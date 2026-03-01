@@ -43,7 +43,10 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+    "Sales Invoice": "rmax_custom/custom_scripts/sales_invoice/sales_invoice.js",
+    "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
+    }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -242,3 +245,29 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+fixtures = [
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    # Sales Invoice
+                    "Sales Invoice-custom_payment_mode",
+
+                    # Sales Invoice Item
+                    "Sales Invoice Item-total_vat_linewise",
+
+    
+                    # Quotation
+                    "Quotation-custom_payment_mode",
+
+                    # Quotation Item
+                    "Quotation Item-total_vat_linewise",
+                    
+                ]
+            ]
+        ]
+    }
+]
