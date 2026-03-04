@@ -48,10 +48,7 @@ app_include_js = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {
-    "Sales Invoice": "rmax_custom/custom_scripts/sales_invoice/sales_invoice.js",
-    "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
-    }
+doctype_js = {"Purchase Receipt" : "public/js/purchase receipt.js"}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
