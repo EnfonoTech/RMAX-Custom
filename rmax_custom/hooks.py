@@ -26,7 +26,12 @@ app_license = "mit"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/rmax_custom/css/rmax_custom.css"
-# app_include_js = "/assets/rmax_custom/js/rmax_custom.js"
+app_include_js = [
+    "/assets/rmax_custom/js/warehouse_stock_popup.js",
+    "/assets/rmax_custom/js/sales_invoice_pos_total_popup.js",
+]
+
+
 
 # include js, css files in header of web template
 # web_include_css = "/assets/rmax_custom/css/rmax_custom.css"
