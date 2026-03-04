@@ -29,6 +29,9 @@ app_license = "mit"
 app_include_js = [
     "/assets/rmax_custom/js/warehouse_stock_popup.js",
     "/assets/rmax_custom/js/sales_invoice_pos_total_popup.js",
+    "/assets/rmax_custom/js/sales_invoice_popup.js",
+    "/assets/rmax_custom/js/create_customer.js",
+
 ]
 
 
@@ -48,7 +51,10 @@ app_include_js = [
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-doctype_js = {"Purchase Receipt" : "public/js/purchase receipt.js"}
+doctype_js = {
+    "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
+    "Purchase Receipt" : "public/js/purchase receipt.js"
+    }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
