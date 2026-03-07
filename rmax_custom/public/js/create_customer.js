@@ -44,6 +44,8 @@ function open_create_customer_dialog(frm) {
 
         let d = new frappe.ui.Dialog({
             title: "Create New Customer",
+            size: "large",   // important when many fields
+
             fields: [
                 {
                     fieldname: "customer_name",
@@ -61,6 +63,11 @@ function open_create_customer_dialog(frm) {
                     fieldname: "email_id",
                     fieldtype: "Data",
                     label: "Email ID"
+                },
+                { 
+                    fieldname: "custom_vat_registration_number",
+                    fieldtype: "Data",
+                    label: "VAT Registration Number"
                 },
                 { fieldtype: "Section Break", label: "Address Details" },
                 {
@@ -83,6 +90,18 @@ function open_create_customer_dialog(frm) {
                     label: "Address Line 2"
                 },
                 {
+                    fieldname: "custom_building_number",
+                    fieldtype: "Data",
+                    label: "Building Number",
+                    reqd: 1
+                },
+                {
+                    fieldname: "custom_area",
+                    fieldtype: "Data",
+                    label: "Area/District",
+                    reqd: 1
+                },
+                {
                     fieldname: "city",
                     fieldtype: "Data",
                     label: "City/Town",
@@ -96,7 +115,12 @@ function open_create_customer_dialog(frm) {
                     default: country,
                     reqd: 1
                 },
-
+                {
+                    fieldname: "pincode",
+                    fieldtype: "Data",
+                    label: "Postal Code",
+                    reqd: 1
+                },
 
             ],
             primary_action_label: "Create Customer",
@@ -111,6 +135,10 @@ function open_create_customer_dialog(frm) {
                         address_type: values.address_type, 
                         address_line1: values.address_line1,
                         address_line2: values.address_line2 || null,
+                        custom_vat_registration_number: values.custom_vat_registration_number || null,
+                        custom_building_number: values.custom_building_number,
+                        custom_area: values.custom_area,
+                        pincode: values.pincode,
                         city: values.city,  
                         country: values.country,
                         default_currency: default_currency
@@ -136,3 +164,4 @@ function open_create_customer_dialog(frm) {
         d.show();
     });
 }
+

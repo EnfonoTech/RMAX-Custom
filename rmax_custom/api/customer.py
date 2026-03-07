@@ -23,15 +23,18 @@ def create_customer_with_address(
     country=None,
     default_currency=None,
     tax_id=None,
+    custom_vat_registration_number=None,
     commercial_registration_number=None,
     address_type=None,
     address_line1=None,
     address_line2=None,
-    building_number=None,
+    custom_building_number=None,
     city=None,
     state=None,
     pincode=None,
-    district=None
+    custom_area=None,
+
+
 ):
 
     if not customer_name:
@@ -68,7 +71,8 @@ def create_customer_with_address(
         "default_currency": default_currency,
         "tax_id": tax_id,
         "mobile_no": mobile_no,
-        "email_id": email_id
+        "email_id": email_id,
+        "custom_vat_registration_number": custom_vat_registration_number,
     })
 
     customer.insert(ignore_permissions=True)
@@ -83,6 +87,8 @@ def create_customer_with_address(
         "address_line2": address_line2,
         "city": city,
         "state": state,
+        "custom_area": custom_area,
+        "custom_building_number": custom_building_number,
         "pincode": pincode,
         "country": country,
         "is_primary_address": 1,
