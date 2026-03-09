@@ -148,13 +148,11 @@ doctype_js = {
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
@@ -263,6 +261,7 @@ fixtures = [
                 [
                     # Sales Invoice
                     "Sales Invoice-custom_payment_mode",
+                    "Sales Invoice-custom_inter_company_branch",
 
                     # Sales Invoice Item
                     "Sales Invoice Item-total_vat_linewise",
