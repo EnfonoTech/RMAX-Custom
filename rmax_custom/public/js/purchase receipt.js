@@ -1,4 +1,3 @@
-
 frappe.ui.form.on('Purchase Receipt', {
     refresh: function(frm) {
         if (frm.doc.docstatus === 1 || frm.doc.docstatus === 0) {
@@ -36,6 +35,25 @@ function populate_new_form(source, source_name, source_docstatus) {
     if (!new_frm || new_frm.doctype !== 'Purchase Receipt') {
         setTimeout(function() { populate_new_form(source, source_name, source_docstatus); }, 500);
         return;
+    }
+
+    // ---------------------------
+    // Posting Date & Time logic
+    // ---------------------------
+    if (source.posting_date && source.posting_time) {
+
+        let source_datetime = frappe.datetime.str_to_obj(
+            source.posting_date + " " + source.posting_time
+        );
+
+        // subtract 10 minutes
+        source_datetime.setMinutes(source_datetime.getMinutes() - 10);
+
+        let new_datetime = frappe.datetime.obj_to_str(source_datetime);
+        let parts = new_datetime.split(" ");
+
+        new_frm.doc.posting_date = parts[0];
+        new_frm.doc.posting_time = parts[1];
     }
 
     //Helper: safe set value
@@ -87,6 +105,7 @@ function populate_new_form(source, source_name, source_docstatus) {
 
     (source.items || []).forEach(function(item, idx) {
         let row = frappe.model.add_child(new_frm.doc, 'Purchase Receipt Item', 'items');
+
         row.idx                         = idx + 1;
         row.item_code                   = item.item_code;
         row.item_name                   = item.item_name;
@@ -129,6 +148,7 @@ function populate_new_form(source, source_name, source_docstatus) {
 
     (source.taxes || []).forEach(function(tax, idx) {
         let row = frappe.model.add_child(new_frm.doc, 'Purchase Taxes and Charges', 'taxes');
+
         row.idx                     = idx + 1;
         row.charge_type             = tax.charge_type;
         row.account_head            = tax.account_head;
@@ -141,12 +161,14 @@ function populate_new_form(source, source_name, source_docstatus) {
         row.row_id                  = tax.row_id;
     });
 
-    //Refresh all fields
+    //Refresh fields
     new_frm.refresh_fields();
     new_frm.refresh_field('items');
     new_frm.refresh_field('taxes');
 
-    try { new_frm.script_manager.trigger('calculate_taxes_and_totals'); } catch(e) {}
+    try {
+        new_frm.script_manager.trigger('calculate_taxes_and_totals');
+    } catch(e) {}
 
     frappe.show_alert({
         message: __('Data carried forward from ' + source_name + '. Save to auto-cancel original.'),
@@ -154,42 +176,63 @@ function populate_new_form(source, source_name, source_docstatus) {
     }, 5);
 }
 
-//Auto-cancel original when new receipt is SAVED
+
+//Auto cancel / delete original after save
 frappe.ui.form.on('Purchase Receipt', {
     after_save: function(frm) {
+
         let source_name      = frm._source_name;
         let source_docstatus = frm._source_docstatus;
 
         if (!source_name) return;
 
         if (source_docstatus === 1) {
+
             frappe.call({
                 method: 'frappe.client.cancel',
-                args: { doctype: 'Purchase Receipt', name: source_name },
+                args: {
+                    doctype: 'Purchase Receipt',
+                    name: source_name
+                },
                 callback: function(r) {
+
                     if (!r.exc) {
+
                         frappe.show_alert({
                             message: __(source_name + ' automatically cancelled.'),
                             indicator: 'green'
                         }, 6);
+
                         frm._source_name = null;
+
                     } else {
+
                         frappe.msgprint(__('Could not auto-cancel ' + source_name + '. Please cancel manually.'));
                     }
                 }
             });
+
         } else if (source_docstatus === 0) {
+
             frappe.call({
                 method: 'frappe.client.delete',
-                args: { doctype: 'Purchase Receipt', name: source_name },
+                args: {
+                    doctype: 'Purchase Receipt',
+                    name: source_name
+                },
                 callback: function(r) {
+
                     if (!r.exc) {
+
                         frappe.show_alert({
-                            message: __('Draft' + source_name + ' automatically deleted.'),
+                            message: __('Draft ' + source_name + ' automatically deleted.'),
                             indicator: 'green'
                         }, 6);
+
                         frm._source_name = null;
+
                     } else {
+
                         frappe.msgprint(__('Could not delete draft ' + source_name + '. Please delete manually.'));
                     }
                 }
