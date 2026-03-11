@@ -2,7 +2,7 @@
 frappe.ui.form.on("Sales Invoice", {
     refresh: function (frm) {
         add_create_customer_button(frm); 
-
+        console.log("Sales Invoice Custom Script Loaded");
 	}
 });
 
@@ -76,13 +76,13 @@ function open_create_customer_dialog(frm) {
                     label: "Address Type",
                     options: "Billing\nShipping",
                     default: "Billing",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
                 {
                     fieldname: "address_line1",
                     fieldtype: "Data",
                     label: "Address Line 1",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
                 {
                     fieldname: "address_line2",
@@ -93,19 +93,19 @@ function open_create_customer_dialog(frm) {
                     fieldname: "custom_building_number",
                     fieldtype: "Data",
                     label: "Building Number",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
                 {
                     fieldname: "custom_area",
                     fieldtype: "Data",
                     label: "Area/District",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number ",
                 },
                 {
                     fieldname: "city",
                     fieldtype: "Data",
                     label: "City/Town",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
                 {
                     fieldname: "country",
@@ -113,13 +113,13 @@ function open_create_customer_dialog(frm) {
                     options: "Country",
                     label: "Country",
                     default: country,
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
                 {
                     fieldname: "pincode",
                     fieldtype: "Data",
                     label: "Postal Code",
-                    reqd: 1
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
                 },
 
             ],
