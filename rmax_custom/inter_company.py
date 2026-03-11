@@ -38,6 +38,28 @@ def sales_invoice_on_submit(doc, method=None):
 			# Fetch Supplier Invoice No & Date from source Sales Invoice (built-in does not set these)
 			pi.bill_no = doc.name
 			pi.bill_date = doc.posting_date
+			if doc.is_return:
+				original_pi = frappe.db.get_value(
+					"Purchase Invoice",
+					{"inter_company_invoice_reference": doc.return_against},
+					"name"
+				)
+				if original_pi:
+					pi.is_return = 1
+					pi.return_against = original_pi
+				if not pi.items:
+					for si_item in doc.items:
+						pi.append("items", {
+							"item_code": si_item.item_code,
+							"item_name": si_item.item_name,
+							"description": si_item.description,
+							"qty": si_item.qty,
+							"rate": si_item.rate,
+							"amount": si_item.amount,
+							"uom": si_item.uom,
+							"stock_uom": si_item.stock_uom,
+							"conversion_factor": si_item.conversion_factor,
+						})
 			# Cost center & warehouse: from Inter Company Branch if selected, else company default
 			branch_data = _get_branch_data(doc, pi.company)
 			frappe.flags._inter_company_pi_branch_data = branch_data
