@@ -31,6 +31,7 @@ app_include_js = [
     "/assets/rmax_custom/js/sales_invoice_pos_total_popup.js",
     "/assets/rmax_custom/js/sales_invoice_popup.js",
     "/assets/rmax_custom/js/create_customer.js",
+    "/assets/rmax_custom/js/create_multiple_supplier.js"
 
 ]
 
