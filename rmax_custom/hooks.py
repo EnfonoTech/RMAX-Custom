@@ -54,8 +54,9 @@ app_include_js = [
 # include js in doctype views
 doctype_js = {
     "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
-    "Purchase Receipt" : "public/js/purchase receipt.js"
-    }
+    "Purchase Receipt": "public/js/purchase receipt.js",
+    "Landed Cost Voucher": "public/js/landed_cost_voucher.js"
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -141,9 +142,9 @@ doctype_js = {
 # ---------------
 # Override standard doctype classes
 
-# override_doctype_class = {
-# 	"ToDo": "custom_app.overrides.CustomToDo"
-# }
+override_doctype_class = {
+	"Landed Cost Voucher": "rmax_custom.overrides.landed_cost_voucher.LandedCostVoucher"
+}
 
 # Document Events
 # ---------------
@@ -273,7 +274,23 @@ fixtures = [
 
                     # Quotation Item
                     "Quotation Item-total_vat_linewise",
-                    
+
+                    # Landed Cost Voucher (CBM distribution when Distribute Manually)
+                    "Landed Cost Voucher-custom_distribute_by_cbm",
+                    # Landed Cost Item (CBM per item)
+                    "Landed Cost Item-custom_cbm",
+                ]
+            ]
+        ]
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Landed Cost Item-qty-columns",
                 ]
             ]
         ]

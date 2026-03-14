@@ -1,0 +1,18 @@
+[
+ {
+  "default_value": null,
+  "doc_type": "Landed Cost Item",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "qty",
+  "is_system_generated": 0,
+  "modified": "2026-03-14 15:18:50.370102",
+  "module": null,
+  "name": "Landed Cost Item-qty-columns",
+  "property": "columns",
+  "property_type": "Int",
+  "row_name": null,
+  "value": "1"
+ }
+]
