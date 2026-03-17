@@ -1,4 +1,4 @@
-
+//Purchase Receipt - Final GRN Button + Auto-cancel original on submit of new receipt
 frappe.ui.form.on('Purchase Receipt', {
     refresh: function(frm) {
         if (frm.doc.docstatus === 1 || frm.doc.docstatus === 0) {
@@ -6,8 +6,69 @@ frappe.ui.form.on('Purchase Receipt', {
                 new_purchase_receipt_with_data(frm);
             }, __('Create'));
         }
+    },
+
+    // Auto-cancel original when new receipt is SUBMITTED
+    on_submit: function(frm) {
+        let source_name      = frm._source_name;
+        let source_docstatus = frm._source_docstatus;
+
+        if (!source_name) return;
+
+        if (source_docstatus === 1) {
+            frappe.call({
+                method: 'frappe.client.cancel',
+                args: { doctype: 'Purchase Receipt', name: source_name },
+                callback: function(r) {
+                    if (!r.exc) {
+                        frappe.show_alert({
+                            message: __(source_name + ' automatically cancelled.'),
+                            indicator: 'green'
+                        }, 6);
+                        frm._source_name = null;
+                    } else {
+                        frappe.msgprint(__('Could not auto-cancel ' + source_name + '. Please cancel manually.'));
+                    }
+                }
+            });
+
+        } else if (source_docstatus === 0) {
+            frappe.call({
+                method: 'frappe.client.delete',
+                args: { doctype: 'Purchase Receipt', name: source_name },
+                callback: function(r) {
+                    if (!r.exc) {
+                        frappe.show_alert({
+                            message: __(source_name + ' automatically deleted.'),
+                            indicator: 'green'
+                        }, 6);
+                        frm._source_name = null;
+                    } else {
+                        frappe.msgprint(__('Could not delete ' + source_name + '. Please delete manually.'));
+                    }
+                }
+            });
+        }
     }
 });
+function subtract_10_minutes(time_str) {
+    if (!time_str) return time_str;
+    let parts = time_str.split(':');
+    let hours   = parseInt(parts[0]) || 0;
+    let minutes = parseInt(parts[1]) || 0;
+    let seconds = parseInt(parts[2]) || 0;
+    let total_seconds = (hours * 3600) + (minutes * 60) + seconds - (10 * 60);
+    if (total_seconds < 0) total_seconds += 86400;
+
+    let new_hours   = Math.floor(total_seconds / 3600);
+    let new_minutes = Math.floor((total_seconds % 3600) / 60);
+    let new_seconds = total_seconds % 60;
+
+    // Pad to HH:MM:SS
+    return String(new_hours).padStart(2, '0') + ':' +
+           String(new_minutes).padStart(2, '0') + ':' +
+           String(new_seconds).padStart(2, '0');
+}
 
 function new_purchase_receipt_with_data(frm) {
 
@@ -17,7 +78,7 @@ function new_purchase_receipt_with_data(frm) {
     }
 
     // Store source data BEFORE navigating away
-    let source = JSON.parse(JSON.stringify(frm.doc));
+    let source           = JSON.parse(JSON.stringify(frm.doc));
     let source_name      = frm.doc.name;
     let source_docstatus = frm.doc.docstatus;
 
@@ -38,7 +99,7 @@ function populate_new_form(source, source_name, source_docstatus) {
         return;
     }
 
-    //Helper: safe set value
+    // Helper: safe set value
     function s(field, value) {
         try {
             if (new_frm.fields_dict[field] !== undefined && value) {
@@ -47,7 +108,7 @@ function populate_new_form(source, source_name, source_docstatus) {
         } catch(e) {}
     }
 
-    //Header
+    // Header
     s('company',                source.company);
     s('supplier',               source.supplier);
     s('supplier_name',          source.supplier_name);
@@ -70,19 +131,24 @@ function populate_new_form(source, source_name, source_docstatus) {
     s('lr_no',                  source.lr_no);
     s('lr_date',                source.lr_date);
     s('supplier_delivery_note', source.supplier_delivery_note);
+    s('posting_date',           source.posting_date);
 
-    //Address & Contact
+    let adjusted_time = subtract_10_minutes(source.posting_time);
+    if (new_frm.fields_dict['posting_time'] !== undefined && adjusted_time) {
+        new_frm.doc['posting_time']     = adjusted_time;
+        new_frm.doc['set_posting_time'] = 1;
+    }
+
+    // Address & Contact
     s('supplier_address',       source.supplier_address);
     s('contact_person',         source.contact_person);
     s('contact_email',          source.contact_email);
     s('shipping_address',       source.shipping_address);
     s('billing_address',        source.billing_address);
-
-    // Store source info for after_save
     new_frm._source_name      = source_name;
     new_frm._source_docstatus = source_docstatus;
 
-    //ITEMS
+    // ITEMS
     new_frm.doc.items = [];
 
     (source.items || []).forEach(function(item, idx) {
@@ -124,7 +190,7 @@ function populate_new_form(source, source_name, source_docstatus) {
         row.allow_zero_valuation_rate   = item.allow_zero_valuation_rate;
     });
 
-    //TAXES
+    // TAXES
     new_frm.doc.taxes = [];
 
     (source.taxes || []).forEach(function(tax, idx) {
@@ -141,7 +207,7 @@ function populate_new_form(source, source_name, source_docstatus) {
         row.row_id                  = tax.row_id;
     });
 
-    //Refresh all fields
+    // Refresh all fields
     new_frm.refresh_fields();
     new_frm.refresh_field('items');
     new_frm.refresh_field('taxes');
@@ -149,51 +215,7 @@ function populate_new_form(source, source_name, source_docstatus) {
     try { new_frm.script_manager.trigger('calculate_taxes_and_totals'); } catch(e) {}
 
     frappe.show_alert({
-        message: __('Data carried forward from ' + source_name + '. Save to auto-cancel original.'),
+        message: __('Data carried forward from ' + source_name + ' | Posting Time set to ' + adjusted_time + '. Submit to auto-cancel original.'),
         indicator: 'blue'
-    }, 5);
+    }, 6);
 }
-
-//Auto-cancel original when new receipt is SAVED
-frappe.ui.form.on('Purchase Receipt', {
-    after_save: function(frm) {
-        let source_name      = frm._source_name;
-        let source_docstatus = frm._source_docstatus;
-
-        if (!source_name) return;
-
-        if (source_docstatus === 1) {
-            frappe.call({
-                method: 'frappe.client.cancel',
-                args: { doctype: 'Purchase Receipt', name: source_name },
-                callback: function(r) {
-                    if (!r.exc) {
-                        frappe.show_alert({
-                            message: __(source_name + ' automatically cancelled.'),
-                            indicator: 'green'
-                        }, 6);
-                        frm._source_name = null;
-                    } else {
-                        frappe.msgprint(__('Could not auto-cancel ' + source_name + '. Please cancel manually.'));
-                    }
-                }
-            });
-        } else if (source_docstatus === 0) {
-            frappe.call({
-                method: 'frappe.client.delete',
-                args: { doctype: 'Purchase Receipt', name: source_name },
-                callback: function(r) {
-                    if (!r.exc) {
-                        frappe.show_alert({
-                            message: __('Draft' + source_name + ' automatically deleted.'),
-                            indicator: 'green'
-                        }, 6);
-                        frm._source_name = null;
-                    } else {
-                        frappe.msgprint(__('Could not delete draft ' + source_name + '. Please delete manually.'));
-                    }
-                }
-            });
-        }
-    }
-});
