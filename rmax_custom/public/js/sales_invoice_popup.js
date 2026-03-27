@@ -5,8 +5,16 @@ frappe.ui.form.on("Sales Invoice", {
                 window.open("/app/sales-invoice/new", "_blank");
             });
         }
+        ensure_update_stock_for_pos_profile(frm);
         set_pos_behavior(frm);
         setup_enter_navigation(frm);
+    },
+    pos_profile(frm) {
+        ensure_update_stock_for_pos_profile(frm);
+    },
+    update_stock(frm) {
+        // Keep update_stock checked when POS Profile is selected.
+        ensure_update_stock_for_pos_profile(frm);
     },
     custom_payment_mode(frm) {
         set_pos_behavior(frm);
@@ -14,25 +22,6 @@ frappe.ui.form.on("Sales Invoice", {
     },
     onload(frm) {
         set_customer_filter(frm);
-    },
-    before_save(frm) {
-        if (frm.doc.docstatus !== 0) return;
-        if (frm.is_new()) return;
-        if (frm._submit_checked) return;
-        frappe.validated = false;
-        frappe.confirm(
-            "Do you want to Submit this Sales Invoice now?",
-            
-            function () {
-                frm._submit_checked = true;
-                frm.save('Submit');
-            },
-            
-            function () {
-                frm._submit_checked = true;
-                frm.save();
-            }
-        );
     },
     items_add: function(frm) {
         check_stock(frm);
@@ -74,11 +63,19 @@ frappe.ui.form.on("Sales Invoice", {
     }
 });
 
+function ensure_update_stock_for_pos_profile(frm) {
+    if (!frm || !frm.doc) return;
+    if (frm.doc.pos_profile && !frm.doc.update_stock) {
+        frm.set_value("update_stock", 1);
+    }
+}
+
 
 function set_pos_behavior(frm) {
     if (!frm.doc.custom_payment_mode) return;
     if (frm.doc.custom_payment_mode === "Cash") {
-        frm.set_value("is_pos", 1);
+        // Do not auto-enable POS / Include Payment when selecting Cash
+        // (user wants Payment Entry method via popup, not Sales Invoice payments table)
     }
     else if (frm.doc.custom_payment_mode === "Credit") {
         frm.set_value("is_pos", 0);
