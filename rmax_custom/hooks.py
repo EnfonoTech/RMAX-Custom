@@ -257,6 +257,9 @@ doc_events = {
 # }
 
 fixtures = [
+    "Workflow", 
+    "Workflow State", 
+    "Workflow Action Master",
     {
         "dt": "Custom Field",
         "filters": [
@@ -334,6 +337,7 @@ fixtures = [
                     "Material Request Item-warehouse-hidden",
                     "Material Request Item-from_warehouse-hidden",
                     "Material Request Item-schedule_date-reqd"
+
                 ]
             ]
         ]
