@@ -302,32 +302,6 @@ fixtures = [
         ]
     },
     {
-        "dt": "Custom Field",
-        "filters": [
-            [
-                "name",
-                "in",
-                [
-                    # Sales Invoice
-                    "Sales Invoice-custom_payment_mode",
-                    "Sales Invoice-custom_inter_company_branch",
-
-                    # Sales Invoice Item
-                    "Sales Invoice Item-total_vat_linewise",
-
-    
-                    # Quotation
-                    "Quotation-custom_payment_mode",
-
-                    # Quotation Item
-                    "Quotation Item-total_vat_linewise",
-                    
-                    
-                ]
-            ]
-        ]
-    },
-    {
         "dt": "Property Setter",
         "filters": [
             [
@@ -336,8 +310,10 @@ fixtures = [
                 [
                     "Material Request Item-warehouse-hidden",
                     "Material Request Item-from_warehouse-hidden",
-                    "Material Request Item-schedule_date-reqd"
-
+                    "Material Request Item-schedule_date-reqd",
+                    "Material Request Item-schedule_date-hidden",
+                    "Material Request Item-schedule_date-default",
+                    "Material Request-schedule_date-hidden"
                 ]
             ]
         ]
