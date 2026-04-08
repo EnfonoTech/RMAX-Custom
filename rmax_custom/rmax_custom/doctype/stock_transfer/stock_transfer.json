@@ -1,0 +1,134 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{ST}-{#####}",
+ "creation": "2026-04-07 12:00:51.568243",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "section_break_14du",
+  "series",
+  "material_request_type",
+  "column_break_vnob",
+  "transaction_date",
+  "company",
+  "amended_from",
+  "section_break_mxxb",
+  "set_source_warehouse",
+  "column_break_cpel",
+  "set_target_warehouse",
+  "section_break_mbwe",
+  "items"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_break_14du",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "series",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Series",
+   "options": "MAT-MR-.YYYY.-",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_vnob",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Today",
+   "fieldname": "transaction_date",
+   "fieldtype": "Date",
+   "label": "Transaction Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "no_copy": 1,
+   "options": "Stock Transfer",
+   "print_hide": 1,
+   "read_only": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "section_break_mxxb",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "column_break_cpel",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "Material Transfer",
+   "fieldname": "material_request_type",
+   "fieldtype": "Select",
+   "label": "Purpose",
+   "options": "Purchase\nMaterial Transfer\nMaterial Issue\nManufacture\nCustomer Provided",
+   "reqd": 1
+  },
+  {
+   "fieldname": "section_break_mbwe",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "items",
+   "fieldtype": "Table",
+   "label": "Items",
+   "options": "Stock Transfer Item"
+  },
+  {
+   "depends_on": "eval:doc.material_request_type == 'Material Transfer'",
+   "fieldname": "set_source_warehouse",
+   "fieldtype": "Link",
+   "label": "Set Source Warehouse",
+   "options": "Warehouse"
+  },
+  {
+   "fieldname": "set_target_warehouse",
+   "fieldtype": "Link",
+   "label": "Set Target Warehouse",
+   "options": "Warehouse"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "is_submittable": 1,
+ "links": [],
+ "modified": "2026-04-08 13:56:52.609254",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "Stock Transfer",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "submit": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "rows_threshold_for_grid_search": 20,
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

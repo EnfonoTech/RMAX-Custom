@@ -31,8 +31,8 @@ app_include_js = [
     "/assets/rmax_custom/js/sales_invoice_pos_total_popup.js",
     "/assets/rmax_custom/js/sales_invoice_popup.js",
     "/assets/rmax_custom/js/create_customer.js",
-    "/assets/rmax_custom/js/create_multiple_supplier.js"
-
+    "/assets/rmax_custom/js/create_multiple_supplier.js",
+    "/assets/rmax_custom/js/materiel_request.js"
 ]
 
 
@@ -294,6 +294,46 @@ fixtures = [
                 "in",
                 [
                     "Landed Cost Item-qty-columns",
+                ]
+            ]
+        ]
+    },
+    {
+        "dt": "Custom Field",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    # Sales Invoice
+                    "Sales Invoice-custom_payment_mode",
+                    "Sales Invoice-custom_inter_company_branch",
+
+                    # Sales Invoice Item
+                    "Sales Invoice Item-total_vat_linewise",
+
+    
+                    # Quotation
+                    "Quotation-custom_payment_mode",
+
+                    # Quotation Item
+                    "Quotation Item-total_vat_linewise",
+                    
+                    
+                ]
+            ]
+        ]
+    },
+    {
+        "dt": "Property Setter",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "Material Request Item-warehouse-hidden",
+                    "Material Request Item-from_warehouse-hidden",
+                    "Material Request Item-schedule_date-reqd"
                 ]
             ]
         ]
