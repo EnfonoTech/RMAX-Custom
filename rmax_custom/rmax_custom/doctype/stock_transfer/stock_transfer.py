@@ -31,6 +31,8 @@ class StockTransfer(Document):
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Transfer"
 		se.from_warehouse = self.set_source_warehouse
+		se.company = self.company
+		se.to_warehouse = self.set_target_warehouse
 		se.remarks = f"Created from Stock Transfer: {self.name}"
 		for item in self.items:
 			if item.item_code:

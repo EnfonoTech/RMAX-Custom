@@ -9,7 +9,18 @@ frappe.ui.form.on('Stock Transfer', {
         }
         frm.set_query('set_source_warehouse', function() {
             return {
-                ignore_user_permissions: 1
+                ignore_user_permissions: 1,
+                 filters: {
+                    company: frm.doc.company
+                }
+            };
+        });
+        frm.set_query('set_target_warehouse', function() {
+            return {
+                ignore_user_permissions: 1,
+                filters: {
+                    company: frm.doc.company
+                }
             };
         });
     },
