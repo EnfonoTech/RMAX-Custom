@@ -5,8 +5,6 @@
   "docstatus": 0,
   "doctype": "Property Setter",
   "doctype_or_field": "DocField",
-<<<<<<< HEAD
-=======
   "field_name": "material_request_type",
   "is_system_generated": 0,
   "modified": "2026-04-06 18:01:32.807738",
@@ -39,7 +37,6 @@
   "docstatus": 0,
   "doctype": "Property Setter",
   "doctype_or_field": "DocField",
->>>>>>> 6c629b7 (feat: stock transfer implementation)
   "field_name": "schedule_date",
   "is_system_generated": 1,
   "modified": "2026-04-08 16:11:03.871048",
