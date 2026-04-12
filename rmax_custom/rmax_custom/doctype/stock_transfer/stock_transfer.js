@@ -11,7 +11,11 @@ frappe.ui.form.on('Stock Transfer', {
             return {
                 ignore_user_permissions: 1,
                  filters: {
+<<<<<<< HEAD
                     company: frm.doc.company
+=======
+                    name: frm.doc.set_source_warehouse
+>>>>>>> 6c629b7 (feat: stock transfer implementation)
                 }
             };
         });
@@ -19,16 +23,21 @@ frappe.ui.form.on('Stock Transfer', {
             return {
                 ignore_user_permissions: 1,
                 filters: {
+<<<<<<< HEAD
                     company: frm.doc.company
+=======
+                    company: frm.doc.company,
+                    name: ["!=", frm.doc.set_source_warehouse]  
+
+>>>>>>> 6c629b7 (feat: stock transfer implementation)
                 }
             };
         });
     },
-
     refresh: function(frm) {
         if (frm.doc.__islocal && !frm.doc.__source_fixed) {
             setTimeout(() => {
-                frm.set_value('set_source_warehouse', '');
+                frm.set_value('set_target_warehouse', '');
                 frm.doc.__source_fixed = true;
 
             }, 200);
@@ -36,7 +45,7 @@ frappe.ui.form.on('Stock Transfer', {
     },
     before_save: function(frm) {
 
-    if (frm.doc.set_source_warehouse) {
+    if (frm.doc.set_target_warehouse) {
 
         frappe.call({
             method: "frappe.client.get_list",
@@ -46,7 +55,7 @@ frappe.ui.form.on('Stock Transfer', {
                 filters: {
                     user: frappe.session.user,
                     allow: "Warehouse",
-                    for_value: frm.doc.set_source_warehouse
+                    for_value: frm.doc.set_target_warehouse
                 },
                 fields: ["name"]
             },
@@ -62,7 +71,7 @@ frappe.ui.form.on('Stock Transfer', {
                                 doctype: "User Permission",
                                 user: frappe.session.user,
                                 allow: "Warehouse",
-                                for_value: frm.doc.set_source_warehouse
+                                for_value: frm.doc.set_target_warehouse
                             }
                         }
                     });
@@ -75,33 +84,30 @@ frappe.ui.form.on('Stock Transfer', {
 
 });
 
-
 function set_default_target(frm) {
 
-    if (!frm.doc.set_target_warehouse) {
-
-        frappe.call({
-            method: "frappe.client.get_list",
-            args: {
-                doctype: "User Permission",
-                filters: {
-                    user: frappe.session.user,
-                    allow: "Warehouse",
-                    is_default: 1
-                },
-                fields: ["for_value"],
-                limit: 1
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "User Permission",
+            filters: {
+                user: frappe.session.user,
+                allow: "Warehouse",
+                is_default: 1
             },
-            callback: function(r) {
+            fields: ["for_value"],
+            limit: 1
+        },
+        callback: function(r) {
 
-                if (r.message && r.message.length > 0) {
-                    let default_wh = r.message[0].for_value;
-                    frm.set_value('set_target_warehouse', default_wh);
+            if (r.message && r.message.length > 0) {
+                let default_wh = r.message[0].for_value;
+                if (!frm.doc.set_source_warehouse) {
+                    frm.set_value('set_source_warehouse', default_wh);
                 }
-
             }
-        });
-    }
+        }
+    });
 }
 
 frappe.ui.form.on('Stock Transfer Item', {
