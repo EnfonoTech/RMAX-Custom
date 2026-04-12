@@ -33,6 +33,7 @@ app_include_js = [
     "/assets/rmax_custom/js/create_customer.js",
     "/assets/rmax_custom/js/create_multiple_supplier.js",
     "/assets/rmax_custom/js/materiel_request.js"
+    
 ]
 
 
@@ -296,24 +297,15 @@ fixtures = [
                 "name",
                 "in",
                 [
-                    "Landed Cost Item-qty-columns",
-                ]
-            ]
-        ]
-    },
-    {
-        "dt": "Property Setter",
-        "filters": [
-            [
-                "name",
-                "in",
-                [
                     "Material Request Item-warehouse-hidden",
                     "Material Request Item-from_warehouse-hidden",
                     "Material Request Item-schedule_date-reqd",
                     "Material Request Item-schedule_date-hidden",
                     "Material Request Item-schedule_date-default",
-                    "Material Request-schedule_date-hidden"
+                    "Material Request-schedule_date-hidden",
+                    "Landed Cost Item-qty-columns",
+                    "Material Request-material_request_type-default"
+
                 ]
             ]
         ]

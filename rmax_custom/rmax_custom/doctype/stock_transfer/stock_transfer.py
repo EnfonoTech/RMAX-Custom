@@ -22,10 +22,8 @@ class StockTransfer(Document):
 		"""Create Stock Entry for Material Transfer"""
 		if not self.set_target_warehouse:
 			frappe.throw("Target Warehouse is required")
-
 		if not self.set_source_warehouse:
 			frappe.throw("Source Warehouse is required")
-
 		if not self.items:
 			frappe.throw("No items found")
 		se = frappe.new_doc("Stock Entry")
@@ -43,18 +41,17 @@ class StockTransfer(Document):
 					"s_warehouse": self.set_source_warehouse,
 					"t_warehouse": self.set_target_warehouse
 				})
-
 		se.insert()
 		self.stock_entry = se.name
 		self.stock_entry_created = 1
-
+		se.submit()
 		frappe.msgprint(
 			f'Stock Entry Created: <a href="/app/stock-entry/{se.name}">{se.name}</a>',
 			alert=True,
 			indicator='green'
 		)
 
-
+		
 
 @frappe.whitelist()
 def get_item_uom_conversion(item_code, uom):
