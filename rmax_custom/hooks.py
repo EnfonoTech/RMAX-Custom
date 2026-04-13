@@ -32,7 +32,9 @@ app_include_js = [
     "/assets/rmax_custom/js/sales_invoice_popup.js",
     "/assets/rmax_custom/js/create_customer.js",
     "/assets/rmax_custom/js/create_multiple_supplier.js",
-    "/assets/rmax_custom/js/materiel_request.js"
+    "/assets/rmax_custom/js/materiel_request.js",
+    "/assets/rmax_custom/js/vat_validation.js",
+    "/assets/rmax_custom/js/contact_validation.js"
     
 ]
 
@@ -286,6 +288,7 @@ fixtures = [
                     "Landed Cost Voucher-custom_distribute_by_cbm",
                     # Landed Cost Item (CBM per item)
                     "Landed Cost Item-custom_cbm",
+                    "Customer-custom_vat_registration_number",
                 ]
             ]
         ]
@@ -304,7 +307,8 @@ fixtures = [
                     "Material Request Item-schedule_date-default",
                     "Material Request-schedule_date-hidden",
                     "Landed Cost Item-qty-columns",
-                    "Material Request-material_request_type-default"
+                    "Material Request-material_request_type-default",
+                    "Customer-customer_type-options"
 
                 ]
             ]

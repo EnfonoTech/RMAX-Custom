@@ -2,6 +2,8 @@ import frappe
 from frappe import _
 from frappe.utils import cstr
 from frappe.core.doctype.user_permission.user_permission import get_permitted_documents
+import re
+
 
 
 def _get_default_customer_group():
@@ -110,3 +112,44 @@ def create_customer_with_address(
         "message": "Customer and Address created successfully"
     }
 
+
+
+@frappe.whitelist()
+def validate_vat_customer(vat, customer_type, name=None):
+    if not vat:
+        return
+    if customer_type == "Branch":
+        return
+
+    existing = frappe.get_all(
+        "Customer",
+        filters={
+            "custom_vat_registration_number": vat,
+            "name": ["!=", name]
+        },
+        fields=["name"]
+    )
+
+    if existing:
+        frappe.throw(
+            f" VAT Registration Number  already used by Customer: {existing[0].name}"
+        )
+
+    return
+
+
+
+def count_digits(value):
+    if not value:
+        return 0
+    return len(re.sub(r"\D", "", value))
+
+
+@frappe.whitelist()
+def validate_phone_numbers(mobile_no=None, phone_no=None):
+    if mobile_no:
+        if count_digits(mobile_no) < 10:
+            frappe.throw("Mobile number must have at least 10 digits.")
+    if phone_no:
+        if count_digits(phone_no) < 10:
+            frappe.throw("Phone number must have at least 10 digits.")
