@@ -11,11 +11,7 @@ frappe.ui.form.on('Stock Transfer', {
             return {
                 ignore_user_permissions: 1,
                  filters: {
-<<<<<<< HEAD
-                    company: frm.doc.company
-=======
                     name: frm.doc.set_source_warehouse
->>>>>>> 6c629b7 (feat: stock transfer implementation)
                 }
             };
         });
@@ -23,13 +19,9 @@ frappe.ui.form.on('Stock Transfer', {
             return {
                 ignore_user_permissions: 1,
                 filters: {
-<<<<<<< HEAD
-                    company: frm.doc.company
-=======
                     company: frm.doc.company,
                     name: ["!=", frm.doc.set_source_warehouse]  
 
->>>>>>> 6c629b7 (feat: stock transfer implementation)
                 }
             };
         });
