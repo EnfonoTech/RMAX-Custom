@@ -26,5 +26,19 @@
   "modified": "2026-04-07 17:49:09.493280",
   "name": "Send For Approval",
   "workflow_action_name": "Send For Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2026-04-14 20:00:00.000000",
+  "name": "Waiting for Approval",
+  "workflow_action_name": "Waiting for Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2026-04-14 20:00:00.000000",
+  "name": "Check & Approve",
+  "workflow_action_name": "Check & Approve"
  }
 ]

@@ -43,5 +43,14 @@
   "name": "Draft",
   "style": "",
   "workflow_state_name": "Draft"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "time",
+  "modified": "2026-04-14 20:00:00.000000",
+  "name": "Waiting for Approval",
+  "style": "Warning",
+  "workflow_state_name": "Waiting for Approval"
  }
 ]
