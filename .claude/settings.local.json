@@ -1,0 +1,17 @@
+{
+  "memory": {
+    "project": "RMAX-Custom",
+    "server": {
+      "ip": "5.189.131.148",
+      "control_server": "207.180.209.80",
+      "agent_secret": "9c9d7e54d54c30e9f264f202376c04ed4dd4bab9c57eb2b3",
+      "server_id": "41ef79dc-a2fd-418a-bd88-b5f5173aeaf7",
+      "bench_user": "v15",
+      "bench_path": "/home/v15/frappe-bench",
+      "site": "rmax_dev2",
+      "git_remote": "upstream"
+    },
+    "docs_url": "https://rmax-docs.vercel.app",
+    "docs_path": "/Users/sayanthns/Documents/RMAX/rmax-docs/"
+  }
+}
