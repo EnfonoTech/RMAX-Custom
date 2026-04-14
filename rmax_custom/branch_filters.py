@@ -11,8 +11,8 @@ import frappe
 
 def get_branch_warehouse_condition(user=None):
     """
-    Return SQL condition to filter documents by the user's branch warehouses.
-    Used for doctypes that have items with a warehouse field (SI, PI, DN, PR).
+    Return list of warehouses from the user's Branch Configuration(s).
+    Uses Branch Configuration as source of truth (not User Permissions).
     Returns empty string for Admin/Stock Manager (no restriction).
     """
     if not user:
@@ -28,17 +28,27 @@ def get_branch_warehouse_condition(user=None):
     if "Branch User" not in roles:
         return ""
 
-    # Get user's permitted warehouses
+    # Get user's branch configurations
+    branch_configs = frappe.get_all(
+        "Branch Configuration User",
+        filters={"user": user},
+        pluck="parent",
+    )
+
+    if not branch_configs:
+        return ""
+
+    # Get warehouses from those branch configurations
     warehouses = frappe.get_all(
-        "User Permission",
-        filters={"user": user, "allow": "Warehouse"},
-        pluck="for_value",
+        "Branch Configuration Warehouse",
+        filters={"parent": ["in", branch_configs]},
+        pluck="warehouse",
     )
 
     if not warehouses:
         return ""
 
-    return warehouses
+    return list(set(warehouses))  # deduplicate
 
 
 def si_permission_query(user):
