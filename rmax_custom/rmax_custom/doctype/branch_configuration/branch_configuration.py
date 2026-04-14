@@ -85,6 +85,13 @@ class BranchConfiguration(Document):
 				# First cost center is the default
 				create_permission(u.user, "Cost Center", c.cost_center, is_default=1 if idx == 0 else 0)
 
+			# Also grant access to the company's default cost center (used in tax templates)
+			# without marking it as default — the branch cost center stays as the user's default
+			if self.company:
+				company_default_cc = frappe.db.get_value("Company", self.company, "cost_center")
+				if company_default_cc:
+					create_permission(u.user, "Cost Center", company_default_cc, is_default=0)
+
 			# Auto-assign Branch User role
 			_assign_branch_user_role(u.user)
 
