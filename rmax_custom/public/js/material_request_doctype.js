@@ -11,10 +11,19 @@
 frappe.ui.form.on("Material Request", {
     refresh: function (frm) {
         if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
+            // Run immediately first
+            _rmax_hide_standard_buttons(frm);
+            _rmax_maybe_add_stock_transfer_button(frm);
+
+            // Then run again after ERPNext buttons render (they can be slow)
             setTimeout(function () {
                 _rmax_hide_standard_buttons(frm);
                 _rmax_maybe_add_stock_transfer_button(frm);
-            }, 300);
+            }, 500);
+
+            setTimeout(function () {
+                _rmax_hide_standard_buttons(frm);
+            }, 1000);
         }
     },
 });
