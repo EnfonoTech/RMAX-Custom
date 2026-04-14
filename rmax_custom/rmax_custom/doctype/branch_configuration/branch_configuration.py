@@ -64,9 +64,6 @@ class BranchConfiguration(Document):
 		self.create_permissions()
 
 	def create_permissions(self):
-		# Determine the first warehouse to mark as default
-		default_warehouse = self.warehouse[0].warehouse if self.warehouse else None
-
 		for u in self.user:
 			# Create company permission (marked as default so Session Defaults picks it)
 			if self.company:
@@ -78,8 +75,9 @@ class BranchConfiguration(Document):
 				# First warehouse is the default
 				create_permission(u.user, "Warehouse", w.warehouse, is_default=1 if idx == 0 else 0)
 
-			for c in self.cost_center:
-				create_permission(u.user, "Cost Center", c.cost_center)
+			for idx, c in enumerate(self.cost_center):
+				# First cost center is the default
+				create_permission(u.user, "Cost Center", c.cost_center, is_default=1 if idx == 0 else 0)
 
 
 def create_permission(user, allow, value, is_default=0):
