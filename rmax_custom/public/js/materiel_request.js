@@ -3,33 +3,37 @@ frappe.ui.form.on('Material Request', {
         if (frm.is_new()) {
             set_default_target(frm);
         }
-
-        // Target warehouse: show all warehouses user has permission for
-        frm.set_query('set_warehouse', function() {
-            return {
-                filters: {
-                    company: frm.doc.company,
-                    is_group: 0
-                }
-            };
-        });
-
-        // Source warehouse: ignore user permissions (can request FROM any branch)
-        frm.set_query('set_from_warehouse', function() {
-            return {
-                ignore_user_permissions: 1,
-                filters: {
-                    company: frm.doc.company,
-                    is_group: 0,
-                    name: ["!=", frm.doc.set_warehouse]
-                }
-            };
-        });
+        _setup_warehouse_queries(frm);
     },
     material_request_type: function(frm) {
         set_default_target(frm);
     },
 });
+
+function _setup_warehouse_queries(frm) {
+    // Target warehouse: only user's permitted warehouses (from User Permissions)
+    // No ignore_user_permissions — Frappe filters by User Permission automatically
+    frm.set_query('set_warehouse', function() {
+        return {
+            filters: {
+                company: frm.doc.company,
+                is_group: 0
+            }
+        };
+    });
+
+    // Source warehouse: ignore user permissions (can request FROM any branch)
+    frm.set_query('set_from_warehouse', function() {
+        return {
+            ignore_user_permissions: 1,
+            filters: {
+                company: frm.doc.company,
+                is_group: 0,
+                name: ["!=", frm.doc.set_warehouse]
+            }
+        };
+    });
+}
 
 function set_default_target(frm) {
     if (!frm.doc.set_warehouse) {
