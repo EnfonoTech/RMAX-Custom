@@ -340,6 +340,12 @@ fixtures = [
                     "Sales Invoice-grand_total-in_standard_filter",
                     "Sales Invoice-total_qty-in_standard_filter",
                     "Sales Invoice-contact_mobile-in_standard_filter",
+
+                    # Item Default — ignore user permissions on warehouse/cost center
+                    # so branch users can view items with defaults from other companies
+                    "Item Default-default_warehouse-ignore_user_permissions",
+                    "Item Default-buying_cost_center-ignore_user_permissions",
+                    "Item Default-selling_cost_center-ignore_user_permissions",
                 ]
             ]
         ]

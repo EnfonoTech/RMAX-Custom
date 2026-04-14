@@ -190,5 +190,53 @@
   "property_type": "Check",
   "row_name": null,
   "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Item Default",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "default_warehouse",
+  "is_system_generated": 0,
+  "modified": "2026-04-14 18:00:00.000000",
+  "module": null,
+  "name": "Item Default-default_warehouse-ignore_user_permissions",
+  "property": "ignore_user_permissions",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Item Default",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "buying_cost_center",
+  "is_system_generated": 0,
+  "modified": "2026-04-14 18:00:00.000000",
+  "module": null,
+  "name": "Item Default-buying_cost_center-ignore_user_permissions",
+  "property": "ignore_user_permissions",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
+ },
+ {
+  "default_value": null,
+  "doc_type": "Item Default",
+  "docstatus": 0,
+  "doctype": "Property Setter",
+  "doctype_or_field": "DocField",
+  "field_name": "selling_cost_center",
+  "is_system_generated": 0,
+  "modified": "2026-04-14 18:00:00.000000",
+  "module": null,
+  "name": "Item Default-selling_cost_center-ignore_user_permissions",
+  "property": "ignore_user_permissions",
+  "property_type": "Check",
+  "row_name": null,
+  "value": "1"
  }
 ]
