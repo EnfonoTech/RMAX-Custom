@@ -1,0 +1,10 @@
+[
+  {
+    "doctype": "Role",
+    "name": "Branch User",
+    "role_name": "Branch User",
+    "desk_access": 1,
+    "is_custom": 1,
+    "disabled": 0
+  }
+]

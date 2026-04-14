@@ -1,0 +1,558 @@
+# RMAX Custom App - Complete Documentation
+
+> **App Name:** rmax_custom  
+> **Publisher:** Enfono  
+> **License:** MIT  
+> **Framework:** Frappe v15 + ERPNext  
+> **Site:** rmax_dev2 on RMAX Server (5.189.131.148)
+
+---
+
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Custom DocTypes](#2-custom-doctypes)
+3. [Custom Fields & Property Setters](#3-custom-fields--property-setters)
+4. [Workflows](#4-workflows)
+5. [Server-Side Logic (Python)](#5-server-side-logic-python)
+6. [Client-Side Logic (JavaScript)](#6-client-side-logic-javascript)
+7. [API Endpoints](#7-api-endpoints)
+8. [Hooks Configuration](#8-hooks-configuration)
+9. [Fixtures](#9-fixtures)
+10. [Architecture Diagram](#10-architecture-diagram)
+
+---
+
+## 1. Overview
+
+RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribution business. It extends ERPNext with:
+
+- **POS-style Sales Invoice workflow** with payment popup and multi-mode payments
+- **Inter-company transaction automation** (auto-create Purchase Invoice from Sales Invoice)
+- **Branch-based access control** with automatic user permission management
+- **Stock Transfer workflow** with approval states
+- **Landed Cost Voucher enhancement** with CBM-based distribution
+- **Customer creation directly from Sales Invoice**
+- **Bulk Purchase Invoice creation** from multiple Purchase Receipts
+- **Final GRN (Goods Received Note)** replacement flow
+- **VAT and contact validation** rules (Saudi Arabia compliance)
+- **Warehouse stock visibility** popup on item selection
+
+---
+
+## 2. Custom DocTypes
+
+### 2.1 Branch Configuration
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `branch` | Link → Branch | The branch this config belongs to |
+| `user` | Table → Branch Configuration User | Users assigned to this branch |
+| `warehouse` | Table → Branch Configuration Warehouse | Warehouses for this branch |
+| `cost_center` | Table → Branch Configuration Cost Center | Cost centers for this branch |
+
+**Behavior:**
+- On save, automatically creates `User Permission` records for each user, granting access to the branch, its warehouses, and cost centers.
+- On user removal, automatically deletes the corresponding `User Permission` records.
+- Permissions are set with `apply_to_all_doctypes = 1`.
+
+**Child Tables:**
+- **Branch Configuration User** — fields: `user` (Link → User)
+- **Branch Configuration Warehouse** — fields: `warehouse` (Link → Warehouse)
+- **Branch Configuration Cost Center** — fields: `cost_center` (Link → Cost Center)
+
+---
+
+### 2.2 Inter Company Branch
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `branch_name` | Data | Name of the inter-company branch |
+| `company_cost_centers` | Table → Inter Company Branch Cost Center | Company-specific cost centers & warehouses |
+
+**Behavior:**
+- Validates that no duplicate company entries exist in the child table.
+- Provides a search helper (`get_branches_for_company`) that returns branches configured for a specific company.
+
+**Child Table — Inter Company Branch Cost Center:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `company` | Link → Company | The company this row applies to |
+| `cost_center` | Link → Cost Center | Default cost center for this company |
+| `warehouse` | Link → Warehouse | Default warehouse for this company |
+
+---
+
+### 2.3 Stock Transfer
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `company` | Link → Company | Company |
+| `set_source_warehouse` | Link → Warehouse | Source warehouse |
+| `set_target_warehouse` | Link → Warehouse | Target warehouse |
+| `items` | Table → Stock Transfer Item | Items to transfer |
+| `stock_entry` | Link → Stock Entry | Auto-created Stock Entry (read-only) |
+| `stock_entry_created` | Check | Flag indicating SE was created |
+
+**Behavior:**
+- Subject to **Stock Transfer Workflow** (Draft → Pending → Approved/Rejected).
+- On submit (when `workflow_state == "Approved"`), automatically creates and submits a **Stock Entry** of type "Material Transfer".
+- Source warehouse defaults to the user's default warehouse permission.
+- Target warehouse filter excludes the source warehouse.
+- Before save, ensures the user has `User Permission` for the target warehouse (auto-creates if missing).
+
+**Child Table — Stock Transfer Item:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `item_code` | Link → Item | Item |
+| `item_name` | Data | Item name (fetched) |
+| `quantity` | Float | Quantity to transfer |
+| `uom` | Link → UOM | Unit of measure |
+| `uom_conversion_factor` | Float | Conversion factor (fetched via API) |
+
+---
+
+## 3. Custom Fields & Property Setters
+
+### 3.1 Custom Fields
+
+| DocType | Field Name | Type | Label | Purpose |
+|---------|-----------|------|-------|---------|
+| Customer | `custom_vat_registration_number` | Data | VAT Registration Number | Saudi VAT number (15 digits) |
+| Sales Invoice | `custom_payment_mode` | Select | Payment Mode | Options: Cash, Credit — drives POS popup behavior |
+| Sales Invoice | `custom_inter_company_branch` | Link → Inter Company Branch | Inter Company Branch | Determines cost center/warehouse for auto-created PI |
+| Quotation | `custom_payment_mode` | Select | Payment Mode | Payment mode on quotation |
+| Landed Cost Voucher | `custom_distribute_by_cbm` | Check | Distribute by CBM | Enables CBM-ratio charge distribution |
+| Landed Cost Item | `custom_cbm` | Float | CBM | Cubic meter value per item line |
+
+### 3.2 Property Setters
+
+| DocType | Field | Property | Value | Purpose |
+|---------|-------|----------|-------|---------|
+| Material Request | `material_request_type` | default | Material Transfer | Default MR type is transfer |
+| Material Request | `schedule_date` | hidden | 1 | Hide header schedule date |
+| Material Request Item | `schedule_date` | hidden | 1 | Hide per-item schedule date |
+| Material Request Item | `schedule_date` | default | Today | Auto-set to today |
+| Material Request Item | `schedule_date` | reqd | 0 | Not mandatory |
+| Material Request Item | `from_warehouse` | hidden | 1 | Simplify transfer UI |
+| Material Request Item | `warehouse` | hidden | 1 | Simplify transfer UI |
+| Landed Cost Item | `qty` | columns | 1 | Show qty in grid |
+| Customer | `customer_type` | options | Company\nIndividual\nPartnership\nBranch | Added "Branch" type |
+
+---
+
+## 4. Workflows
+
+### Stock Transfer Workflow
+
+| State | Doc Status | Allow Edit | Update Field |
+|-------|-----------|------------|--------------|
+| Draft | 0 | All | workflow_state |
+| Pending | 0 | All | workflow_state |
+| Approved | 1 | Specific roles | workflow_state |
+| Rejected | 0 | Specific roles | workflow_state |
+
+**Transitions:** Draft → Pending → Approved/Rejected
+
+When approved and submitted, the Stock Transfer auto-creates a Stock Entry.
+
+---
+
+## 5. Server-Side Logic (Python)
+
+### 5.1 Inter-Company Auto PI Creation (`inter_company.py`)
+
+**Trigger:** `Sales Invoice → on_submit` (via doc_events hook)
+
+**Flow:**
+1. Checks if the Sales Invoice has `is_internal_customer` and `represents_company`.
+2. Checks no duplicate PI already exists.
+3. Calls ERPNext's `make_inter_company_purchase_invoice()`.
+4. Uses patches from `sf_trading` to bypass session/default warehouse interference.
+5. Sets `bill_no` and `bill_date` from the Sales Invoice.
+6. Handles **return invoices** — links to the original PI and sets `is_return = 1`.
+7. Applies **branch-specific cost center and warehouse** from `Inter Company Branch` configuration.
+8. Validates warehouse belongs to the buying company (prevents cross-company mismatch).
+9. Fetches and applies the **default Purchase Taxes and Charges Template**.
+10. Strips invalid session defaults (warehouse/cost center from wrong company).
+11. Inserts the PI as draft with `ignore_permissions=True`.
+
+**Key helper functions:**
+- `_get_branch_data(doc, buying_company)` — Fetches cost center/warehouse from Inter Company Branch config
+- `_apply_default_purchase_taxes(pi, branch_data)` — Applies default tax template
+- `_clear_invalid_session_defaults(pi)` — Removes cross-company values
+- `_warehouse_belongs_to_company(warehouse, company)` — Validates warehouse ownership
+- `_cost_center_belongs_to_company(cost_center, company)` — Validates cost center ownership
+
+### 5.2 Landed Cost Voucher Override (`overrides/landed_cost_voucher.py`)
+
+**Overrides:** `erpnext.stock.doctype.landed_cost_voucher.landed_cost_voucher.LandedCostVoucher`
+
+**Enhancements:**
+- **CBM Distribution:** When `distribute_charges_based_on == "Distribute Manually"` AND `custom_distribute_by_cbm` is checked, distributes charges proportionally based on each item's `custom_cbm` value.
+- **Standard Distribution:** For Qty or Amount-based distribution, uses the same ratio logic as ERPNext but with rounding correction on the last item.
+- **Validation:** Enforces single tax row when using "Distribute Manually" mode.
+
+### 5.3 Branch Configuration (`branch_configuration.py`)
+
+**Auto-permission management:**
+- `on_update`: Creates `User Permission` records for each user × branch/warehouse/cost_center combination.
+- `before_save`: Detects removed users and deletes their permissions.
+
+### 5.4 Stock Transfer (`stock_transfer.py`)
+
+- `on_submit`: Creates and submits a Stock Entry (Material Transfer) when workflow state is "Approved".
+- `get_item_uom_conversion`: Whitelisted API to fetch UOM conversion factors.
+
+---
+
+## 6. Client-Side Logic (JavaScript)
+
+### 6.1 Sales Invoice Popup (`sales_invoice_popup.js`)
+
+**Features:**
+- Adds "New Invoice" button to open a new Sales Invoice in a new tab.
+- Forces `update_stock = 1` when POS Profile is selected.
+- Handles `custom_payment_mode`:
+  - **Cash**: No auto POS behavior (uses payment popup instead).
+  - **Credit**: Disables POS mode; filters customers to those with credit limits.
+- **Enter key navigation**: Moves focus across item grid columns and rows; auto-adds new row at end.
+- **Stock check**: On item add, item_code change, or qty change, checks warehouse stock balance and caps qty if insufficient.
+
+### 6.2 POS Payment Popup (`sales_invoice_pos_total_popup.js`)
+
+**The core POS workflow for Cash mode:**
+
+1. **Intercepts Submit**: When user clicks Submit on a Cash Sales Invoice, shows a payment dialog BEFORE submit.
+2. **Payment Modes Loading**: Fetches from POS Profile or falls back to all enabled `Mode of Payment` with company accounts.
+3. **Dialog UI**: Shows invoice total + one Currency field per payment mode + "fill" buttons to auto-allocate.
+4. **Click-to-fill**: Clicking a payment input auto-fills the remaining balance.
+5. **Save & Submit**: Updates payment amounts on the form, saves, submits, then creates **Payment Entry** records via `create_pos_payments_for_invoice` API.
+6. **Save only**: Updates payments and saves without submitting.
+7. **Credit mode**: Shows a confirm dialog asking whether to submit immediately.
+
+### 6.3 Create Customer (`create_customer.js`)
+
+- Adds a "Create New Customer" button above the customer field on Sales Invoice.
+- Opens a dialog with fields: Customer Name, Mobile No, Email, VAT Registration Number, and full Address details.
+- Address fields become mandatory when VAT number is provided (Saudi compliance).
+- Calls `create_customer_with_address` API and auto-sets the new customer on the invoice.
+
+### 6.4 Warehouse Stock Popup (`warehouse_stock_popup.js`)
+
+- When an item is selected in the items grid (Sales Invoice, Quotation, etc.), shows a panel below the grid displaying stock quantities across all company warehouses.
+- Highlights the currently selected warehouse.
+- Click a warehouse row to set it on the item.
+- Shows top 5 warehouses by default; "Show All" loads the complete list.
+- Auto-hides when no item is selected.
+
+### 6.5 Create Multiple Suppliers (`create_multiple_supplier.js`)
+
+- Adds "Add Multiple Suppliers" button on Item form.
+- Opens a dialog with a table of Supplier links.
+- Creates `Party Specific Item` records linking each supplier to the item.
+
+### 6.6 Material Request (`materiel_request.js`)
+
+- Auto-sets `set_warehouse` (target) from the user's default warehouse permission.
+- Filters `set_from_warehouse` to exclude the target warehouse and match the company.
+- Ignores user permissions on the target warehouse filter.
+
+### 6.7 VAT Validation (`vat_validation.js`)
+
+- On Customer form, restricts `custom_vat_registration_number` to digits only, max 15.
+- On validate, enforces exactly 15 digits for VAT and checks uniqueness via API.
+- Validates phone numbers have at least 10 digits.
+- Hides "Branch" from `customer_type` options for non-System Manager/Auditor users.
+
+### 6.8 Contact Validation (`contact_validation.js`)
+
+- Validates all phone numbers in the Contact's `phone_nos` table have at least 10 digits.
+
+### 6.9 Purchase Receipt - Final GRN (`purchase receipt.js`)
+
+- Adds "Final GRN" button under "Create" menu on Purchase Receipt.
+- Copies all header fields, items, and taxes to a new Purchase Receipt.
+- Sets posting time to 10 minutes before the original (for ordering).
+- On submit of the new receipt, **auto-cancels** the original (if submitted) or **auto-deletes** it (if draft).
+
+### 6.10 Purchase Receipt List (`purchase_receipt_list.js`)
+
+- Adds "Create Single Purchase Invoice" action to list view.
+- Allows selecting multiple Purchase Receipts and creating one consolidated Purchase Invoice.
+
+### 6.11 Landed Cost Voucher (`landed_cost_voucher.js`)
+
+- Client-side companion to the Python override.
+- When "Distribute by CBM" is checked with "Distribute Manually", auto-distributes charges by `custom_cbm` ratio.
+- Recalculates on CBM value change or tax amount change.
+- Patches the form controller's `set_applicable_charges_for_item` method.
+
+### 6.12 Quotation Custom Script (`quotation.js`)
+
+- Adds "Sales Invoice" button under "Create" menu on submitted Quotations.
+- Calls ERPNext's `make_sales_invoice` mapper.
+
+---
+
+## 7. API Endpoints
+
+### 7.1 Customer APIs (`api/customer.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.customer.create_customer_with_address` | Whitelisted | Creates a Customer + Address in one call. Sets defaults from user permissions and company. |
+| `rmax_custom.api.customer.validate_vat_customer` | Whitelisted | Checks VAT uniqueness across customers (skips "Branch" type). |
+| `rmax_custom.api.customer.validate_phone_numbers` | Whitelisted | Validates mobile/phone have 10+ digits. |
+
+### 7.2 Sales Invoice Payment APIs (`api/sales_invoice_payment.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.sales_invoice_payment.get_payment_modes_with_account` | Whitelisted | Returns enabled Mode of Payment names that have a default account for the company. Optionally filters by a provided list (from POS Profile). |
+| `rmax_custom.api.sales_invoice_payment.create_pos_payments_for_invoice` | Whitelisted | Creates and submits Payment Entry records for a submitted Sales Invoice. One PE per mode of payment. Validates outstanding amounts. |
+
+### 7.3 Warehouse Stock API (`api/warehouse_stock.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.warehouse_stock.get_item_warehouse_stock` | Whitelisted | Returns stock balance across all warehouses using the Bin table (optimized). Supports target warehouse prioritization and pagination. |
+
+### 7.4 Material Request API (`api/material_request.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.material_request.create_material_request` | Whitelisted | Creates and submits a Material Request for Material Transfer. Validates item, warehouses, and quantity. |
+
+### 7.5 Purchase Invoice API (`api/purchase_invoice.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.purchase_invoice.create_single_purchase_invoice` | Whitelisted | Creates one Purchase Invoice from multiple Purchase Receipts. Links items back to their source receipts. |
+
+### 7.6 Item API (`api/item.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.api.item.create_party_specific_items` | Whitelisted | Creates Party Specific Item records linking multiple suppliers to an item. Prevents duplicates. |
+
+### 7.7 Stock Transfer API (`stock_transfer.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_item_uom_conversion` | Whitelisted | Returns UOM conversion factor for an item. |
+
+---
+
+## 8. Hooks Configuration
+
+```python
+# Global JS includes (loaded on every desk page)
+app_include_js = [
+    "warehouse_stock_popup.js",       # Stock display panel
+    "sales_invoice_pos_total_popup.js", # POS payment popup
+    "sales_invoice_popup.js",          # SI enhancements
+    "create_customer.js",              # Quick customer creation
+    "create_multiple_supplier.js",     # Bulk supplier linking
+    "materiel_request.js",             # MR defaults
+    "vat_validation.js",               # Customer VAT rules
+    "contact_validation.js",           # Contact phone rules
+]
+
+# DocType-specific JS
+doctype_js = {
+    "Quotation": "quotation.js",           # Create SI button
+    "Purchase Receipt": "purchase receipt.js",  # Final GRN
+    "Landed Cost Voucher": "landed_cost_voucher.js",  # CBM distribution
+}
+
+# List view JS
+doctype_list_js = {
+    "Purchase Receipt": "purchase_receipt_list.js",  # Bulk PI creation
+}
+
+# DocType class override
+override_doctype_class = {
+    "Landed Cost Voucher": "rmax_custom.overrides.landed_cost_voucher.LandedCostVoucher"
+}
+
+# Document events
+doc_events = {
+    "Sales Invoice": {
+        "on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+    },
+}
+
+# Fixtures exported with the app
+fixtures = [
+    "Workflow",
+    "Workflow State",
+    "Workflow Action Master",
+    "Custom Field" (filtered list),
+    "Property Setter" (filtered list),
+]
+```
+
+---
+
+## 9. Fixtures
+
+### Custom Fields Exported
+
+| Name | Purpose |
+|------|---------|
+| `Sales Invoice-custom_payment_mode` | Cash/Credit selector |
+| `Sales Invoice-custom_inter_company_branch` | Branch link for inter-company PI |
+| `Sales Invoice Item-total_vat_linewise` | Per-line VAT total |
+| `Quotation-custom_payment_mode` | Payment mode on quotation |
+| `Quotation Item-total_vat_linewise` | Per-line VAT total |
+| `Landed Cost Voucher-custom_distribute_by_cbm` | CBM distribution toggle |
+| `Landed Cost Item-custom_cbm` | CBM value per item |
+| `Customer-custom_vat_registration_number` | Saudi VAT number |
+
+### Property Setters Exported
+
+Material Request fields simplified for transfer workflow. Customer type extended with "Branch". Landed Cost Item qty column shown.
+
+---
+
+## 10. Architecture Diagram
+
+```
+                         RMAX Custom App
+                              |
+        +---------+-----------+-----------+----------+
+        |         |           |           |          |
+   DocTypes    Overrides   Doc Events   APIs     Client JS
+        |         |           |           |          |
+   Branch     Landed Cost  SI on_submit  customer   POS Payment
+   Config     Voucher      (auto PI)     warehouse  Popup
+        |         |                      stock      
+   Inter Co   CBM-based                  payment    Create
+   Branch     distribution              material    Customer
+        |                               request     
+   Stock                                purchase    Warehouse
+   Transfer                             invoice     Stock Panel
+   (workflow)                           item        
+                                                    Final GRN
+                                                    
+                                                    VAT/Contact
+                                                    Validation
+```
+
+### Data Flow: Sales Invoice Cash Payment
+
+```
+User creates Sales Invoice (Cash mode)
+    → Selects items (stock check + warehouse popup)
+    → Clicks Submit
+    → Payment Popup appears
+    → User allocates amounts across payment modes
+    → Click "Save & Submit"
+        → Updates SI payments table
+        → Saves & Submits SI
+        → Creates Payment Entry per payment mode
+        → If inter-company: auto-creates draft Purchase Invoice
+```
+
+### Data Flow: Stock Transfer
+
+```
+User creates Stock Transfer
+    → Source warehouse auto-set from user default
+    → Selects target warehouse + items
+    → Saves → workflow_state = "Draft"
+    → Submits for approval → "Pending"
+    → Approver approves → "Approved" → auto-creates Stock Entry
+    → OR Approver rejects → "Rejected"
+```
+
+### Data Flow: Branch Configuration
+
+```
+Admin configures Branch
+    → Adds users, warehouses, cost centers
+    → On save: auto-creates User Permissions
+    → Users see only their branch's warehouses/cost centers
+    → On user removal: auto-deletes permissions
+```
+
+---
+
+## Dependencies
+
+- **ERPNext v15** — Core ERP functionality
+- **sf_trading** — Provides `apply_patch` / `restore_patch` and `apply_defaults_patch` / `restore_defaults_patch` used in inter-company PI creation to bypass session defaults
+
+---
+
+## File Structure
+
+```
+rmax_custom/
+├── __init__.py
+├── hooks.py                          # App configuration
+├── inter_company.py                  # Auto PI creation on SI submit
+├── landed_cost.py                    # Helper for distribution field
+├── overrides/
+│   └── landed_cost_voucher.py        # LCV class override (CBM)
+├── api/
+│   ├── customer.py                   # Customer creation & VAT validation
+│   ├── sales_invoice_payment.py      # Payment modes & PE creation
+│   ├── warehouse_stock.py            # Stock balance query
+│   ├── material_request.py           # MR creation
+│   ├── purchase_invoice.py           # Bulk PI from Purchase Receipts
+│   └── item.py                       # Party Specific Item creation
+├── public/js/
+│   ├── warehouse_stock_popup.js      # Stock display panel
+│   ├── sales_invoice_popup.js        # SI form enhancements
+│   ├── sales_invoice_pos_total_popup.js  # POS payment popup
+│   ├── sales_invoice_inter_company.js    # (Inter-company SI JS)
+│   ├── create_customer.js            # Quick customer dialog
+│   ├── create_multiple_supplier.js   # Bulk supplier linking
+│   ├── materiel_request.js           # MR defaults
+│   ├── vat_validation.js             # VAT & phone rules
+│   ├── contact_validation.js         # Contact phone rules
+│   ├── purchase receipt.js           # Final GRN flow
+│   ├── purchase_receipt_list.js      # Bulk PI list action
+│   └── landed_cost_voucher.js        # CBM distribution client
+├── rmax_custom/
+│   ├── custom_scripts/
+│   │   └── quotation/
+│   │       ├── quotation.js          # Create SI from Quotation
+│   │       └── quotation.py          # (empty)
+│   ├── custom/                       # JSON field customizations
+│   │   ├── sales_invoice.json
+│   │   ├── sales_invoice_item.json
+│   │   ├── quotation.json
+│   │   ├── customer.json
+│   │   ├── address.json
+│   │   ├── packed_item.json
+│   │   └── material_request_item.json
+│   ├── page/
+│   │   └── return_invoice/           # Return Invoice page
+│   └── doctype/
+│       ├── branch_configuration/     # Branch access control
+│       ├── branch_configuration_user/
+│       ├── branch_configuration_warehouse/
+│       ├── branch_configuration_cost_center/
+│       ├── inter_company_branch/     # Inter-company config
+│       ├── inter_company_branch_cost_center/
+│       ├── stock_transfer/           # Stock Transfer with workflow
+│       └── stock_transfer_item/
+├── fixtures/
+│   ├── workflow.json
+│   ├── workflow_state.json
+│   ├── workflow_action_master.json
+│   ├── custom_field.json
+│   └── property_setter.json
+├── templates/
+│   └── pages/
+├── config/
+│   └── __init__.py
+├── pyproject.toml
+├── license.txt
+└── README.md
+```

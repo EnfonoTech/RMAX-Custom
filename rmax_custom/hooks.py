@@ -27,6 +27,7 @@ app_license = "mit"
 # include js, css files in header of desk.html
 # app_include_css = "/assets/rmax_custom/css/rmax_custom.css"
 app_include_js = [
+    "/assets/rmax_custom/js/enter_navigation_global.js",
     "/assets/rmax_custom/js/warehouse_stock_popup.js",
     "/assets/rmax_custom/js/sales_invoice_pos_total_popup.js",
     "/assets/rmax_custom/js/sales_invoice_popup.js",
@@ -34,8 +35,8 @@ app_include_js = [
     "/assets/rmax_custom/js/create_multiple_supplier.js",
     "/assets/rmax_custom/js/materiel_request.js",
     "/assets/rmax_custom/js/vat_validation.js",
-    "/assets/rmax_custom/js/contact_validation.js"
-    
+    "/assets/rmax_custom/js/contact_validation.js",
+    "/assets/rmax_custom/js/item_branch_user.js"
 ]
 
 
@@ -61,7 +62,8 @@ doctype_js = {
     "Landed Cost Voucher": "public/js/landed_cost_voucher.js"
 }
 doctype_list_js = {
-    "Purchase Receipt": "public/js/purchase_receipt_list.js"
+    "Purchase Receipt": "public/js/purchase_receipt_list.js",
+    "Material Request": "public/js/material_request_list.js"
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -260,9 +262,14 @@ doc_events = {
 # }
 
 fixtures = [
-    "Workflow", 
-    "Workflow State", 
+    "Workflow",
+    "Workflow State",
     "Workflow Action Master",
+    {
+        "dt": "Role",
+        "filters": [["name", "in", ["Branch User"]]]
+    },
+    "Custom DocPerm",
     {
         "dt": "Custom Field",
         "filters": [
@@ -289,6 +296,9 @@ fixtures = [
                     # Landed Cost Item (CBM per item)
                     "Landed Cost Item-custom_cbm",
                     "Customer-custom_vat_registration_number",
+
+                    # Material Request
+                    "Material Request-custom_is_urgent",
                 ]
             ]
         ]

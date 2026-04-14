@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RMAX Custom - User Guide</title>
+<style>
+  :root {
+    --sidebar-bg: #1a1a2e;
+    --sidebar-hover: #16213e;
+    --sidebar-active: #0f3460;
+    --accent: #e94560;
+    --accent-light: #ff6b81;
+    --bg: #f5f6fa;
+    --card-bg: #ffffff;
+    --text: #2d3436;
+    --text-light: #636e72;
+    --border: #dfe6e9;
+    --success: #00b894;
+    --warning: #fdcb6e;
+    --danger: #d63031;
+    --info: #0984e3;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    width: 280px;
+    min-height: 100vh;
+    background: var(--sidebar-bg);
+    color: #fff;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow-y: auto;
+    z-index: 100;
+    transition: transform 0.3s;
+  }
+
+  .sidebar-header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    text-align: center;
+  }
+
+  .sidebar-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .sidebar-header p {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 4px;
+  }
+
+  .sidebar-section {
+    padding: 16px 0 8px;
+  }
+
+  .sidebar-section-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.35);
+    padding: 0 20px 8px;
+    font-weight: 600;
+  }
+
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 20px;
+    color: rgba(255,255,255,0.7);
+    text-decoration: none;
+    font-size: 13.5px;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+  }
+
+  .sidebar a:hover {
+    background: var(--sidebar-hover);
+    color: #fff;
+    border-left-color: var(--accent);
+  }
+
+  .sidebar a .icon {
+    font-size: 16px;
+    width: 22px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  /* ─── Main ─── */
+  .main {
+    margin-left: 280px;
+    flex: 1;
+    padding: 40px 48px 80px;
+    max-width: 920px;
+  }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--sidebar-bg);
+    margin-bottom: 8px;
+    padding-bottom: 16px;
+    border-bottom: 3px solid var(--accent);
+  }
+
+  .page-subtitle {
+    font-size: 15px;
+    color: var(--text-light);
+    margin-bottom: 40px;
+  }
+
+  /* ─── Sections ─── */
+  .section {
+    margin-bottom: 48px;
+    scroll-margin-top: 20px;
+  }
+
+  .section h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--sidebar-bg);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .section h2 .badge {
+    font-size: 10px;
+    background: var(--accent);
+    color: #fff;
+    padding: 3px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .section > p {
+    color: var(--text-light);
+    margin-bottom: 20px;
+    font-size: 14.5px;
+  }
+
+  /* ─── Cards ─── */
+  .card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    padding: 24px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--sidebar-bg);
+    margin-bottom: 12px;
+  }
+
+  /* ─── Steps ─── */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+  }
+
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 12px 0 12px 48px;
+    border-left: 2px solid var(--border);
+    margin-left: 16px;
+    font-size: 14px;
+  }
+
+  .steps li:last-child {
+    border-left-color: transparent;
+  }
+
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -14px;
+    top: 10px;
+    width: 26px;
+    height: 26px;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .steps li strong {
+    color: var(--sidebar-bg);
+  }
+
+  /* ─── Callouts ─── */
+  .callout {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 13.5px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+
+  .callout .callout-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    line-height: 1.4;
+  }
+
+  .callout-tip {
+    background: #eafaf1;
+    border-left: 4px solid var(--success);
+    color: #1e8449;
+  }
+
+  .callout-warning {
+    background: #fef9e7;
+    border-left: 4px solid var(--warning);
+    color: #7d6608;
+  }
+
+  .callout-danger {
+    background: #fdedec;
+    border-left: 4px solid var(--danger);
+    color: #922b21;
+  }
+
+  .callout-info {
+    background: #ebf5fb;
+    border-left: 4px solid var(--info);
+    color: #1a5276;
+  }
+
+  /* ─── Field ref ─── */
+  .field {
+    display: inline-block;
+    background: #f0f0f5;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12.5px;
+    color: var(--accent);
+    border: 1px solid #e0e0ea;
+  }
+
+  /* ─── Path / navigation breadcrumb ─── */
+  .nav-path {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f8f9fa;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-light);
+    margin-bottom: 16px;
+    border: 1px solid var(--border);
+  }
+
+  .nav-path span {
+    color: var(--sidebar-bg);
+    font-weight: 600;
+  }
+
+  .nav-path .arrow {
+    color: var(--accent);
+    font-weight: bold;
+  }
+
+  /* ─── Table ─── */
+  .info-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 13.5px;
+  }
+
+  .info-table th {
+    background: var(--sidebar-bg);
+    color: #fff;
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .info-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-table tr:nth-child(even) td {
+    background: #f8f9fa;
+  }
+
+  /* ─── Workflow diagram ─── */
+  .workflow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+
+  .workflow-state {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 100px;
+  }
+
+  .workflow-arrow {
+    font-size: 20px;
+    color: var(--text-light);
+    padding: 0 4px;
+  }
+
+  .wf-draft { background: #ffeaa7; color: #6c5b16; }
+  .wf-pending { background: #74b9ff; color: #1a3a5c; }
+  .wf-approved { background: #55efc4; color: #0a6b4a; }
+  .wf-rejected { background: #fab1a0; color: #6b2d20; }
+
+  /* ─── Kbd ─── */
+  kbd {
+    display: inline-block;
+    padding: 2px 7px;
+    font-size: 12px;
+    font-family: inherit;
+    background: #f8f9fa;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 1px 0 #bbb;
+    color: var(--text);
+  }
+
+  /* ─── Feature grid ─── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .feature-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+
+  .feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+
+  .feature-card .feature-icon {
+    font-size: 32px;
+    margin-bottom: 10px;
+  }
+
+  .feature-card h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--sidebar-bg);
+  }
+
+  .feature-card p {
+    font-size: 12.5px;
+    color: var(--text-light);
+  }
+
+  /* ─── Divider ─── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 40px 0;
+  }
+
+  /* ─── Mobile toggle ─── */
+  .mobile-toggle {
+    display: none;
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 200;
+    background: var(--sidebar-bg);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar {
+      transform: translateX(-100%);
+    }
+    .sidebar.open {
+      transform: translateX(0);
+    }
+    .main {
+      margin-left: 0;
+      padding: 24px 20px 60px;
+    }
+    .mobile-toggle {
+      display: block;
+    }
+    .page-title { font-size: 22px; }
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Print */
+  @media print {
+    .sidebar, .mobile-toggle { display: none; }
+    .main { margin-left: 0; max-width: 100%; }
+    .card { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Mobile Menu Toggle -->
+<button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">&#9776;</button>
+
+<!-- ═══════════════════════ SIDEBAR ═══════════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <h1>RMAX</h1>
+    <p>Custom App &mdash; User Guide</p>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Overview</div>
+    <a href="#overview"><span class="icon">&#127968;</span> Home</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Admin Guide</div>
+    <a href="#branch-config"><span class="icon">&#9881;</span> Branch Configuration</a>
+    <a href="#inter-company"><span class="icon">&#128260;</span> Inter Company Branch</a>
+    <a href="#workflows"><span class="icon">&#128259;</span> Workflows</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">User Guide</div>
+    <a href="#sales-invoice-cash"><span class="icon">&#128176;</span> Sales Invoice (Cash)</a>
+    <a href="#sales-invoice-credit"><span class="icon">&#128179;</span> Sales Invoice (Credit)</a>
+    <a href="#create-customer"><span class="icon">&#128100;</span> Create Customer</a>
+    <a href="#warehouse-stock"><span class="icon">&#128230;</span> Warehouse Stock</a>
+    <a href="#material-request"><span class="icon">&#128666;</span> Material Request</a>
+    <a href="#stock-transfer"><span class="icon">&#128230;</span> Stock Transfer</a>
+    <a href="#final-grn"><span class="icon">&#128220;</span> Final GRN</a>
+    <a href="#bulk-pi"><span class="icon">&#128203;</span> Bulk Purchase Invoice</a>
+    <a href="#quotation-to-si"><span class="icon">&#128196;</span> Quotation to Invoice</a>
+    <a href="#landed-cost-cbm"><span class="icon">&#128438;</span> Landed Cost (CBM)</a>
+    <a href="#vat-validation"><span class="icon">&#9989;</span> VAT Validation</a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════ MAIN CONTENT ═══════════════════════ -->
+<main class="main">
+
+  <!-- ─── OVERVIEW ─── -->
+  <section class="section" id="overview">
+    <h1 class="page-title">RMAX Custom &mdash; User Guide</h1>
+    <p class="page-subtitle">Complete guide for administrators and branch users to work with the RMAX Custom app on ERPNext.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">&#128176;</div>
+        <h4>POS Sales</h4>
+        <p>Cash &amp; Credit invoices with payment popup</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#9881;</div>
+        <h4>Branch Setup</h4>
+        <p>Auto-managed permissions per branch</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128230;</div>
+        <h4>Stock Transfers</h4>
+        <p>Transfer with approval workflow</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128260;</div>
+        <h4>Inter-Company</h4>
+        <p>Auto Purchase Invoice on submit</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128438;</div>
+        <h4>Landed Cost CBM</h4>
+        <p>Distribute charges by cubic meters</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#128100;</div>
+        <h4>Quick Customer</h4>
+        <p>Create customer directly from invoice</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ════════════════════ ADMIN GUIDE ════════════════════ -->
+
+  <!-- ─── BRANCH CONFIGURATION ─── -->
+  <section class="section" id="branch-config">
+    <h2>&#9881; Branch Configuration <span class="badge">Admin</span></h2>
+    <p>Branch Configuration controls which Company, Warehouses, Cost Centers, and Users belong to a branch. When you save, user permissions are <strong>automatically created</strong> for every user in the list.</p>
+
+    <div class="nav-path">
+      <span>Search Bar</span> <span class="arrow">&rarr;</span> <span>Branch Configuration</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>How to Create a Branch Configuration</h3>
+      <ol class="steps">
+        <li>Go to the search bar and type <strong>Branch Configuration</strong>, then click <strong>+ Add Branch Configuration</strong>.</li>
+        <li>Select the <strong class="field">Branch</strong> (e.g. "Jeddah").</li>
+        <li>Select the <strong class="field">Company</strong> this branch belongs to (e.g. "Clearlight New Co."). This is required.</li>
+        <li>In the <strong>Warehouse</strong> table, add the warehouses for this branch. They will be filtered to show only warehouses from the selected company. The <strong>first warehouse</strong> becomes the user's default.</li>
+        <li>In the <strong>Cost Center</strong> table, add cost centers. They are also filtered by company. The <strong>first cost center</strong> becomes the default.</li>
+        <li>In the <strong>User</strong> table, add all users who work in this branch (e.g. shameel@rmax.com, naseef@rmaxled.com).</li>
+        <li>Click <strong>Save</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#9989;</span>
+      <div><strong>Auto Permissions:</strong> On save, the system automatically creates User Permissions for every user &times; Company, Branch, Warehouse, and Cost Center. Company, first Warehouse, and first Cost Center are set as the user's <strong>default</strong>, so they auto-fill in new documents like Sales Invoices.</div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Changing Company:</strong> If you change the Company field, the Warehouse and Cost Center tables will be <strong>cleared automatically</strong> because they belong to the old company. You'll need to re-add them.</div>
+    </div>
+
+    <div class="card">
+      <h3>What Happens Automatically</h3>
+      <table class="info-table">
+        <tr><th>Action</th><th>Result</th></tr>
+        <tr><td>Save with users</td><td>User Permissions created for Company, Branch, Warehouse, Cost Center</td></tr>
+        <tr><td>Remove a user</td><td>Their permissions are automatically deleted</td></tr>
+        <tr><td>Change Company</td><td>Old company permission removed, new one created</td></tr>
+        <tr><td>User logs in</td><td>Default Company, Warehouse, Cost Center auto-fill in new documents</td></tr>
+      </table>
+    </div>
+
+    <div class="callout callout-danger">
+      <span class="callout-icon">&#128683;</span>
+      <div><strong>Important:</strong> Warehouses and Cost Centers <strong>must belong to the selected Company</strong>. The system validates this on save and will show an error if there's a mismatch.</div>
+    </div>
+  </section>
+
+  <!-- ─── INTER COMPANY BRANCH ─── -->
+  <section class="section" id="inter-company">
+    <h2>&#128260; Inter Company Branch <span class="badge">Admin</span></h2>
+    <p>Used when you sell from one company to another (internal customer). This configuration tells the system which Cost Center and Warehouse to use when auto-creating the Purchase Invoice in the buying company.</p>
+
+    <div class="nav-path">
+      <span>Search Bar</span> <span class="arrow">&rarr;</span> <span>Inter Company Branch</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>Setup Steps</h3>
+      <ol class="steps">
+        <li>Go to <strong>Inter Company Branch</strong> list and click <strong>+ Add</strong>.</li>
+        <li>Enter a <strong>Branch Name</strong> (e.g. "Jeddah Branch").</li>
+        <li>In the <strong>Company Cost Centers</strong> table, add a row for each company involved:
+          <br>&bull; Select the <strong class="field">Company</strong> (the buying company)
+          <br>&bull; Select the <strong class="field">Cost Center</strong> for that company
+          <br>&bull; Select the <strong class="field">Warehouse</strong> for that company
+        </li>
+        <li>Save.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128161;</span>
+      <div><strong>How it works:</strong> When a Sales Invoice with an <strong>internal customer</strong> is submitted, the system automatically creates a draft Purchase Invoice in the buying company. It uses the Cost Center and Warehouse from this Inter Company Branch configuration. The <span class="field">Inter Company Branch</span> field on the Sales Invoice determines which branch config to use.</div>
+    </div>
+
+    <div class="card">
+      <h3>Auto-Created Purchase Invoice Details</h3>
+      <table class="info-table">
+        <tr><th>Field</th><th>Source</th></tr>
+        <tr><td>Supplier Invoice No</td><td>Sales Invoice name</td></tr>
+        <tr><td>Supplier Invoice Date</td><td>Sales Invoice posting date</td></tr>
+        <tr><td>Cost Center</td><td>Inter Company Branch &rarr; Company row</td></tr>
+        <tr><td>Warehouse</td><td>Inter Company Branch &rarr; Company row</td></tr>
+        <tr><td>Taxes</td><td>Default Purchase Taxes template for the buying company</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─── WORKFLOWS ─── -->
+  <section class="section" id="workflows">
+    <h2>&#128259; Workflows <span class="badge">Admin</span></h2>
+    <p>The Stock Transfer document uses an approval workflow.</p>
+
+    <div class="card">
+      <h3>Stock Transfer Workflow</h3>
+      <div class="workflow">
+        <div class="workflow-state wf-draft">Draft</div>
+        <span class="workflow-arrow">&rarr;</span>
+        <div class="workflow-state wf-pending">Pending</div>
+        <span class="workflow-arrow">&rarr;</span>
+        <div class="workflow-state wf-approved">Approved</div>
+      </div>
+      <div class="workflow" style="margin-top:8px; margin-left: 150px;">
+        <span class="workflow-arrow" style="visibility:hidden">&rarr;</span>
+        <span class="workflow-arrow" style="visibility:hidden">&rarr;</span>
+        <span class="workflow-arrow">&searr;</span>
+        <div class="workflow-state wf-rejected">Rejected</div>
+      </div>
+      <br>
+      <table class="info-table">
+        <tr><th>State</th><th>Who Can Act</th><th>What Happens</th></tr>
+        <tr><td><strong>Draft</strong></td><td>Any user</td><td>User creates and fills in the transfer details</td></tr>
+        <tr><td><strong>Pending</strong></td><td>Any user</td><td>Transfer submitted for approval</td></tr>
+        <tr><td><strong>Approved</strong></td><td>Approver role</td><td>Stock Entry (Material Transfer) is <strong>auto-created and submitted</strong></td></tr>
+        <tr><td><strong>Rejected</strong></td><td>Approver role</td><td>Transfer is rejected, no stock movement</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ════════════════════ USER GUIDE ════════════════════ -->
+
+  <!-- ─── SALES INVOICE CASH ─── -->
+  <section class="section" id="sales-invoice-cash">
+    <h2>&#128176; Sales Invoice &mdash; Cash Mode</h2>
+    <p>The most common daily operation. Create a sales invoice with cash payment.</p>
+
+    <div class="nav-path">
+      <span>Accounting</span> <span class="arrow">&rarr;</span> <span>Sales Invoice</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open a <strong>New Sales Invoice</strong>. The <span class="field">Company</span>, <span class="field">Warehouse</span>, and <span class="field">Cost Center</span> will auto-fill from your branch defaults.</li>
+        <li>Set <strong class="field">Payment Mode</strong> to <strong>Cash</strong>.</li>
+        <li>Select or create a <strong class="field">Customer</strong>. (You can use the "Create New Customer" button to quickly add one.)</li>
+        <li>Add items to the <strong>Items</strong> table. Use <kbd>Enter</kbd> to move between columns and rows.
+          <br>The system will <strong>check stock</strong> automatically and warn you if quantity exceeds available stock.</li>
+        <li>Click <strong>Save</strong>. A <strong>Payment Popup</strong> will appear.</li>
+        <li>In the popup, allocate payment amounts across different payment modes (Cash, Card, etc.):
+          <br>&bull; Click a <strong>payment mode button</strong> to fill the full amount to that mode
+          <br>&bull; Or <strong>click the input field</strong> to auto-fill the remaining balance
+          <br>&bull; You can <strong>split payments</strong> across multiple modes
+        </li>
+        <li>Click <strong>Save &amp; Submit</strong> to submit the invoice and create Payment Entries automatically.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#128161;</span>
+      <div><strong>Quick Tip:</strong> Use the <strong>New Invoice</strong> button (top-right) to open a new Sales Invoice in a new browser tab while the current one is still open.</div>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128176;</span>
+      <div><strong>Payment Entries:</strong> When you click "Save &amp; Submit", the system automatically creates <strong>one Payment Entry per payment mode</strong> and submits them. You don't need to create Payment Entries manually.</div>
+    </div>
+  </section>
+
+  <!-- ─── SALES INVOICE CREDIT ─── -->
+  <section class="section" id="sales-invoice-credit">
+    <h2>&#128179; Sales Invoice &mdash; Credit Mode</h2>
+    <p>For credit sales where the customer pays later.</p>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Create a <strong>New Sales Invoice</strong> as usual.</li>
+        <li>Set <strong class="field">Payment Mode</strong> to <strong>Credit</strong>.</li>
+        <li>Notice that the <strong>Customer</strong> dropdown is now <strong>filtered</strong> to show only customers with a credit limit.</li>
+        <li>Select a customer and add items.</li>
+        <li>Click <strong>Save</strong>. A confirmation dialog will ask: <em>"Do you want to Submit this Sales Invoice now?"</em>
+          <br>&bull; Click <strong>Yes</strong> to submit immediately
+          <br>&bull; Click <strong>No</strong> to save as draft
+        </li>
+      </ol>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Note:</strong> In Credit mode, there is <strong>no payment popup</strong>. Payment will be collected later through a separate Payment Entry.</div>
+    </div>
+  </section>
+
+  <!-- ─── CREATE CUSTOMER ─── -->
+  <section class="section" id="create-customer">
+    <h2>&#128100; Create Customer (Quick)</h2>
+    <p>Create a new customer directly from the Sales Invoice without leaving the form.</p>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>On a new Sales Invoice, click the <strong>+ Create New Customer</strong> button above the Customer field.</li>
+        <li>Fill in the dialog:
+          <br>&bull; <strong class="field">Customer Name</strong> (required)
+          <br>&bull; <strong class="field">Mobile No</strong> (required)
+          <br>&bull; <strong class="field">Email ID</strong> (optional)
+          <br>&bull; <strong class="field">VAT Registration Number</strong> (optional, exactly 15 digits)
+        </li>
+        <li>If VAT number is entered, address fields become <strong>mandatory</strong>:
+          <br>&bull; Address Line 1, Building Number, Area/District, City, Country, Postal Code
+        </li>
+        <li>Click <strong>Create Customer</strong>.</li>
+        <li>The new customer is automatically set on the Sales Invoice.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#9989;</span>
+      <div><strong>Auto-created:</strong> The system creates both a <strong>Customer</strong> record and an <strong>Address</strong> record linked together. The address is set as both primary billing and shipping address.</div>
+    </div>
+  </section>
+
+  <!-- ─── WAREHOUSE STOCK ─── -->
+  <section class="section" id="warehouse-stock">
+    <h2>&#128230; Warehouse Stock Panel</h2>
+    <p>See real-time stock levels across all warehouses when selecting items on Sales Invoice.</p>
+
+    <div class="card">
+      <h3>How It Works</h3>
+      <ol class="steps">
+        <li>On a Sales Invoice (or Quotation), click on an <strong>item row</strong> in the Items table.</li>
+        <li>A <strong>stock panel</strong> appears below the items table showing stock quantities across all warehouses.</li>
+        <li>The currently selected warehouse is <strong>highlighted</strong>.</li>
+        <li>Click on any warehouse row to <strong>set that warehouse</strong> on the item.</li>
+        <li>Click <strong>Show All</strong> to see all warehouses (default shows top 5).</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128200;</span>
+      <div><strong>Stock Check:</strong> When you enter a quantity that exceeds available stock, the system will show a <strong>red alert</strong> and automatically reduce the quantity to the available stock.</div>
+    </div>
+  </section>
+
+  <!-- ─── MATERIAL REQUEST ─── -->
+  <section class="section" id="material-request">
+    <h2>&#128666; Material Request (Transfer)</h2>
+    <p>Request stock to be transferred from one warehouse to another. The default type is set to "Material Transfer".</p>
+
+    <div class="nav-path">
+      <span>Stock</span> <span class="arrow">&rarr;</span> <span>Material Request</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open a <strong>New Material Request</strong>. The type defaults to <strong>Material Transfer</strong>.</li>
+        <li>The <strong class="field">Target Warehouse</strong> (Set Warehouse) auto-fills from your default warehouse permission.</li>
+        <li>Select the <strong class="field">Source Warehouse</strong> (Set From Warehouse). It is filtered to exclude the target warehouse.</li>
+        <li>Add items and quantities. Schedule Date is auto-set to today.</li>
+        <li><strong>Save</strong> and <strong>Submit</strong>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─── STOCK TRANSFER ─── -->
+  <section class="section" id="stock-transfer">
+    <h2>&#128230; Stock Transfer</h2>
+    <p>Transfer stock between warehouses with an approval workflow. When approved, a Stock Entry is automatically created.</p>
+
+    <div class="nav-path">
+      <span>Search Bar</span> <span class="arrow">&rarr;</span> <span>Stock Transfer</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step (Requester)</h3>
+      <ol class="steps">
+        <li>Open a <strong>New Stock Transfer</strong>.</li>
+        <li>The <strong class="field">Source Warehouse</strong> auto-fills from your default warehouse.</li>
+        <li>Select the <strong class="field">Target Warehouse</strong> (filtered to exclude source, ignores user permissions so you can send to any warehouse).</li>
+        <li>Add items: select <strong class="field">Item Code</strong>, set <strong class="field">Quantity</strong>, and choose <strong class="field">UOM</strong> (filtered to the item's available UOMs).</li>
+        <li><strong>Save</strong> to create as Draft.</li>
+        <li>Click <strong>Submit</strong> to send for approval (state changes to <strong>Pending</strong>).</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step (Approver)</h3>
+      <ol class="steps">
+        <li>Open the Stock Transfer in <strong>Pending</strong> state.</li>
+        <li>Review the items and quantities.</li>
+        <li>Click <strong>Approve</strong> to approve &mdash; a <strong>Stock Entry (Material Transfer)</strong> is automatically created and submitted.</li>
+        <li>Or click <strong>Reject</strong> to reject the transfer.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#9989;</span>
+      <div>After approval, a <strong>link to the Stock Entry</strong> is shown in an alert. The Stock Entry name is also saved on the Stock Transfer record for reference.</div>
+    </div>
+  </section>
+
+  <!-- ─── FINAL GRN ─── -->
+  <section class="section" id="final-grn">
+    <h2>&#128220; Purchase Receipt &mdash; Final GRN</h2>
+    <p>Replace an existing Purchase Receipt with a corrected one. The original is automatically cancelled when the new one is submitted.</p>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open the existing <strong>Purchase Receipt</strong> you want to replace.</li>
+        <li>Click <strong>Create</strong> &rarr; <strong>Final GRN</strong>.</li>
+        <li>A new Purchase Receipt opens with all data copied:
+          <br>&bull; Header fields (supplier, company, currency, etc.)
+          <br>&bull; All item rows with quantities, rates, and warehouses
+          <br>&bull; Tax rows
+          <br>&bull; Posting time is set to <strong>10 minutes before</strong> the original
+        </li>
+        <li>Make your corrections (edit quantities, items, etc.).</li>
+        <li>Click <strong>Submit</strong>.</li>
+        <li>The <strong>original Purchase Receipt is automatically cancelled</strong> (if submitted) or deleted (if draft).</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Important:</strong> The auto-cancel only works when submitting from the same browser session where you clicked "Final GRN". If you navigate away and come back, you'll need to cancel the original manually.</div>
+    </div>
+  </section>
+
+  <!-- ─── BULK PI ─── -->
+  <section class="section" id="bulk-pi">
+    <h2>&#128203; Bulk Purchase Invoice</h2>
+    <p>Create a single Purchase Invoice from multiple Purchase Receipts at once.</p>
+
+    <div class="nav-path">
+      <span>Stock</span> <span class="arrow">&rarr;</span> <span>Purchase Receipt</span> <span class="arrow">&rarr;</span> <span>List View</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Go to the <strong>Purchase Receipt list</strong>.</li>
+        <li>Select multiple Purchase Receipts using the <strong>checkboxes</strong> (they must be from the same supplier).</li>
+        <li>Click <strong>Actions</strong> &rarr; <strong>Create Single Purchase Invoice</strong>.</li>
+        <li>Confirm the action. A single Purchase Invoice is created with all items from all selected receipts.</li>
+        <li>A success message with a <strong>link to the new Purchase Invoice</strong> appears.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─── QUOTATION TO SI ─── -->
+  <section class="section" id="quotation-to-si">
+    <h2>&#128196; Quotation to Sales Invoice</h2>
+    <p>Convert a submitted Quotation directly into a Sales Invoice.</p>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open a <strong>submitted</strong> Quotation.</li>
+        <li>Click <strong>Create</strong> &rarr; <strong>Sales Invoice</strong>.</li>
+        <li>A new Sales Invoice opens with all items and details mapped from the Quotation.</li>
+        <li>Review, adjust if needed, and <strong>Save/Submit</strong>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ─── LANDED COST CBM ─── -->
+  <section class="section" id="landed-cost-cbm">
+    <h2>&#128438; Landed Cost Voucher &mdash; CBM Distribution</h2>
+    <p>Distribute landed costs across items proportionally based on their CBM (Cubic Meters) values, instead of the standard Qty or Amount methods.</p>
+
+    <div class="nav-path">
+      <span>Stock</span> <span class="arrow">&rarr;</span> <span>Landed Cost Voucher</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open a <strong>Landed Cost Voucher</strong> and add the Purchase Receipt(s).</li>
+        <li>Set <strong class="field">Distribute Charges Based On</strong> to <strong>Distribute Manually</strong>.</li>
+        <li>Check the <strong class="field">Distribute by CBM</strong> checkbox (appears after selecting Distribute Manually).</li>
+        <li>In the items table, enter the <strong class="field">CBM</strong> value for each item.</li>
+        <li>Add the tax/charge row in the <strong>Taxes and Charges</strong> table.</li>
+        <li>The <strong class="field">Applicable Charges</strong> column auto-fills proportionally based on each item's CBM ratio.</li>
+        <li><strong>Save</strong> and <strong>Submit</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128202;</span>
+      <div><strong>Calculation:</strong> Each item's applicable charge = (Item CBM / Total CBM) &times; Total Charges. Any rounding difference is adjusted on the last item automatically.</div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Limit:</strong> When using "Distribute Manually", only <strong>one tax/charge row</strong> is allowed. For multiple charges, create separate Landed Cost Vouchers.</div>
+    </div>
+  </section>
+
+  <!-- ─── VAT VALIDATION ─── -->
+  <section class="section" id="vat-validation">
+    <h2>&#9989; VAT &amp; Contact Validation</h2>
+    <p>The system enforces Saudi VAT and phone number rules automatically.</p>
+
+    <div class="card">
+      <h3>VAT Rules (Customer)</h3>
+      <table class="info-table">
+        <tr><th>Rule</th><th>Detail</th></tr>
+        <tr><td>Digits only</td><td>Only numeric characters allowed in VAT field</td></tr>
+        <tr><td>Exactly 15 digits</td><td>VAT must be exactly 15 digits to save</td></tr>
+        <tr><td>Unique</td><td>No two customers (except "Branch" type) can have the same VAT number</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Phone Number Rules</h3>
+      <table class="info-table">
+        <tr><th>Rule</th><th>Detail</th></tr>
+        <tr><td>Minimum 10 digits</td><td>Both mobile and phone numbers must have at least 10 digits</td></tr>
+        <tr><td>Validated on</td><td>Customer form (primary contact) and Contact form (all phone numbers)</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Customer Type</h3>
+      <p>Customer Type options include: <strong>Company, Individual, Partnership, Branch</strong>.</p>
+      <div class="callout callout-info" style="margin-bottom:0">
+        <span class="callout-icon">&#128274;</span>
+        <div>The <strong>"Branch"</strong> option is only visible to users with <strong>System Manager</strong> or <strong>Auditor</strong> roles. Regular users will not see it.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <p style="text-align:center; color: var(--text-light); font-size: 13px; padding: 20px 0;">
+    RMAX Custom App User Guide &mdash; Built by Enfono
+  </p>
+
+</main>
+
+</body>
+</html>

@@ -7,11 +7,12 @@ frappe.ui.form.on('Stock Transfer', {
         if (frm.is_new()) {
             set_default_target(frm);
         }
+        // Source warehouse: only user's permitted warehouses (from Branch Configuration)
         frm.set_query('set_source_warehouse', function() {
             return {
-                ignore_user_permissions: 1,
-                 filters: {
-                    name: frm.doc.set_source_warehouse
+                filters: {
+                    company: frm.doc.company,
+                    is_group: 0
                 }
             };
         });

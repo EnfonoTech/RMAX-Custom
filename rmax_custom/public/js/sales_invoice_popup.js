@@ -7,7 +7,6 @@ frappe.ui.form.on("Sales Invoice", {
         }
         ensure_update_stock_for_pos_profile(frm);
         set_pos_behavior(frm);
-        setup_enter_navigation(frm);
     },
     pos_profile(frm) {
         ensure_update_stock_for_pos_profile(frm);
@@ -27,39 +26,7 @@ frappe.ui.form.on("Sales Invoice", {
         check_stock(frm);
     },
     onload(frm) {
-
-        let grid = frm.fields_dict.items.grid;
-
-        grid.wrapper.on('keydown', 'input, select, textarea', function(e) {
-
-            if (e.key !== "Enter") return;
-
-            e.preventDefault();
-
-            let $inputs = $(this).closest('.grid-row')
-                                 .find('input, select, textarea')
-                                 .filter(':visible');
-
-            let index = $inputs.index(this);
-
-            // 🔹 Same row next column
-            if (index < $inputs.length - 1) {
-                $inputs.eq(index + 1).focus();
-            } 
-            // 🔹 Last column → next row
-            else {
-                let $nextRow = $(this).closest('.grid-row').next('.grid-row');
-
-                if ($nextRow.length) {
-                    $nextRow.find('input, select, textarea')
-                            .filter(':visible')
-                            .first()
-                            .focus();
-                } else {
-                    grid.add_new_row();
-                }
-            }
-        });
+        // Enter key navigation is now handled globally by enter_navigation_global.js
     }
 });
 
@@ -136,72 +103,4 @@ function check_stock(frm, cdt, cdn) {
 }
 
 
-function setup_enter_navigation(frm) {
-    if (!frm.fields_dict.items) return;
-    let grid = frm.fields_dict.items.grid;
-    if (!grid) return;
-    $(document).off("keydown.pos_enter_override");
-    $(document).on("keydown.pos_enter_override", function(e) {
-        if (e.key !== "Enter") return;
-        let $active = $(document.activeElement);
-        if (!$active.closest(".grid-row").length) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();  
-
-        let $currentRow = $active.closest(".grid-row");
-        let current_docname = $currentRow.attr("data-name");
-        let current_row = grid.get_row(current_docname);
-
-        if (!current_row) return;
-
-        let row_index = grid.grid_rows.indexOf(current_row);
-
-        let $inputs = $currentRow
-            .find("input, select, textarea")
-            .filter(":visible:not([readonly]):not([disabled])");
-
-        let index = $inputs.index(document.activeElement);
-        if (index < $inputs.length - 1) {
-            $inputs.eq(index + 1).focus().select();
-            return;
-        }
-        if (row_index < grid.grid_rows.length - 1) {
-
-            let next_row = grid.grid_rows[row_index + 1];
-            next_row.activate();
-
-            setTimeout(() => {
-                let $nextInputs = $(next_row.row)
-                    .find("input, select, textarea")
-                    .filter(":visible:not([readonly]):not([disabled])");
-
-                if ($nextInputs.length) {
-                    $nextInputs.eq(0).focus().select();
-                }
-            }, 100);
-
-        } else {
-
-            grid.add_new_row();
-
-            setTimeout(() => {
-                let rows = grid.grid_rows;
-                let new_row = rows[rows.length - 1];
-
-                if (!new_row) return;
-
-                new_row.activate();
-
-                let $newInputs = $(new_row.row)
-                    .find("input, select, textarea")
-                    .filter(":visible:not([readonly]):not([disabled])");
-
-                if ($newInputs.length) {
-                    $newInputs.eq(0).focus().select();
-                }
-
-            }, 150);
-        }
-
-    });
-}
+// Enter navigation is now handled globally by enter_navigation_global.js
