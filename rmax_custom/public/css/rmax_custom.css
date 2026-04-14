@@ -1,17 +1,30 @@
-/* RMAX Custom: List view layout adjustments */
+/* RMAX Custom: List view layout */
 
-/* Move Filter button and Sort to the right in list view */
-.list-row-container .list-headers .list-header-subject {
-    flex: 1;
-}
-
-/* Ensure filter/sort controls align right */
-.frappe-list .list-row-head .list-row-activity {
-    margin-left: auto;
-}
-
-/* Standard filters row — wrap neatly on smaller screens */
+/* Standard filters: left-aligned, wrapping */
 .frappe-list .standard-filter-section {
-    flex-wrap: wrap;
-    gap: 4px;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+    align-items: center !important;
+    flex: 1 !important;
+}
+
+/* Filter/Sort buttons: stay right */
+.frappe-list .sort-selector,
+.frappe-list .filter-selector {
+    flex-shrink: 0 !important;
+}
+
+/* Ensure list header uses flexbox properly */
+.frappe-list .list-row-head .level {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+/* Page head fields — remove duplicate Grand Total/Total Qty
+   (already in standard filters via Property Setters) */
+.page-head .page-form .frappe-control[data-fieldname="grand_total"],
+.page-head .page-form .frappe-control[data-fieldname="total_qty"] {
+    display: none !important;
 }

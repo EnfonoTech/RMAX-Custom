@@ -1,45 +1,46 @@
 /**
- * RMAX Custom: Sales Invoice List View enhancements
- * - Additional standard filters: Customer Mobile, Grand Total, Item, Total Qty
+ * RMAX Custom: Sales Invoice List View
+ *
+ * Standard filters (Grand Total, Total Qty, Mobile No) are added via
+ * Property Setters (in_standard_filter=1) — no JS needed for those.
+ *
+ * This file handles any additional list view customizations.
  */
 frappe.listview_settings["Sales Invoice"] = frappe.listview_settings["Sales Invoice"] || {};
 
-// Preserve existing onload if any
 var _orig_si_onload = frappe.listview_settings["Sales Invoice"].onload;
 
 frappe.listview_settings["Sales Invoice"].onload = function (listview) {
     if (_orig_si_onload) _orig_si_onload(listview);
 
-    // Add custom filters to the filter area
-    // Grand Total (with tax)
-    listview.page.add_field({
-        fieldname: "grand_total",
-        label: __("Grand Total"),
-        fieldtype: "Currency",
-        change: function () {
-            var val = this.get_value();
-            if (val) {
-                listview.filter_area.add("Sales Invoice", "grand_total", ">=", val);
-            } else {
-                listview.filter_area.remove("grand_total");
-            }
-            listview.refresh();
-        }
-    });
-
-    // Total Quantity
-    listview.page.add_field({
-        fieldname: "total_qty",
-        label: __("Total Qty"),
-        fieldtype: "Float",
-        change: function () {
-            var val = this.get_value();
-            if (val) {
-                listview.filter_area.add("Sales Invoice", "total_qty", ">=", val);
-            } else {
-                listview.filter_area.remove("total_qty");
-            }
-            listview.refresh();
-        }
-    });
+    // Inject CSS to organize the list view layout
+    if (!document.getElementById("rmax-list-style")) {
+        var style = document.createElement("style");
+        style.id = "rmax-list-style";
+        style.textContent = [
+            /* Standard filters area: left-aligned, wrap nicely */
+            ".frappe-list .standard-filter-section {",
+            "  display: flex !important;",
+            "  flex-wrap: wrap !important;",
+            "  gap: 6px !important;",
+            "  align-items: center !important;",
+            "  flex: 1 !important;",
+            "}",
+            /* Filter controls row: space between filters and buttons */
+            ".frappe-list .list-row-head .level-left {",
+            "  flex: 1 !important;",
+            "}",
+            /* Keep filter/sort buttons right-aligned */
+            ".frappe-list .list-row-head .level-right {",
+            "  margin-left: auto !important;",
+            "  flex-shrink: 0 !important;",
+            "}",
+            /* Page head fields (added by page.add_field) — hide duplicates */
+            ".page-head .page-form .frappe-control[data-fieldname='grand_total'],",
+            ".page-head .page-form .frappe-control[data-fieldname='total_qty'] {",
+            "  display: none !important;",
+            "}",
+        ].join("\n");
+        document.head.appendChild(style);
+    }
 };
