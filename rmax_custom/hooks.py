@@ -352,6 +352,7 @@ fixtures = [
 
                     # Material Request — ignore user permissions on warehouse fields
                     # (our custom permission_query_conditions handles branch filtering)
+                    "Material Request-set_warehouse-ignore_user_permissions",
                     "Material Request-set_from_warehouse-ignore_user_permissions",
                     "Material Request Item-warehouse-ignore_user_permissions",
                     "Material Request Item-from_warehouse-ignore_user_permissions",
