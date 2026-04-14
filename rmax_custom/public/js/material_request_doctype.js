@@ -4,29 +4,47 @@
  *
  * - Hides standard Material Transfer / Pick List buttons
  * - Adds "Stock Transfer" button ONLY for source warehouse branch users
- *
- * Flow: Requester creates MR → Source branch user creates ST → Target branch user approves
  */
 
 frappe.ui.form.on("Material Request", {
     refresh: function (frm) {
         if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
-            // Run immediately first
-            _rmax_hide_standard_buttons(frm);
-            _rmax_maybe_add_stock_transfer_button(frm);
-
-            // Then run again after ERPNext buttons render (they can be slow)
-            setTimeout(function () {
-                _rmax_hide_standard_buttons(frm);
-                _rmax_maybe_add_stock_transfer_button(frm);
-            }, 500);
-
-            setTimeout(function () {
-                _rmax_hide_standard_buttons(frm);
-            }, 1000);
+            _rmax_setup_buttons(frm);
         }
     },
 });
+
+function _rmax_setup_buttons(frm) {
+    // Get source warehouse
+    var source_wh = frm.doc.set_from_warehouse;
+    if (!source_wh && frm.doc.items && frm.doc.items.length) {
+        source_wh = frm.doc.items[0].from_warehouse;
+    }
+
+    // Check if user can create Stock Transfer (async)
+    frappe.call({
+        method: "rmax_custom.api.material_request.can_create_stock_transfer",
+        args: { source_warehouse: source_wh || "" },
+        callback: function (r) {
+            // Hide standard buttons first
+            _rmax_hide_standard_buttons(frm);
+
+            // Add Stock Transfer button if user has permission
+            if (r.message) {
+                _rmax_add_stock_transfer_button(frm);
+            }
+
+            // Hide again after a delay (ERPNext buttons render late)
+            setTimeout(function () {
+                _rmax_hide_standard_buttons(frm);
+            }, 500);
+        },
+        error: function () {
+            // On error, still hide standard buttons
+            _rmax_hide_standard_buttons(frm);
+        },
+    });
+}
 
 function _rmax_hide_standard_buttons(frm) {
     var labels_to_hide = [
@@ -53,38 +71,10 @@ function _rmax_hide_standard_buttons(frm) {
     });
 }
 
-function _rmax_maybe_add_stock_transfer_button(frm) {
+function _rmax_add_stock_transfer_button(frm) {
     if (frm.doc.status === "Stopped" || flt(frm.doc.per_ordered) >= 100) return;
     if (frm.custom_buttons && frm.custom_buttons[__("Stock Transfer")]) return;
 
-    // Get source warehouse from MR (set_from_warehouse or from item rows)
-    var source_wh = frm.doc.set_from_warehouse;
-    if (!source_wh && frm.doc.items && frm.doc.items.length) {
-        source_wh = frm.doc.items[0].from_warehouse;
-    }
-
-    if (!source_wh) {
-        _rmax_add_stock_transfer_button(frm);
-        return;
-    }
-
-    // Check if current user is from the source warehouse's branch
-    // Uses a whitelisted method to avoid User Permission read access issues
-    frappe.call({
-        method: "rmax_custom.api.material_request.can_create_stock_transfer",
-        args: {
-            source_warehouse: source_wh,
-        },
-        async: false,
-        callback: function (r) {
-            if (r.message) {
-                _rmax_add_stock_transfer_button(frm);
-            }
-        },
-    });
-}
-
-function _rmax_add_stock_transfer_button(frm) {
     frm.add_custom_button(
         __("Stock Transfer"),
         function () {
