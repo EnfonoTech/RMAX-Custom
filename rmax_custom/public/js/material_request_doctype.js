@@ -55,30 +55,22 @@ function _rmax_maybe_add_stock_transfer_button(frm) {
     }
 
     if (!source_wh) {
-        // No source warehouse — show button for all (admin will handle)
         _rmax_add_stock_transfer_button(frm);
         return;
     }
 
-    // Check if current user has this source warehouse in their User Permissions
-    // (meaning they are from the source branch and should fulfill the request)
+    // Check if current user is from the source warehouse's branch
+    // Uses a whitelisted method to avoid User Permission read access issues
     frappe.call({
-        method: "frappe.client.get_count",
+        method: "rmax_custom.api.material_request.can_create_stock_transfer",
         args: {
-            doctype: "User Permission",
-            filters: {
-                user: frappe.session.user,
-                allow: "Warehouse",
-                for_value: source_wh,
-            },
+            source_warehouse: source_wh,
         },
         async: false,
         callback: function (r) {
-            if (r.message && r.message > 0) {
+            if (r.message) {
                 _rmax_add_stock_transfer_button(frm);
             }
-            // If user doesn't have source warehouse permission, no button shown
-            // (they are the requester, not the fulfiller)
         },
     });
 }

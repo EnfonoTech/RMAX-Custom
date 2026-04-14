@@ -62,6 +62,38 @@ def create_material_request(item_code, from_warehouse, to_warehouse, qty, schedu
 
 
 @frappe.whitelist()
+def can_create_stock_transfer(source_warehouse):
+    """Check if current user is from the source warehouse's branch (can fulfill the MR)."""
+    if not source_warehouse:
+        return True
+
+    if frappe.session.user == "Administrator":
+        return True
+
+    roles = frappe.get_roles()
+    if "System Manager" in roles or "Stock Manager" in roles:
+        return True
+
+    # Check if user's branch has this source warehouse
+    user_branches = frappe.get_all(
+        "Branch Configuration User",
+        filters={"user": frappe.session.user},
+        pluck="parent",
+    )
+
+    if not user_branches:
+        return False
+
+    branch_warehouses = frappe.get_all(
+        "Branch Configuration Warehouse",
+        filters={"parent": ["in", user_branches]},
+        pluck="warehouse",
+    )
+
+    return source_warehouse in branch_warehouses
+
+
+@frappe.whitelist()
 def create_stock_transfer_from_mr(material_request):
     """Create a Stock Transfer from a submitted Material Request."""
     mr = frappe.get_doc("Material Request", material_request)
