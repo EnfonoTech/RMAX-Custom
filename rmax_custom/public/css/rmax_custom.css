@@ -1,0 +1,17 @@
+/* RMAX Custom: List view layout adjustments */
+
+/* Move Filter button and Sort to the right in list view */
+.list-row-container .list-headers .list-header-subject {
+    flex: 1;
+}
+
+/* Ensure filter/sort controls align right */
+.frappe-list .list-row-head .list-row-activity {
+    margin-left: auto;
+}
+
+/* Standard filters row — wrap neatly on smaller screens */
+.frappe-list .standard-filter-section {
+    flex-wrap: wrap;
+    gap: 4px;
+}
