@@ -86,11 +86,16 @@ def create_stock_transfer_from_mr(material_request):
     st.transaction_date = nowdate()
 
     for item in mr.items:
+        uom = item.uom or item.stock_uom
+        conversion_factor = flt(item.conversion_factor) or 1
+
         st.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
             "quantity": flt(item.qty),
-            "uom": item.uom or item.stock_uom,
+            "uom": uom,
+            "stock_uom": item.stock_uom,
+            "uom_conversion_factor": conversion_factor,
         })
 
         # Use item-level warehouses if header-level not set
