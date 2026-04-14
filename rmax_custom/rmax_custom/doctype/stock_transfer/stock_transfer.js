@@ -7,25 +7,7 @@ frappe.ui.form.on('Stock Transfer', {
         if (frm.is_new()) {
             set_default_target(frm);
         }
-        // Source warehouse: only user's permitted warehouses (from Branch Configuration)
-        frm.set_query('set_source_warehouse', function() {
-            return {
-                filters: {
-                    company: frm.doc.company,
-                    is_group: 0
-                }
-            };
-        });
-        frm.set_query('set_target_warehouse', function() {
-            return {
-                ignore_user_permissions: 1,
-                filters: {
-                    company: frm.doc.company,
-                    name: ["!=", frm.doc.set_source_warehouse]  
-
-                }
-            };
-        });
+        _setup_st_warehouse_queries(frm);
     },
     refresh: function(frm) {
         if (frm.doc.__islocal && !frm.doc.__source_fixed) {
@@ -76,6 +58,57 @@ frappe.ui.form.on('Stock Transfer', {
 }
 
 });
+
+function _setup_st_warehouse_queries(frm) {
+    // Source warehouse: ONLY user's permitted warehouses
+    // Fetch explicitly to override DocType-level ignore_user_permissions
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "User Permission",
+            filters: {
+                user: frappe.session.user,
+                allow: "Warehouse"
+            },
+            fields: ["for_value"],
+            limit_page_length: 0
+        },
+        async: false,
+        callback: function(r) {
+            var permitted = (r.message || []).map(function(d) { return d.for_value; });
+            frm.set_query('set_source_warehouse', function() {
+                if (permitted.length) {
+                    return {
+                        ignore_user_permissions: 1,
+                        filters: {
+                            company: frm.doc.company,
+                            is_group: 0,
+                            name: ["in", permitted]
+                        }
+                    };
+                }
+                return {
+                    filters: {
+                        company: frm.doc.company,
+                        is_group: 0
+                    }
+                };
+            });
+        }
+    });
+
+    // Target warehouse: ANY warehouse (can send to any branch)
+    frm.set_query('set_target_warehouse', function() {
+        return {
+            ignore_user_permissions: 1,
+            filters: {
+                company: frm.doc.company,
+                is_group: 0,
+                name: ["!=", frm.doc.set_source_warehouse]
+            }
+        };
+    });
+}
 
 function set_default_target(frm) {
 
