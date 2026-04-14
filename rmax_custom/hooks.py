@@ -106,6 +106,8 @@ doctype_list_js = {
 # before_install = "rmax_custom.install.before_install"
 # after_install = "rmax_custom.install.after_install"
 
+after_migrate = ["rmax_custom.setup.after_migrate"]
+
 # Uninstallation
 # ------------
 
@@ -269,7 +271,6 @@ fixtures = [
         "dt": "Role",
         "filters": [["name", "in", ["Branch User"]]]
     },
-    "Custom DocPerm",
     {
         "dt": "Custom Field",
         "filters": [
