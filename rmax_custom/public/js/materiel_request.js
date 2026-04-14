@@ -11,15 +11,42 @@ frappe.ui.form.on('Material Request', {
 });
 
 function _setup_warehouse_queries(frm) {
-    // Target warehouse: only user's permitted warehouses (from User Permissions)
-    // No ignore_user_permissions — Frappe filters by User Permission automatically
-    frm.set_query('set_warehouse', function() {
-        return {
+    // Target warehouse: show all user's permitted warehouses
+    // Use ignore_user_permissions + explicit filter by permitted warehouses
+    // This avoids Frappe's default "name = default_value" filter behavior
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "User Permission",
             filters: {
-                company: frm.doc.company,
-                is_group: 0
-            }
-        };
+                user: frappe.session.user,
+                allow: "Warehouse"
+            },
+            fields: ["for_value"],
+            limit_page_length: 0
+        },
+        async: false,
+        callback: function(r) {
+            var permitted = (r.message || []).map(function(d) { return d.for_value; });
+            frm.set_query('set_warehouse', function() {
+                if (permitted.length) {
+                    return {
+                        ignore_user_permissions: 1,
+                        filters: {
+                            company: frm.doc.company,
+                            is_group: 0,
+                            name: ["in", permitted]
+                        }
+                    };
+                }
+                return {
+                    filters: {
+                        company: frm.doc.company,
+                        is_group: 0
+                    }
+                };
+            });
+        }
     });
 
     // Source warehouse: ignore user permissions (can request FROM any branch)
