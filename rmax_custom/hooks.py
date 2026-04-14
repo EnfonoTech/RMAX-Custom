@@ -354,6 +354,7 @@ fixtures = [
                     "Material Request-set_from_warehouse-ignore_user_permissions",
                     "Material Request Item-warehouse-ignore_user_permissions",
                     "Material Request Item-from_warehouse-ignore_user_permissions",
+                    "Material Request Item-cost_center-ignore_user_permissions",
                 ]
             ]
         ]
