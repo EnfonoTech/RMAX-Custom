@@ -9,6 +9,8 @@
  "engine": "InnoDB",
  "field_order": [
   "branch",
+  "column_break_company",
+  "company",
   "section_break_tzxx",
   "warehouse",
   "cost_center",
@@ -20,6 +22,18 @@
    "fieldtype": "Link",
    "label": "Branch",
    "options": "Branch",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_company",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
    "reqd": 1,
    "in_list_view": 1
   },
@@ -49,7 +63,7 @@
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-03-05 12:26:24.845956",
+ "modified": "2026-04-14 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Branch Configuration",
