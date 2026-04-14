@@ -163,14 +163,23 @@ def delete_permission(user, allow, value):
 
 
 def _assign_role(user, role):
-	"""Assign the specified role if not already assigned."""
+	"""Assign the specified role if not already assigned. Uses direct DB for reliability."""
 	if not role or not frappe.db.exists("Role", role):
 		return
 
-	user_doc = frappe.get_doc("User", user)
-	existing_roles = [r.role for r in user_doc.roles]
-	if role not in existing_roles:
-		user_doc.add_roles(role)
+	# Check if role already assigned
+	if frappe.db.exists("Has Role", {"parent": user, "role": role}):
+		return
+
+	# Direct insert — more reliable than user_doc.add_roles() which can fail
+	# during Branch Configuration save context
+	frappe.get_doc({
+		"doctype": "Has Role",
+		"parent": user,
+		"parenttype": "User",
+		"parentfield": "roles",
+		"role": role,
+	}).insert(ignore_permissions=True)
 
 
 def _maybe_remove_role(user, role, exclude_branch=None):
