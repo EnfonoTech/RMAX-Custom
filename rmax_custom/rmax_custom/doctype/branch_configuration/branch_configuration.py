@@ -56,8 +56,14 @@ class BranchConfiguration(Document):
 			for c in old_doc.cost_center:
 				delete_permission(user, "Cost Center", c.cost_center)
 
-			# Remove Branch User role if user is not in any other Branch Configuration
-			_maybe_remove_branch_user_role(user, exclude_branch=self.name)
+			# Remove role if user is not in any other Branch Configuration
+			# Find what role they had in this branch
+			old_role = None
+			for old_u in old_doc.user:
+				if old_u.user == user:
+					old_role = old_u.get("role") or BRANCH_USER_ROLE
+					break
+			_maybe_remove_role(user, old_role or BRANCH_USER_ROLE, exclude_branch=self.name)
 
 		# Handle company change — remove old company permission for remaining users
 		old_company = old_doc.get("company")
@@ -92,8 +98,9 @@ class BranchConfiguration(Document):
 				if company_default_cc:
 					create_permission(u.user, "Cost Center", company_default_cc, is_default=0)
 
-			# Auto-assign Branch User role
-			_assign_branch_user_role(u.user)
+			# Auto-assign the selected role (Branch User, Warehouse User, or Stock User)
+			selected_role = u.get("role") or BRANCH_USER_ROLE
+			_assign_role(u.user, selected_role)
 
 
 def create_permission(user, allow, value, is_default=0):
@@ -155,32 +162,35 @@ def delete_permission(user, allow, value):
 		frappe.delete_doc("User Permission", p, ignore_permissions=True)
 
 
-def _assign_branch_user_role(user):
-	"""Assign Branch User role if not already assigned."""
-	if not frappe.db.exists("Role", BRANCH_USER_ROLE):
+def _assign_role(user, role):
+	"""Assign the specified role if not already assigned."""
+	if not role or not frappe.db.exists("Role", role):
 		return
 
 	user_doc = frappe.get_doc("User", user)
 	existing_roles = [r.role for r in user_doc.roles]
-	if BRANCH_USER_ROLE not in existing_roles:
-		user_doc.add_roles(BRANCH_USER_ROLE)
+	if role not in existing_roles:
+		user_doc.add_roles(role)
 
 
-def _maybe_remove_branch_user_role(user, exclude_branch=None):
-	"""Remove Branch User role if user is not in any other Branch Configuration."""
-	filters = {"user": user}
+def _maybe_remove_role(user, role, exclude_branch=None):
+	"""Remove role if user is not in any other Branch Configuration with the same role."""
+	if not role:
+		return
+
 	other_configs = frappe.get_all(
 		"Branch Configuration User",
-		filters=filters,
-		fields=["parent"],
+		filters={"user": user},
+		fields=["parent", "role"],
 	)
 
-	# Check if user exists in any Branch Configuration OTHER than the excluded one
-	in_other_branch = any(
-		c.parent != exclude_branch for c in other_configs
+	# Check if user has this same role in any other Branch Configuration
+	has_role_elsewhere = any(
+		c.parent != exclude_branch and (c.get("role") or BRANCH_USER_ROLE) == role
+		for c in other_configs
 	)
 
-	if not in_other_branch:
+	if not has_role_elsewhere:
 		user_doc = frappe.get_doc("User", user)
-		if BRANCH_USER_ROLE in [r.role for r in user_doc.roles]:
-			user_doc.remove_roles(BRANCH_USER_ROLE)
+		if role in [r.role for r in user_doc.roles]:
+			user_doc.remove_roles(role)
