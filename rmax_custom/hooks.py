@@ -148,6 +148,7 @@ permission_query_conditions = {
 	"Purchase Receipt": "rmax_custom.branch_filters.pr_permission_query",
 	"Payment Entry": "rmax_custom.branch_filters.pe_permission_query",
 	"Quotation": "rmax_custom.branch_filters.quotation_permission_query",
+	"Stock Transfer": "rmax_custom.branch_filters.stock_transfer_permission_query",
 }
 
 # DocType Class

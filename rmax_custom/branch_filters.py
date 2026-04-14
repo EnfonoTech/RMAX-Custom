@@ -141,3 +141,18 @@ def quotation_permission_query(user):
         return ""
 
     return f"""`tabQuotation`.`owner` = {frappe.db.escape(user)}"""
+
+
+def stock_transfer_permission_query(user):
+    """Filter Stock Transfers — show where source OR target warehouse matches user's branch."""
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabStock Transfer`.`set_source_warehouse` IN ({wh_list})
+        OR `tabStock Transfer`.`set_target_warehouse` IN ({wh_list})
+        OR `tabStock Transfer`.`owner` = {frappe.db.escape(user)}
+    )"""
