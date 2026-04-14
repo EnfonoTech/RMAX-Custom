@@ -166,3 +166,22 @@ def stock_transfer_permission_query(user):
         OR `tabStock Transfer`.`set_target_warehouse` IN ({wh_list})
         OR `tabStock Transfer`.`owner` = {frappe.db.escape(user)}
     )"""
+
+
+def material_request_permission_query(user):
+    """Filter Material Requests — show where source OR target warehouse matches user's branch."""
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabMaterial Request`.`set_warehouse` IN ({wh_list})
+        OR `tabMaterial Request`.`set_from_warehouse` IN ({wh_list})
+        OR `tabMaterial Request`.`name` IN (
+            SELECT DISTINCT parent FROM `tabMaterial Request Item`
+            WHERE warehouse IN ({wh_list}) OR from_warehouse IN ({wh_list})
+        )
+        OR `tabMaterial Request`.`owner` = {frappe.db.escape(user)}
+    )"""

@@ -149,6 +149,7 @@ permission_query_conditions = {
 	"Payment Entry": "rmax_custom.branch_filters.pe_permission_query",
 	"Quotation": "rmax_custom.branch_filters.quotation_permission_query",
 	"Stock Transfer": "rmax_custom.branch_filters.stock_transfer_permission_query",
+	"Material Request": "rmax_custom.branch_filters.material_request_permission_query",
 }
 
 # DocType Class
@@ -347,6 +348,11 @@ fixtures = [
                     "Item Default-default_warehouse-ignore_user_permissions",
                     "Item Default-buying_cost_center-ignore_user_permissions",
                     "Item Default-selling_cost_center-ignore_user_permissions",
+
+                    # Material Request — ignore user permissions on warehouse fields
+                    # (our custom permission_query_conditions handles branch filtering)
+                    "Material Request-set_warehouse-ignore_user_permissions",
+                    "Material Request-set_from_warehouse-ignore_user_permissions",
                 ]
             ]
         ]
