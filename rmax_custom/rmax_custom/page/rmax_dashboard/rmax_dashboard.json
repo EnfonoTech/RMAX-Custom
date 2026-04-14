@@ -1,0 +1,23 @@
+{
+ "content": null,
+ "creation": "2026-04-15",
+ "docstatus": 0,
+ "doctype": "Page",
+ "icon": "dashboard",
+ "idx": 0,
+ "modified": "2026-04-15",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "rmax-dashboard",
+ "owner": "Administrator",
+ "page_name": "rmax-dashboard",
+ "roles": [
+  {"role": "Branch User"},
+  {"role": "Stock User"},
+  {"role": "Stock Manager"},
+  {"role": "System Manager"}
+ ],
+ "standard": "Yes",
+ "system_page": 0,
+ "title": "Dashboard"
+}
