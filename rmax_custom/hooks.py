@@ -59,7 +59,8 @@ app_include_js = [
 doctype_js = {
     "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
     "Purchase Receipt": "public/js/purchase receipt.js",
-    "Landed Cost Voucher": "public/js/landed_cost_voucher.js"
+    "Landed Cost Voucher": "public/js/landed_cost_voucher.js",
+    "Material Request": "public/js/material_request_doctype.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
