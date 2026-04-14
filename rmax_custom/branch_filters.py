@@ -9,10 +9,15 @@ Uses permission_query_conditions hook.
 import frappe
 
 
+def _is_branch_configured_user(user):
+    """Check if user exists in any Branch Configuration."""
+    return frappe.db.exists("Branch Configuration User", {"user": user})
+
+
 def get_branch_warehouse_condition(user=None):
     """
     Return list of warehouses from the user's Branch Configuration(s).
-    Uses Branch Configuration as source of truth (not User Permissions).
+    Uses Branch Configuration as source of truth (not User Permissions or roles).
     Returns empty string for Admin/Stock Manager (no restriction).
     """
     if not user:
@@ -25,10 +30,8 @@ def get_branch_warehouse_condition(user=None):
     if "System Manager" in roles or "Stock Manager" in roles:
         return ""
 
-    if "Branch User" not in roles:
-        return ""
-
-    # Get user's branch configurations
+    # Check if user is in any Branch Configuration (source of truth)
+    # Don't rely on Branch User role — it might not be assigned yet
     branch_configs = frappe.get_all(
         "Branch Configuration User",
         filters={"user": user},
@@ -36,6 +39,8 @@ def get_branch_warehouse_condition(user=None):
     )
 
     if not branch_configs:
+        # User is NOT in any branch config — no filtering needed
+        # (they get normal Frappe permission behavior)
         return ""
 
     # Get warehouses from those branch configurations
@@ -124,7 +129,7 @@ def pr_permission_query(user):
 
 
 def pe_permission_query(user):
-    """Filter Payment Entries — show only those created by the user or for their company."""
+    """Filter Payment Entries — show only those created by the user."""
     if not user or user == "Administrator":
         return ""
 
@@ -132,7 +137,7 @@ def pe_permission_query(user):
     if "System Manager" in roles or "Stock Manager" in roles:
         return ""
 
-    if "Branch User" not in roles:
+    if not _is_branch_configured_user(user):
         return ""
 
     return f"""`tabPayment Entry`.`owner` = {frappe.db.escape(user)}"""
@@ -147,7 +152,7 @@ def quotation_permission_query(user):
     if "System Manager" in roles or "Stock Manager" in roles:
         return ""
 
-    if "Branch User" not in roles:
+    if not _is_branch_configured_user(user):
         return ""
 
     return f"""`tabQuotation`.`owner` = {frappe.db.escape(user)}"""
