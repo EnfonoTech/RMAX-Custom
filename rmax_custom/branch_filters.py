@@ -181,7 +181,7 @@ def material_request_permission_query(user):
         OR `tabMaterial Request`.`set_from_warehouse` IN ({wh_list})
         OR `tabMaterial Request`.`name` IN (
             SELECT DISTINCT parent FROM `tabMaterial Request Item`
-            WHERE warehouse IN ({wh_list}) OR from_warehouse IN ({wh_list})
+            WHERE (warehouse IN ({wh_list}) OR from_warehouse IN ({wh_list}))
         )
         OR `tabMaterial Request`.`owner` = {frappe.db.escape(user)}
     )"""
