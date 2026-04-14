@@ -1,4 +1,6 @@
 # User permissions are created for company, branch, warehouse and cost center.
+# Company and first warehouse are set as is_default=1 so Frappe uses them as
+# the user's Session Defaults instead of falling back to global defaults.
 
 import frappe
 from frappe.model.document import Document
@@ -62,33 +64,44 @@ class BranchConfiguration(Document):
 		self.create_permissions()
 
 	def create_permissions(self):
+		# Determine the first warehouse to mark as default
+		default_warehouse = self.warehouse[0].warehouse if self.warehouse else None
+
 		for u in self.user:
-			# Create company permission
+			# Create company permission (marked as default so Session Defaults picks it)
 			if self.company:
-				create_permission(u.user, "Company", self.company)
+				create_permission(u.user, "Company", self.company, is_default=1)
 
 			create_permission(u.user, "Branch", self.branch)
 
-			for w in self.warehouse:
-				create_permission(u.user, "Warehouse", w.warehouse)
+			for idx, w in enumerate(self.warehouse):
+				# First warehouse is the default
+				create_permission(u.user, "Warehouse", w.warehouse, is_default=1 if idx == 0 else 0)
 
 			for c in self.cost_center:
 				create_permission(u.user, "Cost Center", c.cost_center)
 
 
-def create_permission(user, allow, value):
+def create_permission(user, allow, value, is_default=0):
 	if not value:
 		return
 
-	if not frappe.db.exists("User Permission", {
+	existing = frappe.db.exists("User Permission", {
 		"user": user,
 		"allow": allow,
 		"for_value": value
-	}):
+	})
+
+	if existing:
+		# Update is_default if needed (e.g. re-saving Branch Configuration)
+		if is_default:
+			frappe.db.set_value("User Permission", existing, "is_default", 1)
+	else:
 		doc = frappe.new_doc("User Permission")
 		doc.user = user
 		doc.allow = allow
 		doc.for_value = value
+		doc.is_default = is_default
 		doc.apply_to_all_doctypes = 1
 		doc.insert(ignore_permissions=True)
 
