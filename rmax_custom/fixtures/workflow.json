@@ -60,7 +60,7 @@
    {
     "action": "Waiting for Approval",
     "allow_self_approval": 1,
-    "allowed": "Warehouse User",
+    "allowed": "Stock User",
     "next_state": "Waiting for Approval",
     "parent": "Stock Transfer Workflow",
     "parentfield": "transitions",
@@ -90,7 +90,7 @@
    {
     "action": "Check & Approve",
     "allow_self_approval": 1,
-    "allowed": "Warehouse User",
+    "allowed": "Stock User",
     "next_state": "Approved",
     "parent": "Stock Transfer Workflow",
     "parentfield": "transitions",
@@ -120,7 +120,7 @@
    {
     "action": "Reject",
     "allow_self_approval": 1,
-    "allowed": "Warehouse User",
+    "allowed": "Stock User",
     "next_state": "Rejected",
     "parent": "Stock Transfer Workflow",
     "parentfield": "transitions",
