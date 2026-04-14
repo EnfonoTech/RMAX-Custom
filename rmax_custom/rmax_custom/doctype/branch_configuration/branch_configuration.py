@@ -107,10 +107,14 @@ def create_permission(user, allow, value, is_default=0):
 	})
 
 	if existing:
-		# Update is_default if needed (e.g. re-saving Branch Configuration)
-		if is_default:
+		# Update is_default if needed — but only if no other default exists
+		if is_default and not _has_existing_default(user, allow, exclude_value=value):
 			frappe.db.set_value("User Permission", existing, "is_default", 1)
 	else:
+		# If we want to set default but one already exists, don't override it
+		if is_default and _has_existing_default(user, allow):
+			is_default = 0
+
 		doc = frappe.new_doc("User Permission")
 		doc.user = user
 		doc.allow = allow
@@ -118,6 +122,19 @@ def create_permission(user, allow, value, is_default=0):
 		doc.is_default = is_default
 		doc.apply_to_all_doctypes = 1
 		doc.insert(ignore_permissions=True)
+
+
+def _has_existing_default(user, allow, exclude_value=None):
+	"""Check if user already has a default User Permission for this allow type."""
+	filters = {
+		"user": user,
+		"allow": allow,
+		"is_default": 1,
+	}
+	if exclude_value:
+		filters["for_value"] = ["!=", exclude_value]
+
+	return frappe.db.exists("User Permission", filters)
 
 
 def delete_permission(user, allow, value):
