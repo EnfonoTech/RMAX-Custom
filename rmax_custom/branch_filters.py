@@ -47,7 +47,7 @@ def si_permission_query(user):
     if not warehouses:
         return ""
 
-    wh_list = ", ".join(f"'{w}'" for w in warehouses)
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
 
     return f"""(
         `tabSales Invoice`.`set_warehouse` IN ({wh_list})
@@ -55,7 +55,7 @@ def si_permission_query(user):
             SELECT DISTINCT parent FROM `tabSales Invoice Item`
             WHERE warehouse IN ({wh_list})
         )
-        OR `tabSales Invoice`.`owner` = '{frappe.db.escape(user)}'
+        OR `tabSales Invoice`.`owner` = {frappe.db.escape(user)}
     )"""
 
 
@@ -65,7 +65,7 @@ def pi_permission_query(user):
     if not warehouses:
         return ""
 
-    wh_list = ", ".join(f"'{w}'" for w in warehouses)
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
 
     return f"""(
         `tabPurchase Invoice`.`set_warehouse` IN ({wh_list})
@@ -73,7 +73,7 @@ def pi_permission_query(user):
             SELECT DISTINCT parent FROM `tabPurchase Invoice Item`
             WHERE warehouse IN ({wh_list})
         )
-        OR `tabPurchase Invoice`.`owner` = '{frappe.db.escape(user)}'
+        OR `tabPurchase Invoice`.`owner` = {frappe.db.escape(user)}
     )"""
 
 
@@ -83,7 +83,7 @@ def dn_permission_query(user):
     if not warehouses:
         return ""
 
-    wh_list = ", ".join(f"'{w}'" for w in warehouses)
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
 
     return f"""(
         `tabDelivery Note`.`set_warehouse` IN ({wh_list})
@@ -91,7 +91,7 @@ def dn_permission_query(user):
             SELECT DISTINCT parent FROM `tabDelivery Note Item`
             WHERE warehouse IN ({wh_list})
         )
-        OR `tabDelivery Note`.`owner` = '{frappe.db.escape(user)}'
+        OR `tabDelivery Note`.`owner` = {frappe.db.escape(user)}
     )"""
 
 
@@ -101,7 +101,7 @@ def pr_permission_query(user):
     if not warehouses:
         return ""
 
-    wh_list = ", ".join(f"'{w}'" for w in warehouses)
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
 
     return f"""(
         `tabPurchase Receipt`.`set_warehouse` IN ({wh_list})
@@ -109,7 +109,7 @@ def pr_permission_query(user):
             SELECT DISTINCT parent FROM `tabPurchase Receipt Item`
             WHERE warehouse IN ({wh_list})
         )
-        OR `tabPurchase Receipt`.`owner` = '{frappe.db.escape(user)}'
+        OR `tabPurchase Receipt`.`owner` = {frappe.db.escape(user)}
     )"""
 
 
@@ -125,7 +125,7 @@ def pe_permission_query(user):
     if "Branch User" not in roles:
         return ""
 
-    return f"""`tabPayment Entry`.`owner` = '{frappe.db.escape(user)}'"""
+    return f"""`tabPayment Entry`.`owner` = {frappe.db.escape(user)}"""
 
 
 def quotation_permission_query(user):
@@ -140,4 +140,4 @@ def quotation_permission_query(user):
     if "Branch User" not in roles:
         return ""
 
-    return f"""`tabQuotation`.`owner` = '{frappe.db.escape(user)}'"""
+    return f"""`tabQuotation`.`owner` = {frappe.db.escape(user)}"""

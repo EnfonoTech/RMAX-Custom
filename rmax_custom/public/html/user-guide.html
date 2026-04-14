@@ -473,6 +473,7 @@
   <div class="sidebar-section">
     <div class="sidebar-section-title">Admin Guide</div>
     <a href="#branch-config"><span class="icon">&#9881;</span> Branch Configuration</a>
+    <a href="#branch-user-role"><span class="icon">&#128101;</span> Branch User Role</a>
     <a href="#inter-company"><span class="icon">&#128260;</span> Inter Company Branch</a>
     <a href="#workflows"><span class="icon">&#128259;</span> Workflows</a>
   </div>
@@ -490,6 +491,17 @@
     <a href="#quotation-to-si"><span class="icon">&#128196;</span> Quotation to Invoice</a>
     <a href="#landed-cost-cbm"><span class="icon">&#128438;</span> Landed Cost (CBM)</a>
     <a href="#vat-validation"><span class="icon">&#9989;</span> VAT Validation</a>
+    <a href="#enter-nav"><span class="icon">&#9000;</span> Enter Key Navigation</a>
+    <a href="#list-filtering"><span class="icon">&#128269;</span> List Filtering</a>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">Developer Guide</div>
+    <a href="#dev-architecture"><span class="icon">&#128736;</span> Architecture</a>
+    <a href="#dev-hooks"><span class="icon">&#128279;</span> Hooks &amp; Events</a>
+    <a href="#dev-api"><span class="icon">&#128268;</span> API Reference</a>
+    <a href="#dev-permissions"><span class="icon">&#128274;</span> Permission System</a>
+    <a href="#dev-files"><span class="icon">&#128193;</span> File Structure</a>
   </div>
 </nav>
 
@@ -585,6 +597,55 @@
     <div class="callout callout-danger">
       <span class="callout-icon">&#128683;</span>
       <div><strong>Important:</strong> Warehouses and Cost Centers <strong>must belong to the selected Company</strong>. The system validates this on save and will show an error if there's a mismatch.</div>
+    </div>
+  </section>
+
+  <!-- ─── BRANCH USER ROLE ─── -->
+  <section class="section" id="branch-user-role">
+    <h2>&#128101; Branch User Role <span class="badge">Admin</span></h2>
+    <p>The <strong>Branch User</strong> role is automatically assigned when a user is added to a Branch Configuration. It grants permissions for daily branch operations.</p>
+
+    <div class="card">
+      <h3>Automatic Role Assignment</h3>
+      <table class="info-table">
+        <tr><th>Action</th><th>Result</th></tr>
+        <tr><td>Add user to Branch Configuration</td><td>"Branch User" role <strong>auto-assigned</strong></td></tr>
+        <tr><td>Remove user from ALL Branch Configurations</td><td>"Branch User" role <strong>auto-removed</strong></td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Permission Matrix</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Read</th><th>Write</th><th>Create</th><th>Submit</th><th>Cancel</th></tr>
+        <tr><td>Sales Invoice</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Quotation</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Customer</td><td>Yes</td><td>Yes</td><td>Yes</td><td>-</td><td>-</td></tr>
+        <tr><td>Payment Entry</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Purchase Receipt</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Delivery Note</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Purchase Invoice</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Stock Transfer</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Material Request</td><td>Yes</td><td>Yes</td><td>Yes</td><td>Yes</td><td>No</td></tr>
+        <tr><td>Item</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
+        <tr><td>Price List</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
+        <tr><td>Stock Entry</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
+      </table>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128274;</span>
+      <div><strong>Item Restrictions:</strong> Branch Users can view items but <strong>cannot see cost/valuation fields</strong> (valuation rate, last purchase rate, standard rate). Inter-company price lists are also hidden.</div>
+    </div>
+
+    <div class="card">
+      <h3>Three User Roles</h3>
+      <table class="info-table">
+        <tr><th>Role</th><th>Purpose</th></tr>
+        <tr><td><strong>Branch User</strong></td><td>Sales staff at branches. Full access to sales/purchase documents. Restricted on stock/cost data.</td></tr>
+        <tr><td><strong>Warehouse User</strong></td><td>Stock keepers. Can view MRs, create stock transfers, view stock reports. (Default ERPNext role)</td></tr>
+        <tr><td><strong>Stock Manager</strong></td><td>Full stock control. Can approve transfers, see all data. (Default ERPNext role)</td></tr>
+      </table>
     </div>
   </section>
 
@@ -968,10 +1029,349 @@
     </div>
   </section>
 
+  <!-- ─── ENTER NAVIGATION ─── -->
+  <section class="section" id="enter-nav">
+    <h2>&#9000; Enter Key Navigation</h2>
+    <p>The <kbd>Enter</kbd> key works as a navigation key across <strong>all forms and doctypes</strong> in the system.</p>
+
+    <div class="card">
+      <h3>How It Works</h3>
+      <table class="info-table">
+        <tr><th>Context</th><th>Enter Key Behavior</th></tr>
+        <tr><td>Main form field</td><td>Move to the <strong>next visible, editable field</strong></td></tr>
+        <tr><td>Child table (grid) &mdash; not last column</td><td>Move to <strong>next column</strong> in the same row</td></tr>
+        <tr><td>Child table &mdash; last column</td><td>Move to <strong>first column of next row</strong></td></tr>
+        <tr><td>Child table &mdash; last column, last row</td><td><strong>Add a new row</strong> and move to it</td></tr>
+        <tr><td>Textarea</td><td>Normal newline (not intercepted)</td></tr>
+        <tr><td>Ctrl/Cmd + Enter</td><td>Normal submit shortcut (not intercepted)</td></tr>
+        <tr><td>Button / Dialog</td><td>Normal click (not intercepted)</td></tr>
+      </table>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#9989;</span>
+      <div>This works on <strong>all doctypes</strong> &mdash; Sales Invoice, Purchase Receipt, Quotation, Material Request, Stock Transfer, and any other form.</div>
+    </div>
+  </section>
+
+  <!-- ─── LIST FILTERING ─── -->
+  <section class="section" id="list-filtering">
+    <h2>&#128269; Branch-wise List Filtering</h2>
+    <p>Branch Users automatically see only documents related to their branch. No manual filtering needed.</p>
+
+    <div class="card">
+      <h3>Filtered DocTypes</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Filter Logic</th></tr>
+        <tr><td>Sales Invoice</td><td>Items warehouse matches branch warehouse, OR user is the creator</td></tr>
+        <tr><td>Purchase Invoice</td><td>Items warehouse matches branch warehouse, OR user is the creator</td></tr>
+        <tr><td>Delivery Note</td><td>Items warehouse matches branch warehouse, OR user is the creator</td></tr>
+        <tr><td>Purchase Receipt</td><td>Items warehouse matches branch warehouse, OR user is the creator</td></tr>
+        <tr><td>Payment Entry</td><td>User is the creator</td></tr>
+        <tr><td>Quotation</td><td>User is the creator</td></tr>
+      </table>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128274;</span>
+      <div><strong>Admin Access:</strong> System Manager, Stock Manager, and Administrator bypass all filters and see all documents.</div>
+    </div>
+
+    <div class="card">
+      <h3>Sales Invoice List &mdash; Extra Filters</h3>
+      <p>The Sales Invoice list view includes additional standard filters in the header:</p>
+      <table class="info-table">
+        <tr><th>Filter</th><th>Description</th></tr>
+        <tr><td><strong>Grand Total</strong></td><td>Filter invoices by total amount (with tax)</td></tr>
+        <tr><td><strong>Total Qty</strong></td><td>Filter by total quantity of items</td></tr>
+        <tr><td><strong>Contact Mobile</strong></td><td>Search by customer mobile number</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ════════════════════ DEVELOPER GUIDE ════════════════════ -->
+
+  <!-- ─── ARCHITECTURE ─── -->
+  <section class="section" id="dev-architecture">
+    <h2>&#128736; Architecture Overview <span class="badge">Developer</span></h2>
+    <p>Technical architecture of the RMAX Custom app for ERPNext v15.</p>
+
+    <div class="card">
+      <h3>App Structure</h3>
+      <pre style="background:#1a1a2e; color:#e0e0e0; padding:16px; border-radius:8px; overflow-x:auto; font-size:12px; line-height:1.8;">rmax_custom/
+├── hooks.py                          <span style="color:#636e72"># App config: JS includes, doc_events, fixtures, permissions</span>
+├── setup.py                          <span style="color:#636e72"># after_migrate: Branch User role + DocType permissions</span>
+├── inter_company.py                  <span style="color:#636e72"># Auto PI creation on SI submit</span>
+├── landed_cost.py                    <span style="color:#636e72"># LCV distribution helper</span>
+├── branch_defaults.py                <span style="color:#636e72"># Cost center override for branch users</span>
+├── branch_filters.py                 <span style="color:#636e72"># permission_query_conditions for list filtering</span>
+├── overrides/
+│   └── landed_cost_voucher.py        <span style="color:#636e72"># LCV class override (CBM distribution)</span>
+├── api/
+│   ├── customer.py                   <span style="color:#636e72"># Quick customer creation + VAT validation</span>
+│   ├── sales_invoice_payment.py      <span style="color:#636e72"># POS payment popup backend</span>
+│   ├── warehouse_stock.py            <span style="color:#636e72"># Stock balance across warehouses</span>
+│   ├── material_request.py           <span style="color:#636e72"># MR creation API</span>
+│   ├── purchase_invoice.py           <span style="color:#636e72"># Bulk PI from multiple PRs</span>
+│   └── item.py                       <span style="color:#636e72"># Party Specific Item creation</span>
+├── public/js/
+│   ├── enter_navigation_global.js    <span style="color:#636e72"># Global Enter key → Tab behavior</span>
+│   ├── warehouse_stock_popup.js      <span style="color:#636e72"># Stock panel below items grid</span>
+│   ├── sales_invoice_pos_total_popup.js  <span style="color:#636e72"># POS payment dialog</span>
+│   ├── sales_invoice_popup.js        <span style="color:#636e72"># SI form enhancements</span>
+│   ├── create_customer.js            <span style="color:#636e72"># Quick customer dialog on SI</span>
+│   ├── create_multiple_supplier.js   <span style="color:#636e72"># Bulk supplier linking on Item</span>
+│   ├── materiel_request.js           <span style="color:#636e72"># MR warehouse defaults</span>
+│   ├── vat_validation.js             <span style="color:#636e72"># Customer VAT + phone rules</span>
+│   ├── contact_validation.js         <span style="color:#636e72"># Contact phone validation</span>
+│   ├── item_branch_user.js           <span style="color:#636e72"># Hide cost fields for Branch User</span>
+│   ├── purchase receipt.js           <span style="color:#636e72"># Final GRN flow</span>
+│   ├── purchase_receipt_list.js      <span style="color:#636e72"># Bulk PI from list</span>
+│   ├── material_request_list.js      <span style="color:#636e72"># Urgent indicator</span>
+│   ├── sales_invoice_list.js         <span style="color:#636e72"># Extra list filters</span>
+│   └── landed_cost_voucher.js        <span style="color:#636e72"># CBM distribution client</span>
+├── rmax_custom/
+│   ├── doctype/
+│   │   ├── branch_configuration/     <span style="color:#636e72"># Branch → Company/WH/CC/Users mapping</span>
+│   │   ├── inter_company_branch/     <span style="color:#636e72"># Inter-company CC/WH config</span>
+│   │   ├── stock_transfer/           <span style="color:#636e72"># Custom transfer with approval workflow</span>
+│   │   └── (child tables)            <span style="color:#636e72"># Config User/WH/CC, ST Item, IC Branch CC</span>
+│   └── custom_scripts/quotation/     <span style="color:#636e72"># Create SI from Quotation button</span>
+└── fixtures/
+    ├── workflow.json                  <span style="color:#636e72"># Stock Transfer workflow (4 states)</span>
+    ├── role.json                      <span style="color:#636e72"># Branch User role definition</span>
+    ├── custom_field.json              <span style="color:#636e72"># Custom fields (payment mode, CBM, VAT, urgent)</span>
+    └── property_setter.json           <span style="color:#636e72"># Field tweaks (MR defaults, SI filters, customer type)</span></pre>
+    </div>
+
+    <div class="card">
+      <h3>Data Flow Diagrams</h3>
+      <h4 style="margin-bottom:8px;">Sales Invoice (Cash) Flow</h4>
+      <pre style="background:#f8f9fa; padding:14px; border-radius:8px; font-size:12px; overflow-x:auto; border:1px solid var(--border);">User creates SI (Cash mode)
+  → Items added (stock check + warehouse popup)
+  → Click Submit → Payment Popup appears
+  → Allocate amounts across payment modes
+  → "Save &amp; Submit"
+      → before_validate: cost center override (branch_defaults.py)
+      → SI saved + submitted
+      → Payment Entries auto-created (one per mode)
+      → on_submit: if inter-company → auto-create draft PI (inter_company.py)</pre>
+
+      <h4 style="margin:16px 0 8px;">Branch Configuration Flow</h4>
+      <pre style="background:#f8f9fa; padding:14px; border-radius:8px; font-size:12px; overflow-x:auto; border:1px solid var(--border);">Admin saves Branch Configuration
+  → validate(): check WH/CC belong to Company
+  → before_save(): delete permissions for removed users
+  → on_update() → create_permissions():
+      → User Permission: Company (is_default=1)
+      → User Permission: Branch
+      → User Permission: Warehouse (first=default)
+      → User Permission: Cost Center (first=default)
+      → User Permission: Company default CC (is_default=0, access only)
+      → Assign "Branch User" role to user</pre>
+
+      <h4 style="margin:16px 0 8px;">Stock Transfer Approval Flow</h4>
+      <pre style="background:#f8f9fa; padding:14px; border-radius:8px; font-size:12px; overflow-x:auto; border:1px solid var(--border);">User creates Stock Transfer
+  → Draft → Send For Approval → Pending
+  → Target branch user opens it
+  → validate(): check user in target branch's Branch Configuration
+  → Approve → on_submit() → create Stock Entry (Material Transfer)
+  → OR Reject → stays as draft</pre>
+    </div>
+  </section>
+
+  <!-- ─── HOOKS & EVENTS ─── -->
+  <section class="section" id="dev-hooks">
+    <h2>&#128279; Hooks &amp; Events <span class="badge">Developer</span></h2>
+    <p>All Frappe hooks configured by the app.</p>
+
+    <div class="card">
+      <h3>app_include_js (loaded on every desk page)</h3>
+      <table class="info-table">
+        <tr><th>File</th><th>Purpose</th></tr>
+        <tr><td><span class="field">enter_navigation_global.js</span></td><td>Global Enter key → Tab navigation</td></tr>
+        <tr><td><span class="field">warehouse_stock_popup.js</span></td><td>Stock display panel below items grid</td></tr>
+        <tr><td><span class="field">sales_invoice_pos_total_popup.js</span></td><td>POS payment popup for Cash mode</td></tr>
+        <tr><td><span class="field">sales_invoice_popup.js</span></td><td>SI: New Invoice button, update_stock, stock check</td></tr>
+        <tr><td><span class="field">create_customer.js</span></td><td>Quick customer creation from SI</td></tr>
+        <tr><td><span class="field">create_multiple_supplier.js</span></td><td>Bulk supplier linking on Item</td></tr>
+        <tr><td><span class="field">materiel_request.js</span></td><td>MR: default warehouse, query filters</td></tr>
+        <tr><td><span class="field">vat_validation.js</span></td><td>Customer VAT + phone validation</td></tr>
+        <tr><td><span class="field">contact_validation.js</span></td><td>Contact phone validation</td></tr>
+        <tr><td><span class="field">item_branch_user.js</span></td><td>Hide cost fields for Branch User</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>doc_events (server-side hooks)</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Event</th><th>Handler</th><th>Logic</th></tr>
+        <tr><td>Sales Invoice</td><td>before_validate</td><td><span class="field">branch_defaults.override_cost_center_from_branch</span></td><td>Replace inaccessible cost centers with user's default</td></tr>
+        <tr><td>Sales Invoice</td><td>on_submit</td><td><span class="field">inter_company.sales_invoice_on_submit</span></td><td>Auto-create draft Purchase Invoice for internal customers</td></tr>
+        <tr><td>Purchase Invoice</td><td>before_validate</td><td><span class="field">branch_defaults.override_cost_center_from_branch</span></td><td>Same cost center override</td></tr>
+        <tr><td>Payment Entry</td><td>before_validate</td><td><span class="field">branch_defaults.override_cost_center_from_branch</span></td><td>Same cost center override</td></tr>
+        <tr><td>Delivery Note</td><td>before_validate</td><td><span class="field">branch_defaults.override_cost_center_from_branch</span></td><td>Same cost center override</td></tr>
+        <tr><td>Purchase Receipt</td><td>before_validate</td><td><span class="field">branch_defaults.override_cost_center_from_branch</span></td><td>Same cost center override</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>permission_query_conditions (list filtering)</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Handler</th><th>Logic</th></tr>
+        <tr><td>Sales Invoice</td><td><span class="field">branch_filters.si_permission_query</span></td><td>Filter by branch WH (items/set_warehouse) OR owner</td></tr>
+        <tr><td>Purchase Invoice</td><td><span class="field">branch_filters.pi_permission_query</span></td><td>Same warehouse-based filter</td></tr>
+        <tr><td>Delivery Note</td><td><span class="field">branch_filters.dn_permission_query</span></td><td>Same warehouse-based filter</td></tr>
+        <tr><td>Purchase Receipt</td><td><span class="field">branch_filters.pr_permission_query</span></td><td>Same warehouse-based filter</td></tr>
+        <tr><td>Payment Entry</td><td><span class="field">branch_filters.pe_permission_query</span></td><td>Owner-only filter</td></tr>
+        <tr><td>Quotation</td><td><span class="field">branch_filters.quotation_permission_query</span></td><td>Owner-only filter</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>override_doctype_class</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Override Class</th><th>Purpose</th></tr>
+        <tr><td>Landed Cost Voucher</td><td><span class="field">rmax_custom.overrides.landed_cost_voucher.LandedCostVoucher</span></td><td>CBM-based charge distribution</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>after_migrate</h3>
+      <table class="info-table">
+        <tr><th>Handler</th><th>Purpose</th></tr>
+        <tr><td><span class="field">rmax_custom.setup.after_migrate</span></td><td>Create/update Custom DocPerm records for Branch User role (14 DocTypes)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─── API REFERENCE ─── -->
+  <section class="section" id="dev-api">
+    <h2>&#128268; API Reference <span class="badge">Developer</span></h2>
+    <p>All whitelisted API endpoints provided by the app.</p>
+
+    <div class="card">
+      <h3>Customer APIs</h3>
+      <table class="info-table">
+        <tr><th>Endpoint</th><th>Parameters</th><th>Returns</th></tr>
+        <tr><td><span class="field">rmax_custom.api.customer.create_customer_with_address</span></td><td>customer_name, mobile_no, email_id, address fields, VAT, country</td><td>{customer, address, message}</td></tr>
+        <tr><td><span class="field">rmax_custom.api.customer.validate_vat_customer</span></td><td>vat, customer_type, name</td><td>Throws if duplicate</td></tr>
+        <tr><td><span class="field">rmax_custom.api.customer.validate_phone_numbers</span></td><td>mobile_no, phone_no</td><td>Throws if &lt;10 digits</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Payment APIs</h3>
+      <table class="info-table">
+        <tr><th>Endpoint</th><th>Parameters</th><th>Returns</th></tr>
+        <tr><td><span class="field">rmax_custom.api.sales_invoice_payment.get_payment_modes_with_account</span></td><td>company, mode_list (optional)</td><td>List of valid mode names</td></tr>
+        <tr><td><span class="field">rmax_custom.api.sales_invoice_payment.create_pos_payments_for_invoice</span></td><td>sales_invoice, payments (JSON array)</td><td>List of created PE names</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Stock &amp; Item APIs</h3>
+      <table class="info-table">
+        <tr><th>Endpoint</th><th>Parameters</th><th>Returns</th></tr>
+        <tr><td><span class="field">rmax_custom.api.warehouse_stock.get_item_warehouse_stock</span></td><td>item_code, company, limit, target_warehouse</td><td>List of {warehouse, stock_qty}</td></tr>
+        <tr><td><span class="field">rmax_custom.api.material_request.create_material_request</span></td><td>item_code, from/to warehouse, qty, schedule_date, company</td><td>MR name</td></tr>
+        <tr><td><span class="field">rmax_custom.api.purchase_invoice.create_single_purchase_invoice</span></td><td>receipt_names (JSON array)</td><td>PI name</td></tr>
+        <tr><td><span class="field">rmax_custom.api.item.create_party_specific_items</span></td><td>item, suppliers (JSON array)</td><td>"Done"</td></tr>
+        <tr><td><span class="field">rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_item_uom_conversion</span></td><td>item_code, uom</td><td>Conversion factor (float)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ─── PERMISSION SYSTEM ─── -->
+  <section class="section" id="dev-permissions">
+    <h2>&#128274; Permission System <span class="badge">Developer</span></h2>
+    <p>How the multi-layer permission system works together.</p>
+
+    <div class="card">
+      <h3>Layer 1: User Permissions (from Branch Configuration)</h3>
+      <p>When a Branch Configuration is saved, these User Permissions are created per user:</p>
+      <table class="info-table">
+        <tr><th>Allow</th><th>Value</th><th>is_default</th><th>Purpose</th></tr>
+        <tr><td>Company</td><td>Branch company</td><td><strong>1</strong></td><td>Default company for new docs</td></tr>
+        <tr><td>Branch</td><td>Branch name</td><td>0</td><td>Branch access</td></tr>
+        <tr><td>Warehouse</td><td>First branch WH</td><td><strong>1</strong></td><td>Default warehouse</td></tr>
+        <tr><td>Warehouse</td><td>Other branch WHs</td><td>0</td><td>Access only</td></tr>
+        <tr><td>Cost Center</td><td>First branch CC</td><td><strong>1</strong></td><td>Default cost center</td></tr>
+        <tr><td>Cost Center</td><td>Other branch CCs</td><td>0</td><td>Access only</td></tr>
+        <tr><td>Cost Center</td><td>Company default CC</td><td>0</td><td>Access for tax templates (e.g. Main - CNC)</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Layer 2: DocType Permissions (from setup.py after_migrate)</h3>
+      <p>Custom DocPerm records control which DocTypes the Branch User can read/write/create/submit. These are created programmatically on every <span class="field">bench migrate</span>.</p>
+    </div>
+
+    <div class="card">
+      <h3>Layer 3: permission_query_conditions (from branch_filters.py)</h3>
+      <p>SQL WHERE clauses injected into list queries to filter documents by branch warehouses. Only affects Branch User role; Admin/Stock Manager bypass.</p>
+      <p style="margin-top:8px;"><strong>Logic for SI/PI/DN/PR:</strong></p>
+      <pre style="background:#f8f9fa; padding:12px; border-radius:6px; font-size:12px; overflow-x:auto; border:1px solid var(--border);">WHERE (
+  set_warehouse IN (user's branch warehouses)
+  OR name IN (SELECT parent FROM items WHERE warehouse IN (user's WHs))
+  OR owner = current_user
+)</pre>
+    </div>
+
+    <div class="card">
+      <h3>Layer 4: Cost Center Override (from branch_defaults.py)</h3>
+      <p>Server-side <span class="field">before_validate</span> hook that replaces cost centers the user doesn't have access to. Catches cases where a tax template or item default injects a cost center the branch user can't access.</p>
+    </div>
+
+    <div class="card">
+      <h3>Layer 5: Client-side Restrictions (from item_branch_user.js)</h3>
+      <p>Hides cost/valuation fields on Item form for Branch Users. Checks <span class="field">frappe.user_roles</span> and only applies if user has Branch User but NOT Stock Manager or System Manager.</p>
+    </div>
+  </section>
+
+  <!-- ─── FILE STRUCTURE ─── -->
+  <section class="section" id="dev-files">
+    <h2>&#128193; Fixtures &amp; Custom Fields <span class="badge">Developer</span></h2>
+    <p>All fixtures exported by the app.</p>
+
+    <div class="card">
+      <h3>Custom Fields</h3>
+      <table class="info-table">
+        <tr><th>Name</th><th>Type</th><th>Purpose</th></tr>
+        <tr><td>Sales Invoice → <span class="field">custom_payment_mode</span></td><td>Select (Cash/Credit)</td><td>Drives POS popup vs Credit behavior</td></tr>
+        <tr><td>Sales Invoice → <span class="field">custom_inter_company_branch</span></td><td>Link</td><td>Selects branch for inter-company PI</td></tr>
+        <tr><td>Quotation → <span class="field">custom_payment_mode</span></td><td>Select</td><td>Payment mode on quotation</td></tr>
+        <tr><td>Customer → <span class="field">custom_vat_registration_number</span></td><td>Data</td><td>15-digit Saudi VAT number</td></tr>
+        <tr><td>LCV → <span class="field">custom_distribute_by_cbm</span></td><td>Check</td><td>Enable CBM distribution</td></tr>
+        <tr><td>Landed Cost Item → <span class="field">custom_cbm</span></td><td>Float</td><td>CBM value per item</td></tr>
+        <tr><td>Material Request → <span class="field">custom_is_urgent</span></td><td>Check</td><td>Urgent priority flag</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Workflows</h3>
+      <table class="info-table">
+        <tr><th>Workflow</th><th>DocType</th><th>States</th></tr>
+        <tr><td>Stock Transfer Workflow</td><td>Stock Transfer</td><td>Draft → Pending → Approved (docstatus=1) / Rejected</td></tr>
+      </table>
+      <p style="margin-top:8px;"><strong>Key:</strong> Approval is <strong>branch-based</strong> — only users from the target warehouse's Branch Configuration can approve/reject. Validated in <span class="field">stock_transfer.py → validate()</span>.</p>
+    </div>
+
+    <div class="card">
+      <h3>Dependencies</h3>
+      <table class="info-table">
+        <tr><th>App</th><th>Usage</th></tr>
+        <tr><td><strong>ERPNext v15</strong></td><td>Core ERP (SI, PI, PE, Stock Entry, etc.)</td></tr>
+        <tr><td><strong>sf_trading</strong></td><td>apply_patch/restore_patch for inter-company PI creation (bypasses session defaults)</td></tr>
+      </table>
+    </div>
+  </section>
+
   <div class="divider"></div>
 
   <p style="text-align:center; color: var(--text-light); font-size: 13px; padding: 20px 0;">
-    RMAX Custom App User Guide &mdash; Built by Enfono
+    RMAX Custom App &mdash; User &amp; Developer Guide &mdash; Built by Enfono
   </p>
 
 </main>
