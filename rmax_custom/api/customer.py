@@ -20,7 +20,7 @@ def _get_default_territory():
 def create_customer_with_address(
     customer_name,
     mobile_no=None,
-    customer_type="Individual",
+    customer_type="Company",
     email_id=None,
     country=None,
     default_currency=None,
@@ -67,7 +67,7 @@ def create_customer_with_address(
     customer = frappe.get_doc({
         "doctype": "Customer",
         "customer_name": customer_name,
-        "customer_type": customer_type or "Individual",
+        "customer_type": customer_type or "Company",
         "customer_group": _get_default_customer_group(),
         "territory": _get_default_territory(),
         "default_currency": default_currency,
