@@ -59,3 +59,57 @@ def create_material_request(item_code, from_warehouse, to_warehouse, qty, schedu
     material_request.submit()
 
     return material_request.name
+
+
+@frappe.whitelist()
+def create_stock_transfer_from_mr(material_request):
+    """Create a Stock Transfer from a submitted Material Request."""
+    mr = frappe.get_doc("Material Request", material_request)
+
+    if mr.docstatus != 1:
+        frappe.throw(_("Material Request must be submitted"))
+
+    if mr.material_request_type != "Material Transfer":
+        frappe.throw(_("Only Material Transfer type can create Stock Transfer"))
+
+    source_wh = mr.set_from_warehouse
+    target_wh = mr.set_warehouse
+
+    if not source_wh and not target_wh:
+        frappe.throw(_("Source or Target Warehouse is required on the Material Request"))
+
+    st = frappe.new_doc("Stock Transfer")
+    st.company = mr.company
+    st.set_source_warehouse = source_wh or ""
+    st.set_target_warehouse = target_wh or ""
+    st.material_request_type = "Material Transfer"
+    st.transaction_date = nowdate()
+
+    for item in mr.items:
+        st.append("items", {
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "quantity": flt(item.qty),
+            "uom": item.uom or item.stock_uom,
+        })
+
+        # Use item-level warehouses if header-level not set
+        if not st.set_source_warehouse and item.from_warehouse:
+            st.set_source_warehouse = item.from_warehouse
+        if not st.set_target_warehouse and item.warehouse:
+            st.set_target_warehouse = item.warehouse
+
+    st.insert(ignore_permissions=True)
+
+    # Link MR to Stock Transfer via comment
+    frappe.get_doc({
+        "doctype": "Comment",
+        "comment_type": "Info",
+        "reference_doctype": "Material Request",
+        "reference_name": mr.name,
+        "content": _("Stock Transfer {0} created").format(
+            f'<a href="/app/stock-transfer/{st.name}">{st.name}</a>'
+        ),
+    }).insert(ignore_permissions=True)
+
+    return st.name
