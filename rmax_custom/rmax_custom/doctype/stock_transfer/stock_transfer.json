@@ -91,12 +91,14 @@
    "depends_on": "eval:doc.material_request_type == 'Material Transfer'",
    "fieldname": "set_source_warehouse",
    "fieldtype": "Link",
+   "ignore_user_permissions": 1,
    "label": "Set Source Warehouse",
    "options": "Warehouse"
   },
   {
    "fieldname": "set_target_warehouse",
    "fieldtype": "Link",
+   "ignore_user_permissions": 1,
    "label": "Set Target Warehouse",
    "options": "Warehouse"
   }
@@ -105,7 +107,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-08 13:56:52.609254",
+ "modified": "2026-04-14 19:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Stock Transfer",
