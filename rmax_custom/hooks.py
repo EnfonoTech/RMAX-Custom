@@ -356,6 +356,14 @@ fixtures = [
                     "Material Request Item-warehouse-ignore_user_permissions",
                     "Material Request Item-from_warehouse-ignore_user_permissions",
                     "Material Request Item-cost_center-ignore_user_permissions",
+
+                    # Stock Entry — ignore user permissions on warehouse/cost center
+                    # so branch users can view Stock Entries from approved Stock Transfers
+                    "Stock Entry-from_warehouse-ignore_user_permissions",
+                    "Stock Entry-to_warehouse-ignore_user_permissions",
+                    "Stock Entry Detail-s_warehouse-ignore_user_permissions",
+                    "Stock Entry Detail-t_warehouse-ignore_user_permissions",
+                    "Stock Entry Detail-cost_center-ignore_user_permissions",
                 ]
             ]
         ]
