@@ -285,6 +285,7 @@ fixtures = [
     "Workflow",
     "Workflow State",
     "Workflow Action Master",
+    "Number Card",
     {
         "dt": "Role",
         "filters": [["name", "in", ["Branch User"]]]

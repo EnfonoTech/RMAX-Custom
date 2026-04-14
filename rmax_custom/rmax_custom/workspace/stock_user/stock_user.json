@@ -1,0 +1,107 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"h1_stock_ops\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Stock Operations</b></span>\",\"col\":12}},{\"id\":\"sc_stock_transfer\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Transfer\",\"col\":3}},{\"id\":\"sc_material_request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Material Request\",\"col\":3}},{\"id\":\"sc_purchase_receipt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Receipt\",\"col\":3}},{\"id\":\"sc_item\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Item\",\"col\":3}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"h2_reports\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports</b></span>\",\"col\":12}},{\"id\":\"card_reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports\",\"col\":12}}]",
+  "creation": "2026-04-15 00:00:00.000000",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "box",
+  "idx": 0,
+  "is_hidden": 0,
+  "label": "Stock User",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Reports",
+      "link_count": 0,
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Balance",
+      "link_count": 0,
+      "link_to": "Stock Balance",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Ledger",
+      "link_count": 0,
+      "link_to": "Stock Ledger",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Movement Report",
+      "link_count": 0,
+      "link_to": "Warehouse Analytics",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Item Groups",
+      "link_count": 0,
+      "link_to": "Item Group",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    }
+  ],
+  "modified": "2026-04-15 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rmax Custom",
+  "name": "Stock User",
+  "number_cards": [],
+  "owner": "Administrator",
+  "parent_page": "",
+  "public": 1,
+  "restrict_to_domain": "",
+  "roles": [],
+  "sequence_id": 20.0,
+  "shortcuts": [
+    {
+      "color": "#449CF0",
+      "icon": "shuffle",
+      "label": "Stock Transfer",
+      "link_to": "Stock Transfer",
+      "type": "DocType",
+      "url": "/app/stock-transfer/new"
+    },
+    {
+      "color": "#449CF0",
+      "icon": "list",
+      "label": "Material Request",
+      "link_to": "Material Request",
+      "type": "DocType"
+    },
+    {
+      "color": "#449CF0",
+      "icon": "truck",
+      "label": "Purchase Receipt",
+      "link_to": "Purchase Receipt",
+      "type": "DocType"
+    },
+    {
+      "color": "#449CF0",
+      "icon": "package",
+      "label": "Item",
+      "link_to": "Item",
+      "type": "DocType"
+    }
+  ],
+  "title": "Stock User"
+}

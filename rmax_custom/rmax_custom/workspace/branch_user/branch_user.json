@@ -1,0 +1,187 @@
+{
+  "charts": [],
+  "content": "[{\"id\":\"h1_dashboard\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Dashboard</b></span>\",\"col\":12}},{\"id\":\"nc_daily_sales\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Daily Sales\",\"col\":3}},{\"id\":\"nc_monthly_sales\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Monthly Sales\",\"col\":3}},{\"id\":\"nc_pending_approvals\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Pending Approvals\",\"col\":3}},{\"id\":\"nc_credits_remaining\",\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Credits Remaining\",\"col\":3}},{\"id\":\"sp1\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"h2_quick_access\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Quick Access</b></span>\",\"col\":12}},{\"id\":\"sc_sales_invoice\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Invoice\",\"col\":3}},{\"id\":\"sc_quotation\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Quotation\",\"col\":3}},{\"id\":\"sc_customer\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Customer\",\"col\":3}},{\"id\":\"sc_payment_entry\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Payment Entry\",\"col\":3}},{\"id\":\"sc_purchase_receipt\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Receipt\",\"col\":3}},{\"id\":\"sc_purchase_invoice\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Invoice\",\"col\":3}},{\"id\":\"sc_material_request\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Material Request\",\"col\":3}},{\"id\":\"sc_stock_transfer\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Stock Transfer\",\"col\":3}},{\"id\":\"sp2\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"h3_returns\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Returns</b></span>\",\"col\":12}},{\"id\":\"sc_sales_return\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Sales Return\",\"col\":3}},{\"id\":\"sc_purchase_return\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Purchase Return\",\"col\":3}},{\"id\":\"sp3\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"h4_reports\",\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Reports & Data</b></span>\",\"col\":12}},{\"id\":\"card_reports\",\"type\":\"card\",\"data\":{\"card_name\":\"Reports & Data\",\"col\":12}}]",
+  "creation": "2026-04-15 00:00:00.000000",
+  "custom_blocks": [],
+  "docstatus": 0,
+  "doctype": "Workspace",
+  "for_user": "",
+  "hide_custom": 0,
+  "icon": "store",
+  "idx": 0,
+  "is_hidden": 0,
+  "label": "Branch User",
+  "links": [
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Reports & Data",
+      "link_count": 0,
+      "onboard": 0,
+      "type": "Card Break"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Balance",
+      "link_count": 0,
+      "link_to": "Stock Balance",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Ledger",
+      "link_count": 0,
+      "link_to": "Stock Ledger",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Item",
+      "link_count": 0,
+      "link_to": "Item",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 0,
+      "label": "Price List",
+      "link_count": 0,
+      "link_to": "Price List",
+      "link_type": "DocType",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Stock Sales Report",
+      "link_count": 0,
+      "link_to": "Stock Sales Report",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Collection Report",
+      "link_count": 0,
+      "link_to": "Collection Report",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
+    }
+  ],
+  "modified": "2026-04-15 00:00:00.000000",
+  "modified_by": "Administrator",
+  "module": "Rmax Custom",
+  "name": "Branch User",
+  "number_cards": [
+    {
+      "label": "Daily Sales",
+      "number_card_name": "Daily Sales"
+    },
+    {
+      "label": "Monthly Sales",
+      "number_card_name": "Monthly Sales"
+    },
+    {
+      "label": "Pending Approvals",
+      "number_card_name": "Pending Approvals"
+    },
+    {
+      "label": "Credits Remaining",
+      "number_card_name": "Credits Remaining"
+    }
+  ],
+  "owner": "Administrator",
+  "parent_page": "",
+  "public": 1,
+  "restrict_to_domain": "",
+  "roles": [],
+  "sequence_id": 10.0,
+  "shortcuts": [
+    {
+      "color": "#5B5FC7",
+      "icon": "file-text",
+      "label": "Sales Invoice",
+      "link_to": "Sales Invoice",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "file-text",
+      "label": "Quotation",
+      "link_to": "Quotation",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "users",
+      "label": "Customer",
+      "link_to": "Customer",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "credit-card",
+      "label": "Payment Entry",
+      "link_to": "Payment Entry",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "truck",
+      "label": "Purchase Receipt",
+      "link_to": "Purchase Receipt",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "file-text",
+      "label": "Purchase Invoice",
+      "link_to": "Purchase Invoice",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "list",
+      "label": "Material Request",
+      "link_to": "Material Request",
+      "type": "DocType"
+    },
+    {
+      "color": "#5B5FC7",
+      "icon": "shuffle",
+      "label": "Stock Transfer",
+      "link_to": "Stock Transfer",
+      "type": "DocType"
+    },
+    {
+      "color": "#FF5858",
+      "icon": "corner-down-left",
+      "label": "Sales Return",
+      "link_to": "Sales Invoice",
+      "type": "DocType",
+      "url": "/app/sales-invoice?is_return=1"
+    },
+    {
+      "color": "#FF5858",
+      "icon": "corner-down-left",
+      "label": "Purchase Return",
+      "link_to": "Purchase Invoice",
+      "type": "DocType",
+      "url": "/app/purchase-invoice?is_return=1"
+    }
+  ],
+  "title": "Branch User"
+}
