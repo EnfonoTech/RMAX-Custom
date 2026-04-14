@@ -3,16 +3,17 @@
  * Loaded via doctype_js hook (no bench build needed).
  *
  * - Hides standard Material Transfer / Pick List buttons
- * - Adds "Stock Transfer" button under Create
+ * - Adds "Stock Transfer" button ONLY for source warehouse branch users
+ *
+ * Flow: Requester creates MR → Source branch user creates ST → Target branch user approves
  */
 
 frappe.ui.form.on("Material Request", {
     refresh: function (frm) {
         if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
-            // Wait for ERPNext's buttons to render first
             setTimeout(function () {
                 _rmax_hide_standard_buttons(frm);
-                _rmax_add_stock_transfer_button(frm);
+                _rmax_maybe_add_stock_transfer_button(frm);
             }, 300);
         }
     },
@@ -26,13 +27,11 @@ function _rmax_hide_standard_buttons(frm) {
     ];
 
     labels_to_hide.forEach(function (label) {
-        // Hide from custom_buttons registry
         if (frm.custom_buttons && frm.custom_buttons[label]) {
             frm.custom_buttons[label].addClass("hidden");
         }
     });
 
-    // Also hide from dropdown menu items inside "Create" group
     frm.page.inner_toolbar.find(".dropdown-item, .dropdown-menu a").each(function () {
         var text = $(this).text().trim();
         if (
@@ -45,12 +44,46 @@ function _rmax_hide_standard_buttons(frm) {
     });
 }
 
-function _rmax_add_stock_transfer_button(frm) {
+function _rmax_maybe_add_stock_transfer_button(frm) {
     if (frm.doc.status === "Stopped" || flt(frm.doc.per_ordered) >= 100) return;
-
-    // Don't add duplicate button
     if (frm.custom_buttons && frm.custom_buttons[__("Stock Transfer")]) return;
 
+    // Get source warehouse from MR (set_from_warehouse or from item rows)
+    var source_wh = frm.doc.set_from_warehouse;
+    if (!source_wh && frm.doc.items && frm.doc.items.length) {
+        source_wh = frm.doc.items[0].from_warehouse;
+    }
+
+    if (!source_wh) {
+        // No source warehouse — show button for all (admin will handle)
+        _rmax_add_stock_transfer_button(frm);
+        return;
+    }
+
+    // Check if current user has this source warehouse in their User Permissions
+    // (meaning they are from the source branch and should fulfill the request)
+    frappe.call({
+        method: "frappe.client.get_count",
+        args: {
+            doctype: "User Permission",
+            filters: {
+                user: frappe.session.user,
+                allow: "Warehouse",
+                for_value: source_wh,
+            },
+        },
+        async: false,
+        callback: function (r) {
+            if (r.message && r.message > 0) {
+                _rmax_add_stock_transfer_button(frm);
+            }
+            // If user doesn't have source warehouse permission, no button shown
+            // (they are the requester, not the fulfiller)
+        },
+    });
+}
+
+function _rmax_add_stock_transfer_button(frm) {
     frm.add_custom_button(
         __("Stock Transfer"),
         function () {
