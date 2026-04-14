@@ -18,46 +18,8 @@ frappe.ui.form.on('Stock Transfer', {
             }, 200);
         }
     },
-    before_save: function(frm) {
-
-    if (frm.doc.set_target_warehouse) {
-
-        frappe.call({
-            method: "frappe.client.get_list",
-            async: false,
-            args: {
-                doctype: "User Permission",
-                filters: {
-                    user: frappe.session.user,
-                    allow: "Warehouse",
-                    for_value: frm.doc.set_target_warehouse
-                },
-                fields: ["name"]
-            },
-            callback: function(r) {
-
-                if (!r.message.length) {
-
-                    frappe.call({
-                        method: "frappe.client.insert",
-                        async: false,
-                        args: {
-                            doc: {
-                                doctype: "User Permission",
-                                user: frappe.session.user,
-                                allow: "Warehouse",
-                                for_value: frm.doc.set_target_warehouse
-                            }
-                        }
-                    });
-
-                }
-            }
-        });
-    }
-}
-
 });
+
 
 function _setup_st_warehouse_queries(frm) {
     // Source warehouse: ONLY user's permitted warehouses
