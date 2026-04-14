@@ -21,6 +21,16 @@ def get_dashboard_data():
 
     warehouses = get_branch_warehouse_condition(user) or []
 
+    # Get branch name
+    branch_name = ""
+    branch_configs = frappe.get_all(
+        "Branch Configuration User",
+        filters={"user": user},
+        pluck="parent",
+    )
+    if branch_configs:
+        branch_name = branch_configs[0]
+
     data = {
         "company": company,
         "is_branch_user": is_branch_user,
@@ -28,6 +38,7 @@ def get_dashboard_data():
         "is_admin": is_admin,
         "user": user,
         "warehouses": warehouses,
+        "branch_name": branch_name,
     }
 
     today = frappe.utils.today()

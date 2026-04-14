@@ -34,17 +34,15 @@ function render_dashboard(page, data) {
 	// Header
 	html += '<div class="dash-header">';
 	html += '<div>';
-	html += '<h2 class="dash-company">' + frappe.utils.escape_html(data.company || 'RMAX') + '</h2>';
+	html += '<h2 class="dash-company">RMAX</h2>';
 	if (data.is_branch_user && !data.is_admin) {
-		html += '<span class="dash-subtitle">Branch Dashboard</span>';
+		html += '<span class="dash-subtitle">Sales Dashboard' + (data.branch_name ? ' &mdash; ' + frappe.utils.escape_html(data.branch_name) : '') + '</span>';
 	} else if (data.is_stock_user && !data.is_branch_user) {
-		html += '<span class="dash-subtitle">Stock Operations</span>';
+		html += '<span class="dash-subtitle">Stock Dashboard</span>';
 	} else {
-		html += '<span class="dash-subtitle">Management Dashboard</span>';
+		html += '<span class="dash-subtitle">Dashboard</span>';
 	}
 	html += '</div>';
-	html += '<button class="btn btn-default btn-sm dash-settings-btn" onclick="frappe.set_route(\'modules\', \'Rmax Custom\')">';
-	html += '<i class="fa fa-cog"></i> Settings</button>';
 	html += '</div>';
 
 	// Branch User Dashboard
