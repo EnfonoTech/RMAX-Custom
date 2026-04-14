@@ -125,7 +125,13 @@ function open_create_customer_dialog(frm) {
             ],
             primary_action_label: "Create Customer",
             primary_action(values) {
-
+                function count_digits(val) {
+                    if (!val) return 0;
+                    return val.replace(/\D/g, "").length;
+                }
+                if (count_digits(values.mobile_no) < 10) {
+                    frappe.throw("Mobile number must have at least 10 digits.");
+                        }
                 frappe.call({
                     method: "rmax_custom.api.customer.create_customer_with_address",
                     args: {
