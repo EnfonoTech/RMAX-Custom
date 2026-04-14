@@ -63,7 +63,8 @@ doctype_js = {
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
-    "Material Request": "public/js/material_request_list.js"
+    "Material Request": "public/js/material_request_list.js",
+    "Sales Invoice": "public/js/sales_invoice_list.js"
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -140,13 +141,14 @@ after_migrate = ["rmax_custom.setup.after_migrate"]
 # -----------
 # Permissions evaluated in scripted ways
 
-# permission_query_conditions = {
-# 	"Event": "frappe.desk.doctype.event.event.get_permission_query_conditions",
-# }
-#
-# has_permission = {
-# 	"Event": "frappe.desk.doctype.event.event.has_permission",
-# }
+permission_query_conditions = {
+	"Sales Invoice": "rmax_custom.branch_filters.si_permission_query",
+	"Purchase Invoice": "rmax_custom.branch_filters.pi_permission_query",
+	"Delivery Note": "rmax_custom.branch_filters.dn_permission_query",
+	"Purchase Receipt": "rmax_custom.branch_filters.pr_permission_query",
+	"Payment Entry": "rmax_custom.branch_filters.pe_permission_query",
+	"Quotation": "rmax_custom.branch_filters.quotation_permission_query",
+}
 
 # DocType Class
 # ---------------
@@ -162,7 +164,20 @@ override_doctype_class = {
 
 doc_events = {
 	"Sales Invoice": {
+		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+	},
+	"Purchase Invoice": {
+		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+	},
+	"Payment Entry": {
+		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+	},
+	"Delivery Note": {
+		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+	},
+	"Purchase Receipt": {
+		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
 }
 
@@ -319,8 +334,12 @@ fixtures = [
                     "Material Request-schedule_date-hidden",
                     "Landed Cost Item-qty-columns",
                     "Material Request-material_request_type-default",
-                    "Customer-customer_type-options"
+                    "Customer-customer_type-options",
 
+                    # Sales Invoice list view filters
+                    "Sales Invoice-grand_total-in_standard_filter",
+                    "Sales Invoice-total_qty-in_standard_filter",
+                    "Sales Invoice-contact_mobile-in_standard_filter",
                 ]
             ]
         ]
