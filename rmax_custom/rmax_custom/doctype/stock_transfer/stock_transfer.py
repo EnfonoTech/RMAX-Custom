@@ -15,9 +15,17 @@ class StockTransfer(Document):
 			self._validate_target_branch_user()
 
 	def _validate_target_branch_user(self):
-		"""Check that the current user belongs to the target warehouse's branch."""
+		"""Check that the current user belongs to the target warehouse's branch.
+		Also prevents the creator from approving their own transfer."""
 		if frappe.session.user == "Administrator":
 			return
+
+		# Prevent self-approval — creator cannot approve their own transfer
+		if self.workflow_state == "Approved" and frappe.session.user == self.owner:
+			frappe.throw(
+				_("You cannot approve a Stock Transfer that you created. "
+				  "It must be approved by another user from the target branch.")
+			)
 
 		target_wh = self.set_target_warehouse
 		if not target_wh:

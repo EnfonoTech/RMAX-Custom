@@ -78,6 +78,17 @@ def create_stock_transfer_from_mr(material_request):
     if not source_wh and not target_wh:
         frappe.throw(_("Source or Target Warehouse is required on the Material Request"))
 
+    # Check if ST already exists for this MR (prevent duplicates)
+    existing_st = frappe.db.sql("""
+        SELECT c.reference_name
+        FROM `tabComment` c
+        WHERE c.reference_doctype = 'Material Request'
+        AND c.reference_name = %s
+        AND c.content LIKE '%%Stock Transfer%%created%%'
+    """, mr.name)
+    if existing_st:
+        frappe.throw(_("A Stock Transfer has already been created from this Material Request."))
+
     st = frappe.new_doc("Stock Transfer")
     st.company = mr.company
     st.set_source_warehouse = source_wh or ""
