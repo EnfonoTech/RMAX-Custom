@@ -8,7 +8,6 @@
 
 frappe.ui.form.on("Material Request", {
     refresh: function (frm) {
-        console.log("RMAX: MR refresh", frm.doc.docstatus, frm.doc.material_request_type);
         if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
             _rmax_setup_buttons(frm);
         }
@@ -23,32 +22,21 @@ function _rmax_setup_buttons(frm) {
     }
 
     // Check if user can create Stock Transfer (async)
-    console.log("RMAX: checking source_wh =", source_wh);
-
     frappe.call({
         method: "rmax_custom.api.material_request.can_create_stock_transfer",
         args: { source_warehouse: source_wh || "" },
         callback: function (r) {
-            console.log("RMAX: can_create_stock_transfer result =", r.message);
-
-            // Hide standard buttons first
             _rmax_hide_standard_buttons(frm);
 
-            // Add Stock Transfer button if user has permission
             if (r.message) {
                 _rmax_add_stock_transfer_button(frm);
-                console.log("RMAX: Stock Transfer button added");
-            } else {
-                console.log("RMAX: No permission — button NOT added");
             }
 
-            // Hide again after a delay (ERPNext buttons render late)
             setTimeout(function () {
                 _rmax_hide_standard_buttons(frm);
             }, 500);
         },
-        error: function (err) {
-            console.log("RMAX: API ERROR", err);
+        error: function () {
             _rmax_hide_standard_buttons(frm);
         },
     });
