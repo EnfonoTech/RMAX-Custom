@@ -51,11 +51,11 @@ frappe.listview_settings["Sales Invoice"].refresh = function (listview) {
     // Check if is_return filter is active
     if (_is_return_filter_active(listview)) {
         listview.page.set_primary_action(
-            __("+ New Credit Note"),
+            __("New Credit Note"),
             function () {
-                frappe.new_doc("Sales Invoice", { is_return: 1 });
-            },
-            "add"
+                frappe.route_options = { is_return: 1 };
+                frappe.new_doc("Sales Invoice");
+            }
         );
     }
 };

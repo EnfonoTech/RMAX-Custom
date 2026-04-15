@@ -34,11 +34,11 @@ frappe.listview_settings["Purchase Invoice"].refresh = function (listview) {
 
     if (is_return_active) {
         listview.page.set_primary_action(
-            __("+ New Debit Note"),
+            __("New Debit Note"),
             function () {
-                frappe.new_doc("Purchase Invoice", { is_return: 1 });
-            },
-            "add"
+                frappe.route_options = { is_return: 1 };
+                frappe.new_doc("Purchase Invoice");
+            }
         );
     }
 };
