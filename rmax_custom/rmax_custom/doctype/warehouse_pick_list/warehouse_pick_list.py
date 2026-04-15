@@ -9,8 +9,12 @@ from frappe.utils import flt
 
 class WarehousePickList(Document):
 
+	def before_save(self):
+		if self.docstatus == 0 and self.items:
+			self.status = "Picking"
+
 	def before_submit(self):
-		self.status = "Open"
+		self.status = "Completed"
 
 	def before_cancel(self):
 		self.status = "Cancelled"
@@ -18,9 +22,14 @@ class WarehousePickList(Document):
 
 @frappe.whitelist()
 def get_pending_material_requests(warehouse):
-	"""List pending Material Requests for the given source warehouse."""
+	"""List pending Material Requests for the given source warehouse.
+	Excludes MRs already added to any non-cancelled Warehouse Pick List.
+	"""
 	if not warehouse:
 		frappe.throw(_("Please select a Source Warehouse first"))
+
+	# Get MRs already picked in any active (non-cancelled) pick list
+	already_picked = _get_already_picked_docs("Material Request")
 
 	mrs = frappe.db.sql(
 		"""
@@ -46,14 +55,23 @@ def get_pending_material_requests(warehouse):
 		as_dict=True,
 	)
 
+	# Filter out already picked
+	if already_picked:
+		mrs = [mr for mr in mrs if mr.name not in already_picked]
+
 	return mrs
 
 
 @frappe.whitelist()
 def get_pending_stock_transfers(warehouse):
-	"""List pending Stock Transfers for the given source warehouse."""
+	"""List pending Stock Transfers for the given source warehouse.
+	Excludes STs already added to any non-cancelled Warehouse Pick List.
+	"""
 	if not warehouse:
 		frappe.throw(_("Please select a Source Warehouse first"))
+
+	# Get STs already picked in any active pick list
+	already_picked = _get_already_picked_docs("Stock Transfer")
 
 	sts = frappe.db.sql(
 		"""
@@ -76,7 +94,27 @@ def get_pending_stock_transfers(warehouse):
 		as_dict=True,
 	)
 
+	# Filter out already picked
+	if already_picked:
+		sts = [st for st in sts if st.name not in already_picked]
+
 	return sts
+
+
+def _get_already_picked_docs(source_doctype):
+	"""Get set of document names already added to any non-cancelled Warehouse Pick List."""
+	picked = frappe.db.sql(
+		"""
+		SELECT DISTINCT wps.source_name
+		FROM `tabWarehouse Pick List Source` wps
+		INNER JOIN `tabWarehouse Pick List` wpl ON wpl.name = wps.parent
+		WHERE wps.source_doctype = %s
+		AND wpl.docstatus != 2
+		""",
+		(source_doctype,),
+		as_list=True,
+	)
+	return set(row[0] for row in picked)
 
 
 @frappe.whitelist()
@@ -165,12 +203,3 @@ def get_items_from_document(source_doctype, source_name, warehouse):
 	return {"items": items, "sources": sources}
 
 
-@frappe.whitelist()
-def mark_completed(name):
-	"""Mark a submitted Warehouse Pick List as Completed."""
-	doc = frappe.get_doc("Warehouse Pick List", name)
-	if doc.docstatus != 1:
-		frappe.throw(_("Only submitted pick lists can be marked as completed"))
-	doc.status = "Completed"
-	doc.save(ignore_permissions=True)
-	return "ok"

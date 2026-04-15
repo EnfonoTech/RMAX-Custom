@@ -19,24 +19,6 @@ frappe.ui.form.on('Warehouse Pick List', {
 			}, __('Get Items'));
 		}
 
-		// "Mark as Completed" button — only on submitted Open pick lists
-		if (frm.doc.docstatus === 1 && frm.doc.status === 'Open') {
-			frm.add_custom_button(__('Mark as Completed'), function() {
-				frappe.confirm(
-					__('Mark this pick list as completed?'),
-					function() {
-						frappe.call({
-							method: 'rmax_custom.rmax_custom.doctype.warehouse_pick_list.warehouse_pick_list.mark_completed',
-							args: { name: frm.doc.name },
-							callback: function() {
-								frm.reload_doc();
-							}
-						});
-					}
-				);
-			}, __('Actions'));
-		}
-
 		// Color-code rows
 		_highlight_pick_rows(frm);
 	},
