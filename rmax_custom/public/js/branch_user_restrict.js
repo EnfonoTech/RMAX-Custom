@@ -182,16 +182,20 @@
 	// === INTERCEPT NAVBAR LOGO CLICK ===
 	function intercept_logo_click() {
 		if (!is_branch_user()) return;
-		// Frappe navbar logo — redirect to dashboard instead of Home
-		$(document).on("click", ".navbar-brand, .navbar-home, .erpnext-icon, a[href='/app'], a[href='/app/home']", function (e) {
+
+		// Directly change the logo href to dashboard route
+		// This is more reliable than click interception since native <a> behavior fires first
+		$("a.navbar-brand, a.navbar-home, .navbar a[href='/app'], .navbar a[href='/app/home']").each(function() {
+			$(this).attr("href", "/app/rmax-dashboard");
+		});
+
+		// Also intercept click as fallback (for dynamically created elements)
+		$(document).on("click", ".navbar-brand, .navbar-home", function (e) {
 			e.preventDefault();
 			e.stopPropagation();
 			frappe.set_route("rmax-dashboard");
 			return false;
 		});
-
-		// Also make the logo element have a pointer cursor
-		$(".navbar-brand, .navbar-home").css("cursor", "pointer");
 	}
 
 	// === ADD DASHBOARD BUTTON IN NAVBAR ===
@@ -233,7 +237,10 @@
 	$(document).on("page-change", function () {
 		enforce_route();
 		setTimeout(hide_sidebar, 200);
-		setTimeout(add_dashboard_nav, 300);
+		setTimeout(function() {
+			add_dashboard_nav();
+			intercept_logo_click();
+		}, 300);
 	});
 
 	// === ENFORCE ON INITIAL LOAD ===
