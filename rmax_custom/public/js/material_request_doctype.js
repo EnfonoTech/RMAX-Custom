@@ -21,6 +21,11 @@ frappe.ui.form.on("Material Request", {
         if (frm.doc.material_request_type === "Material Transfer") {
             _rmax_fetch_available_qty(frm);
         }
+
+        // Show transfer status below items table for submitted MRs
+        if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
+            _rmax_show_transfer_status(frm);
+        }
     },
     set_from_warehouse: function (frm) {
         _rmax_fetch_available_qty(frm);
@@ -198,6 +203,67 @@ function _rmax_hide_standard_buttons(frm) {
             text === "Pick List"
         ) {
             $(this).addClass("hidden");
+        }
+    });
+}
+
+// ─── Transfer Status Section ────────────────────────────────
+
+function _rmax_show_transfer_status(frm) {
+    // Remove old status HTML
+    frm.fields_dict.items.$wrapper.parent().find(".rmax-transfer-status").remove();
+
+    frappe.call({
+        method: "rmax_custom.api.material_request.get_mr_transfer_status",
+        args: { material_request: frm.doc.name },
+        callback: function (r) {
+            if (!r.message || !r.message.length) return;
+
+            var items = r.message;
+            var has_any_transfer = items.some(function (item) {
+                return flt(item.transferred_qty) > 0;
+            });
+
+            // Only show if at least one item has been transferred
+            if (!has_any_transfer) return;
+
+            var html = '<div class="rmax-transfer-status" style="margin-top: 15px; padding: 12px; border: 1px solid #d1d8dd; border-radius: 8px; background: #fafbfc;">';
+            html += '<h6 style="margin-bottom: 10px; font-weight: 600; color: #333;">📦 Transfer Status</h6>';
+            html += '<table class="table table-bordered table-sm" style="margin-bottom: 0; font-size: 12px;">';
+            html += '<thead style="background: #f5f7fa;"><tr>';
+            html += '<th>' + __("Item") + '</th>';
+            html += '<th style="text-align:right">' + __("Requested") + '</th>';
+            html += '<th style="text-align:right">' + __("Transferred") + '</th>';
+            html += '<th style="text-align:right">' + __("Pending") + '</th>';
+            html += '<th style="text-align:center">' + __("Status") + '</th>';
+            html += '</tr></thead><tbody>';
+
+            items.forEach(function (item) {
+                var requested = flt(item.requested_qty);
+                var transferred = flt(item.transferred_qty);
+                var pending = flt(item.pending_qty);
+
+                var status_badge = '';
+                if (pending <= 0) {
+                    status_badge = '<span class="indicator-pill green" style="font-size:11px">Completed</span>';
+                } else if (transferred > 0) {
+                    status_badge = '<span class="indicator-pill orange" style="font-size:11px">Partial</span>';
+                } else {
+                    status_badge = '<span class="indicator-pill red" style="font-size:11px">Pending</span>';
+                }
+
+                html += '<tr>';
+                html += '<td>' + item.item_code + ' — <span style="color:#888">' + (item.item_name || '') + '</span></td>';
+                html += '<td style="text-align:right">' + requested + '</td>';
+                html += '<td style="text-align:right; color:#10b981; font-weight:600">' + transferred + '</td>';
+                html += '<td style="text-align:right; color:' + (pending > 0 ? '#e94560' : '#10b981') + '; font-weight:600">' + pending + '</td>';
+                html += '<td style="text-align:center">' + status_badge + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+
+            frm.fields_dict.items.$wrapper.parent().append(html);
         }
     });
 }

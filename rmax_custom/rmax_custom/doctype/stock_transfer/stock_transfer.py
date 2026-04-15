@@ -72,6 +72,7 @@ class StockTransfer(Document):
 			return
 
 		self.create_stock_entry()
+		self._update_material_request_status()
 
 	def _validate_stock_availability(self):
 		"""Check stock availability for all items before creating Stock Entry.
@@ -142,6 +143,54 @@ class StockTransfer(Document):
 			alert=True,
 			indicator='green'
 		)
+
+
+	def on_cancel(self):
+		"""Update MR status when ST is cancelled."""
+		self._update_material_request_status()
+
+	def _update_material_request_status(self):
+		"""Update linked Material Request status based on total transferred qty."""
+		if not self.material_request:
+			return
+
+		mr = frappe.get_doc("Material Request", self.material_request)
+		if mr.docstatus != 1:
+			return
+
+		# Import helper from our API
+		from rmax_custom.api.material_request import _get_transferred_qty_map
+
+		transferred_map = _get_transferred_qty_map(mr.name)
+
+		all_fulfilled = True
+		any_fulfilled = False
+
+		for item in mr.items:
+			transferred = flt(transferred_map.get(item.name, 0))
+			if transferred >= flt(item.qty):
+				any_fulfilled = True
+			elif transferred > 0:
+				any_fulfilled = True
+				all_fulfilled = False
+			else:
+				all_fulfilled = False
+
+		if all_fulfilled and any_fulfilled:
+			new_status = "Transferred"
+			per_ordered = 100
+		elif any_fulfilled:
+			new_status = "Partially Ordered"
+			per_ordered = 50  # approximate
+		else:
+			new_status = "Pending"
+			per_ordered = 0
+
+		# Update MR status directly via DB to avoid permission/workflow issues
+		frappe.db.set_value("Material Request", mr.name, {
+			"status": new_status,
+			"per_ordered": per_ordered,
+		}, update_modified=False)
 
 
 def get_available_qty(item_code, warehouse):
