@@ -323,6 +323,7 @@ fixtures = [
 
                     # Material Request
                     "Material Request-custom_is_urgent",
+                    "Material Request Item-custom_is_urgent",
                 ]
             ]
         ]

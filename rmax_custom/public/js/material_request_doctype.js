@@ -11,8 +11,51 @@ frappe.ui.form.on("Material Request", {
         if (frm.doc.docstatus === 1 && frm.doc.material_request_type === "Material Transfer") {
             _rmax_setup_buttons(frm);
         }
+        _rmax_highlight_urgent_items(frm);
     },
 });
+
+// Auto-sync: if ANY item is urgent, tick the parent checkbox too
+frappe.ui.form.on("Material Request Item", {
+    custom_is_urgent: function (frm, cdt, cdn) {
+        _rmax_sync_urgent_to_parent(frm);
+        _rmax_highlight_urgent_items(frm);
+    },
+    items_remove: function (frm) {
+        _rmax_sync_urgent_to_parent(frm);
+    },
+});
+
+function _rmax_sync_urgent_to_parent(frm) {
+    var any_urgent = (frm.doc.items || []).some(function (item) {
+        return item.custom_is_urgent;
+    });
+    if (frm.doc.custom_is_urgent !== any_urgent) {
+        frm.set_value("custom_is_urgent", any_urgent ? 1 : 0);
+    }
+}
+
+function _rmax_highlight_urgent_items(frm) {
+    // Highlight urgent item rows with a red left border
+    setTimeout(function () {
+        (frm.doc.items || []).forEach(function (item) {
+            var $row = frm.fields_dict.items.grid.grid_rows_by_docname[item.name];
+            if ($row && $row.row) {
+                if (item.custom_is_urgent) {
+                    $($row.row).css({
+                        "border-left": "3px solid #e94560",
+                        "background-color": "#fff5f5"
+                    });
+                } else {
+                    $($row.row).css({
+                        "border-left": "",
+                        "background-color": ""
+                    });
+                }
+            }
+        });
+    }, 300);
+}
 
 function _rmax_setup_buttons(frm) {
     // Get source warehouse
