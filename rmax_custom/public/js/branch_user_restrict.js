@@ -183,18 +183,17 @@
 	function intercept_logo_click() {
 		if (!is_branch_user()) return;
 
-		// Directly change the logo href to dashboard route
-		// This is more reliable than click interception since native <a> behavior fires first
-		$("a.navbar-brand, a.navbar-home, .navbar a[href='/app'], .navbar a[href='/app/home']").each(function() {
-			$(this).attr("href", "/app/rmax-dashboard");
-		});
+		// The logo is: <a class="navbar-brand" href="/app/branch-user"> (or /app/home, etc.)
+		// Directly rewrite the href to dashboard route
+		$(".navbar-brand").attr("href", "/app/rmax-dashboard");
 
-		// Also intercept click as fallback (for dynamically created elements)
-		$(document).on("click", ".navbar-brand, .navbar-home", function (e) {
-			e.preventDefault();
-			e.stopPropagation();
-			frappe.set_route("rmax-dashboard");
-			return false;
+		// Also catch any navbar logo link regardless of class
+		$("header a, nav a").each(function() {
+			var href = ($(this).attr("href") || "");
+			if (href === "/app" || href === "/" || href === "/app/home" ||
+				href === "/app/branch-user" || href.indexOf("/app/workspace") === 0) {
+				$(this).attr("href", "/app/rmax-dashboard");
+			}
 		});
 	}
 
