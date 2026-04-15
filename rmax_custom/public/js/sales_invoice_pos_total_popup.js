@@ -498,7 +498,8 @@ function rmax_render_dialog(frm) {
 			// Save - payments are already updated in frm.doc.payments
 			frm.save(save_action).then(function(r) {
 				// If user submitted, create Payment Entries from the popup amounts
-				if (submit) {
+				// Double-check that submit actually succeeded (docstatus=1)
+				if (submit && frm.doc.docstatus === 1) {
 					frappe.call({
 						method: "rmax_custom.api.sales_invoice_payment.create_pos_payments_for_invoice",
 						args: {
@@ -529,6 +530,17 @@ function rmax_render_dialog(frm) {
 							frm.reload_doc();
 						},
 					});
+					return;
+				}
+
+				// Submit was requested but docstatus is still 0 — submit failed
+				if (submit && frm.doc.docstatus !== 1) {
+					frappe.msgprint({
+						title: __("Submit Failed"),
+						message: __("The invoice could not be submitted. Please check for validation errors and try again."),
+						indicator: "orange",
+					});
+					frm.reload_doc();
 					return;
 				}
 
