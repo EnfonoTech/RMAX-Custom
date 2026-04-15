@@ -108,6 +108,7 @@
   },
   {
    "collapsible": 1,
+   "collapsible_depends_on": "eval:!doc.stock_entry_transfer && !doc.stock_entry_writeoff",
    "fieldname": "section_break_ref",
    "fieldtype": "Section Break",
    "label": "Reference"

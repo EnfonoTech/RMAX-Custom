@@ -112,6 +112,37 @@ Validation (Python):
 3. Source user creates ST (pre-filled from MR) → sends for approval
 4. Target branch user approves → Stock Entry created
 
+### Damage Workflow
+
+**DocTypes:** Damage Slip (DS-#####), Damage Transfer (DT-#####, submittable)
+**Child Tables:** Damage Slip Item, Damage Transfer Item, Damage Transfer Slip
+**Roles:** Damage User (restricted like Branch User), Branch User, Stock User can also access
+
+**Flow:**
+1. Branch user creates **Damage Slip** — records damaged items with branch warehouse + damage warehouse (Damage Jeddah/Riyadh)
+2. Damage user creates **Damage Transfer** — pulls in pending slips, validates inspection (≥1 image + supplier code per item)
+3. On submit: auto-creates **Stock Entry (Material Transfer)** — branch WH → damage WH
+4. Admin can later **Write Off** via button — creates **Stock Entry (Material Issue)** — Dr Damage/Loss Account, Cr Stock Account
+
+**Damage Warehouses:** `Damage Jeddah - CNC`, `Damage Riyadh - CNC` (under parent `Damage - CNC`)
+**JS warehouse filter:** `name: ["like", "Damage%"]` in damage_warehouse field query
+
+**Key Files:**
+- `damage_slip/damage_slip.py` — validation, status management
+- `damage_transfer/damage_transfer.py` — `_create_transfer_stock_entry()`, `write_off_damage()`, `get_pending_damage_slips()`
+- `damage_transfer/damage_transfer.js` — inspection UI, slip fetching, warehouse query setup
+- `damage_slip/damage_slip.js` — warehouse query setup
+
+**Permissions:**
+- Damage User: read/write/create on Damage Slip; read/write/submit on Damage Transfer
+- `ignore_user_permissions: 1` on branch_warehouse, damage_warehouse, company fields
+- setup.py adds 9 extra DocType permissions for Damage User (User Permission, Customer, Supplier, etc.)
+- `branch_user_restrict.js` includes Damage Slip, Damage Transfer, Supplier Code in ALLOWED_DOCTYPES
+
+**Supplier Code:** Custom DocType linking supplier name to a code. Records created for: Clear Desk, Clear Desk USD, Clear light, RMAX.
+
+**Company Config Needed:** `custom_damage_loss_account` field on Company — required for write-off Stock Entry. Not yet configured.
+
 ### List Filtering Logic
 
 `get_branch_warehouse_condition()` checks `tabBranch Configuration User` (NOT roles, NOT User Permissions) as source of truth. Returns warehouses from user's branch configs.

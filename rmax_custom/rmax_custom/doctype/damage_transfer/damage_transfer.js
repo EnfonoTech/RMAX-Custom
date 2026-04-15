@@ -44,6 +44,9 @@ frappe.ui.form.on('Damage Transfer', {
 			frm.set_intro(__('This Damage Transfer has been written off.'), 'blue');
 		}
 
+		// === Show Stock Entry links prominently ===
+		_show_stock_entry_links(frm);
+
 		// === Field visibility per state ===
 		_toggle_inspection_fields(frm);
 
@@ -240,6 +243,41 @@ function _add_slips_to_transfer(frm, selected_slips) {
 	}
 
 	frappe.show_alert({ message: __('Damage Slips added.'), indicator: 'green' });
+}
+
+function _show_stock_entry_links(frm) {
+	// Show Stock Entry links in the dashboard area for easy access
+	if (frm.doc.docstatus !== 1) return;
+
+	var links = [];
+	if (frm.doc.stock_entry_transfer) {
+		links.push(
+			'<span style="margin-right:15px;">' +
+			'<strong>' + __('Transfer Entry') + ':</strong> ' +
+			'<a href="/app/stock-entry/' + frm.doc.stock_entry_transfer + '">' +
+			frm.doc.stock_entry_transfer + '</a>' +
+			' <span class="indicator-pill green">' + __('Material Transfer') + '</span>' +
+			'</span>'
+		);
+	}
+	if (frm.doc.stock_entry_writeoff) {
+		links.push(
+			'<span>' +
+			'<strong>' + __('Write-Off Entry') + ':</strong> ' +
+			'<a href="/app/stock-entry/' + frm.doc.stock_entry_writeoff + '">' +
+			frm.doc.stock_entry_writeoff + '</a>' +
+			' <span class="indicator-pill blue">' + __('Material Issue') + '</span>' +
+			'</span>'
+		);
+	}
+
+	if (links.length) {
+		frm.dashboard.set_headline(
+			'<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">' +
+			links.join('') +
+			'</div>'
+		);
+	}
 }
 
 function _setup_dt_damage_warehouse_query(frm) {
