@@ -35,10 +35,19 @@ frappe.listview_settings["Purchase Invoice"].refresh = function (listview) {
         listview.page.set_primary_action(
             __("New Debit Note"),
             function () {
-                var doc = frappe.model.get_new_doc("Purchase Invoice");
-                doc.is_return = 1;
-                frappe.set_route("Form", "Purchase Invoice", doc.name);
+                window._rmax_create_return = "Purchase Invoice";
+                frappe.new_doc("Purchase Invoice");
             }
         );
     }
 };
+
+// Listen for form render — set is_return after the form is fully loaded
+$(document).on("form-refresh", function (e, frm) {
+    if (window._rmax_create_return && frm.doc.__islocal) {
+        if (frm.doc.doctype === window._rmax_create_return) {
+            delete window._rmax_create_return;
+            frm.set_value("is_return", 1);
+        }
+    }
+});

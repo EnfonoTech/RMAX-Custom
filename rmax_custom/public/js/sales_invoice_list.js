@@ -12,7 +12,6 @@ var _orig_si_refresh = frappe.listview_settings["Sales Invoice"].refresh;
 frappe.listview_settings["Sales Invoice"].onload = function (listview) {
     if (_orig_si_onload) _orig_si_onload(listview);
 
-    // Inject CSS to organize the list view layout
     if (!document.getElementById("rmax-list-style")) {
         var style = document.createElement("style");
         style.id = "rmax-list-style";
@@ -47,9 +46,9 @@ frappe.listview_settings["Sales Invoice"].refresh = function (listview) {
         listview.page.set_primary_action(
             __("New Credit Note"),
             function () {
-                var doc = frappe.model.get_new_doc("Sales Invoice");
-                doc.is_return = 1;
-                frappe.set_route("Form", "Sales Invoice", doc.name);
+                // Flag that we want a return — picked up by form event below
+                window._rmax_create_return = "Sales Invoice";
+                frappe.new_doc("Sales Invoice");
             }
         );
     }
@@ -68,3 +67,13 @@ function _si_is_return_filter_active(listview) {
     }
     return false;
 }
+
+// Listen for form render — set is_return after the form is fully loaded
+$(document).on("form-refresh", function (e, frm) {
+    if (window._rmax_create_return && frm.doc.__islocal) {
+        if (frm.doc.doctype === window._rmax_create_return) {
+            delete window._rmax_create_return;
+            frm.set_value("is_return", 1);
+        }
+    }
+});
