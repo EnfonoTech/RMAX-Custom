@@ -21,17 +21,10 @@ def material_request_dashboard(data):
 
 
 def stock_transfer_dashboard(data):
-    """Add Material Request connection to Stock Transfer dashboard.
-    Stock Transfer itself has the 'material_request' field (internal link),
-    so we use internal_links to show the referenced MR in connections.
+    """Show Material Request in Stock Transfer connections.
+    We don't set fieldname or internal_links here — the MR side already
+    uses non_standard_fieldnames to find STs. On the ST form itself, the
+    material_request Link field in the Reference section is enough for
+    users to navigate to the MR.
     """
-    data.setdefault("internal_links", {})
-    data["internal_links"]["Material Request"] = "material_request"
-
-    data.setdefault("transactions", [])
-    data["transactions"].append({
-        "label": _("Reference"),
-        "items": ["Material Request"],
-    })
-
     return data

@@ -172,7 +172,9 @@ def create_stock_transfer_from_mr(material_request):
 
 
 def _get_transferred_qty_map(material_request):
-    """Get total transferred qty per MR item from all non-cancelled Stock Transfers.
+    """Get total transferred qty per MR item from all active Stock Transfers.
+    Excludes cancelled (docstatus=2) STs. Deleted STs are automatically
+    excluded since their rows no longer exist in the database.
     Returns dict: {material_request_item_name: total_transferred_qty}
     """
     data = frappe.db.sql(
@@ -181,7 +183,7 @@ def _get_transferred_qty_map(material_request):
         FROM `tabStock Transfer Item` sti
         INNER JOIN `tabStock Transfer` st ON st.name = sti.parent
         WHERE st.material_request = %s
-        AND st.docstatus != 2
+        AND st.docstatus IN (0, 1)
         AND sti.material_request_item IS NOT NULL
         AND sti.material_request_item != ''
         GROUP BY sti.material_request_item

@@ -226,7 +226,6 @@ doc_events = {
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
-	"Stock Transfer": "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
 }
 
 # exempt linked doctypes from being automatically cancelled
