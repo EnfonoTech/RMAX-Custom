@@ -1,39 +1,34 @@
 /**
  * RMAX Custom: Purchase Invoice List View
  *
- * When filtered by is_return=1, overrides the "+ Add" button
- * to create a Debit Note (Purchase Invoice with is_return=1).
+ * When is_return=1 filter is active, the "+ Add" button becomes "+ New Debit Note"
+ * and creates a Purchase Invoice with is_return=1 pre-set.
  */
 frappe.listview_settings["Purchase Invoice"] = frappe.listview_settings["Purchase Invoice"] || {};
 
-var _orig_pi_onload = frappe.listview_settings["Purchase Invoice"].onload;
+var _orig_pi_refresh = frappe.listview_settings["Purchase Invoice"].refresh;
 
-frappe.listview_settings["Purchase Invoice"].onload = function (listview) {
-    if (_orig_pi_onload) _orig_pi_onload(listview);
+frappe.listview_settings["Purchase Invoice"].refresh = function (listview) {
+    if (_orig_pi_refresh) _orig_pi_refresh(listview);
 
-    _setup_pi_return_action(listview);
-
-    listview.page.wrapper.on("change", ".frappe-control[data-fieldname='is_return']", function () {
-        setTimeout(function () {
-            _setup_pi_return_action(listview);
-        }, 300);
-    });
-};
-
-
-function _setup_pi_return_action(listview) {
+    // Check if is_return filter is active
+    var filters = listview.filter_area ? listview.filter_area.get() : [];
     var is_return_active = false;
-    (listview.filter_area ? listview.filter_area.get() : []).forEach(function (f) {
-        if (f[1] === "is_return" && f[3] == 1) {
+    for (var i = 0; i < filters.length; i++) {
+        if (filters[i][1] === "is_return" && filters[i][3] == 1) {
             is_return_active = true;
+            break;
         }
-    });
-
-    var route = frappe.get_route();
-    if (route && route.length > 2) {
-        var route_str = route.slice(2).join("/");
-        if (route_str.indexOf("is_return") !== -1) {
-            is_return_active = true;
+    }
+    if (!is_return_active) {
+        var route = frappe.get_route();
+        if (route && route.length > 2) {
+            for (var j = 2; j < route.length; j++) {
+                if ((route[j] || "").indexOf("is_return=1") !== -1) {
+                    is_return_active = true;
+                    break;
+                }
+            }
         }
     }
 
@@ -46,4 +41,4 @@ function _setup_pi_return_action(listview) {
             "add"
         );
     }
-}
+};
