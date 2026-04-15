@@ -224,9 +224,10 @@ doc_events = {
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
 # along with any modifications made in other Frappe apps
-# override_doctype_dashboards = {
-# 	"Task": "rmax_custom.task.get_dashboard_data"
-# }
+override_doctype_dashboards = {
+	"Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+	"Stock Transfer": "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+}
 
 # exempt linked doctypes from being automatically cancelled
 #

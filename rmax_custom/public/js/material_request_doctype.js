@@ -134,11 +134,11 @@ function _rmax_add_stock_transfer_button(frm) {
     );
 }
 
-// ─── Transfer Status Section ─────────────────────────────────
+// ─── Transfer Status & Available Qty Section ─────────────────
 
 function _rmax_show_transfer_status(frm) {
     // Remove old status section if any
-    frm.fields_dict.items.$wrapper.find(".rmax-transfer-status").remove();
+    frm.fields_dict.items.$wrapper.parent().find(".rmax-transfer-status").remove();
 
     frappe.call({
         method: "rmax_custom.api.material_request.get_mr_transfer_status",
@@ -148,37 +148,65 @@ function _rmax_show_transfer_status(frm) {
 
             var items = r.message;
             var has_any_transfer = items.some(function (d) { return d.transferred_qty > 0; });
-            if (!has_any_transfer) return;
 
             var html = '<div class="rmax-transfer-status" style="margin-top:15px;padding:10px 15px;border:1px solid #d1d8dd;border-radius:6px;background:#f8f9fa;">';
-            html += '<h6 style="margin:0 0 8px;font-weight:600;color:#333;">📦 Transfer Status</h6>';
+            html += '<h6 style="margin:0 0 8px;font-weight:600;color:#333;">📦 Stock & Transfer Status</h6>';
             html += '<table class="table table-sm table-bordered" style="margin:0;font-size:12px;">';
             html += '<thead><tr style="background:#e9ecef;">';
-            html += '<th>Item</th><th style="width:90px;text-align:right;">Requested</th>';
-            html += '<th style="width:100px;text-align:right;">Transferred</th>';
-            html += '<th style="width:90px;text-align:right;">Pending</th>';
+            html += '<th>Item</th>';
+            html += '<th style="width:85px;text-align:right;">Requested</th>';
+            html += '<th style="width:85px;text-align:right;">Available</th>';
+
+            if (has_any_transfer) {
+                html += '<th style="width:95px;text-align:right;">Transferred</th>';
+                html += '<th style="width:80px;text-align:right;">Pending</th>';
+            }
+
+            html += '<th style="width:70px;text-align:center;">Status</th>';
             html += '</tr></thead><tbody>';
 
             items.forEach(function (d) {
                 var row_style = '';
                 var badge = '';
-                if (d.pending_qty <= 0) {
+
+                if (has_any_transfer && d.pending_qty <= 0) {
                     row_style = ' style="background:#f0fdf4;"';
-                    badge = ' <span style="background:#10b981;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">DONE</span>';
-                } else if (d.transferred_qty > 0) {
+                    badge = '<span style="background:#10b981;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">DONE</span>';
+                } else if (has_any_transfer && d.transferred_qty > 0) {
                     row_style = ' style="background:#fffbeb;"';
-                    badge = ' <span style="background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">PARTIAL</span>';
+                    badge = '<span style="background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">PARTIAL</span>';
+                } else if (d.available_qty < d.requested_qty) {
+                    badge = '<span style="background:#ef4444;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">LOW</span>';
+                } else {
+                    badge = '<span style="background:#10b981;color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;">OK</span>';
                 }
 
+                // Color available qty
+                var avail_color = d.available_qty >= d.requested_qty ? '#10b981' : '#e94560';
+
                 html += '<tr' + row_style + '>';
-                html += '<td>' + d.item_code + ' — ' + d.item_name + badge + '</td>';
+                html += '<td>' + d.item_code + ' — ' + d.item_name + '</td>';
                 html += '<td style="text-align:right;">' + d.requested_qty + '</td>';
-                html += '<td style="text-align:right;font-weight:600;">' + d.transferred_qty + '</td>';
-                html += '<td style="text-align:right;font-weight:600;color:' + (d.pending_qty > 0 ? '#e94560' : '#10b981') + ';">' + d.pending_qty + '</td>';
+                html += '<td style="text-align:right;font-weight:600;color:' + avail_color + ';">' + d.available_qty + '</td>';
+
+                if (has_any_transfer) {
+                    html += '<td style="text-align:right;font-weight:600;">' + d.transferred_qty + '</td>';
+                    html += '<td style="text-align:right;font-weight:600;color:' + (d.pending_qty > 0 ? '#e94560' : '#10b981') + ';">' + d.pending_qty + '</td>';
+                }
+
+                html += '<td style="text-align:center;">' + badge + '</td>';
                 html += '</tr>';
             });
 
-            html += '</tbody></table></div>';
+            html += '</tbody></table>';
+
+            // Show source warehouse info
+            var source_wh = items[0] && items[0].source_warehouse;
+            if (source_wh) {
+                html += '<div style="margin-top:6px;font-size:11px;color:#6c757d;">Available qty from: <b>' + source_wh + '</b></div>';
+            }
+
+            html += '</div>';
 
             frm.fields_dict.items.$wrapper.after(html);
         }
