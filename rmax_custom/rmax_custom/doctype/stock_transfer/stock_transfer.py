@@ -4,6 +4,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import flt
 from frappe.utils.data import get_url_to_form
 
 
@@ -13,6 +14,11 @@ class StockTransfer(Document):
 		"""Branch-based approval: only target branch users can approve/reject."""
 		if self.workflow_state in ("Approved", "Rejected"):
 			self._validate_target_branch_user()
+
+	def before_submit(self):
+		"""Validate stock availability before submitting (approval)."""
+		if self.workflow_state == "Approved":
+			self._validate_stock_availability()
 
 	def _validate_target_branch_user(self):
 		"""Check that the current user belongs to the target warehouse's branch.
@@ -67,6 +73,43 @@ class StockTransfer(Document):
 
 		self.create_stock_entry()
 
+	def _validate_stock_availability(self):
+		"""Check stock availability for all items before creating Stock Entry.
+		Throws a clear error listing all insufficient items."""
+		if not self.set_source_warehouse or not self.items:
+			return
+
+		shortage_items = []
+		for item in self.items:
+			if not item.item_code:
+				continue
+			available = get_available_qty(item.item_code, self.set_source_warehouse)
+			needed = flt(item.quantity)
+			if flt(available) < needed:
+				shortage_items.append({
+					"item_code": item.item_code,
+					"item_name": item.item_name or item.item_code,
+					"needed": needed,
+					"available": flt(available),
+				})
+
+		if shortage_items:
+			msg = _("Insufficient stock in <b>{0}</b> for the following items:").format(
+				self.set_source_warehouse
+			)
+			msg += "<br><br><table class='table table-bordered table-sm'>"
+			msg += "<thead><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead>".format(
+				_("Item Code"), _("Item Name"), _("Required Qty"), _("Available Qty")
+			)
+			msg += "<tbody>"
+			for s in shortage_items:
+				msg += "<tr><td>{}</td><td>{}</td><td>{}</td><td style='color:red;font-weight:bold'>{}</td></tr>".format(
+					s["item_code"], s["item_name"], s["needed"], s["available"]
+				)
+			msg += "</tbody></table>"
+			msg += "<br>" + _("Please adjust quantities or ensure stock is available before approving.")
+			frappe.throw(msg, title=_("Insufficient Stock"))
+
 	def create_stock_entry(self):
 		"""Create Stock Entry for Material Transfer"""
 		if not self.set_target_warehouse:
@@ -101,6 +144,16 @@ class StockTransfer(Document):
 		)
 
 
+def get_available_qty(item_code, warehouse):
+	"""Get available qty from Bin (actual_qty)."""
+	actual_qty = frappe.db.get_value(
+		"Bin",
+		{"item_code": item_code, "warehouse": warehouse},
+		"actual_qty",
+	)
+	return flt(actual_qty)
+
+
 @frappe.whitelist()
 def get_item_uom_conversion(item_code, uom):
     data = frappe.db.get_value(
@@ -109,3 +162,22 @@ def get_item_uom_conversion(item_code, uom):
         "conversion_factor"
     )
     return data or 1
+
+
+@frappe.whitelist()
+def get_items_available_qty(items, warehouse):
+	"""Get available qty for multiple items in a warehouse.
+	Args:
+		items: JSON list of item_codes
+		warehouse: source warehouse name
+	Returns:
+		dict: {item_code: available_qty}
+	"""
+	import json
+	if isinstance(items, str):
+		items = json.loads(items)
+
+	result = {}
+	for item_code in items:
+		result[item_code] = get_available_qty(item_code, warehouse)
+	return result

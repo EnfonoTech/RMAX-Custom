@@ -14,16 +14,97 @@ frappe.ui.form.on('Stock Transfer', {
             setTimeout(() => {
                 frm.set_value('set_target_warehouse', '');
                 frm.doc.__source_fixed = true;
-
             }, 200);
         }
+
+        // Fetch and display available qty for all items
+        _fetch_available_qty(frm);
+    },
+    set_source_warehouse: function(frm) {
+        // Re-fetch available qty when source warehouse changes
+        _fetch_available_qty(frm);
     },
 });
 
 
+// ─── Available Qty: Fetch and Color-Code ──────────────────────
+
+function _fetch_available_qty(frm) {
+    var source_wh = frm.doc.set_source_warehouse;
+    if (!source_wh || !frm.doc.items || !frm.doc.items.length) {
+        return;
+    }
+
+    // Collect unique item codes
+    var item_codes = [];
+    (frm.doc.items || []).forEach(function(item) {
+        if (item.item_code && item_codes.indexOf(item.item_code) === -1) {
+            item_codes.push(item.item_code);
+        }
+    });
+
+    if (!item_codes.length) return;
+
+    frappe.call({
+        method: "rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_items_available_qty",
+        args: {
+            items: JSON.stringify(item_codes),
+            warehouse: source_wh
+        },
+        callback: function(r) {
+            if (!r.message) return;
+            var qty_map = r.message;
+
+            (frm.doc.items || []).forEach(function(item) {
+                if (item.item_code && qty_map.hasOwnProperty(item.item_code)) {
+                    var avail = flt(qty_map[item.item_code]);
+                    frappe.model.set_value(item.doctype, item.name, "available_qty", avail);
+                }
+            });
+
+            frm.refresh_field("items");
+            // Color-code after refresh
+            setTimeout(function() {
+                _color_code_rows(frm);
+            }, 200);
+        }
+    });
+}
+
+function _color_code_rows(frm) {
+    (frm.doc.items || []).forEach(function(item) {
+        var $row = frm.fields_dict.items.grid.grid_rows_by_docname[item.name];
+        if (!$row || !$row.row) return;
+
+        var needed = flt(item.quantity);
+        var available = flt(item.available_qty);
+
+        if (needed > 0 && available < needed) {
+            // Insufficient stock — red indicator
+            $($row.row).css({
+                "border-left": "3px solid #ef4444",
+                "background-color": "#fef2f2"
+            });
+        } else if (needed > 0 && available >= needed) {
+            // Sufficient stock — green indicator
+            $($row.row).css({
+                "border-left": "3px solid #10b981",
+                "background-color": "#f0fdf4"
+            });
+        } else {
+            $($row.row).css({
+                "border-left": "",
+                "background-color": ""
+            });
+        }
+    });
+}
+
+
+// ─── Warehouse Queries ────────────────────────────────────────
+
 function _setup_st_warehouse_queries(frm) {
     // Source warehouse: ONLY user's permitted warehouses
-    // Fetch explicitly to override DocType-level ignore_user_permissions
     frappe.call({
         method: "frappe.client.get_list",
         args: {
@@ -73,7 +154,6 @@ function _setup_st_warehouse_queries(frm) {
 }
 
 function set_default_target(frm) {
-
     frappe.call({
         method: "frappe.client.get_list",
         args: {
@@ -87,7 +167,6 @@ function set_default_target(frm) {
             limit: 1
         },
         callback: function(r) {
-
             if (r.message && r.message.length > 0) {
                 let default_wh = r.message[0].for_value;
                 if (!frm.doc.set_source_warehouse) {
@@ -97,6 +176,9 @@ function set_default_target(frm) {
         }
     });
 }
+
+
+// ─── Item Field Handlers ──────────────────────────────────────
 
 frappe.ui.form.on('Stock Transfer Item', {
     item_code: function(frm, cdt, cdn) {
@@ -109,12 +191,38 @@ frappe.ui.form.on('Stock Transfer Item', {
             }
         });
         set_uom_query(frm, cdt, cdn);
+
+        // Fetch available qty for this item
+        _fetch_single_item_qty(frm, row);
+    },
+    quantity: function(frm, cdt, cdn) {
+        // Re-color when quantity changes
+        setTimeout(function() { _color_code_rows(frm); }, 100);
     },
     uom: function(frm, cdt, cdn) {
         trigger_conversion(frm, cdt, cdn);
     }
 });
 
+function _fetch_single_item_qty(frm, row) {
+    var source_wh = frm.doc.set_source_warehouse;
+    if (!source_wh || !row.item_code) return;
+
+    frappe.call({
+        method: "rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_items_available_qty",
+        args: {
+            items: JSON.stringify([row.item_code]),
+            warehouse: source_wh
+        },
+        callback: function(r) {
+            if (r.message && r.message[row.item_code] !== undefined) {
+                frappe.model.set_value(row.doctype, row.name, "available_qty", flt(r.message[row.item_code]));
+                frm.refresh_field("items");
+                setTimeout(function() { _color_code_rows(frm); }, 200);
+            }
+        }
+    });
+}
 
 function set_uom_query(frm, cdt, cdn) {
     let row = locals[cdt][cdn];
@@ -131,16 +239,14 @@ function set_uom_query(frm, cdt, cdn) {
                 frm.fields_dict["items"].grid.get_field("uom").get_query = function(doc, cdt, cdn) {
                     return {
                         filters: {
-                            name: ["in", uom_list]   
+                            name: ["in", uom_list]
                         }
                     };
                 };
-
             }
         }
     });
 }
-
 
 function trigger_conversion(frm, cdt, cdn) {
     let row = locals[cdt][cdn];

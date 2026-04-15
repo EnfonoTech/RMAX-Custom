@@ -9,6 +9,7 @@
   "item_code",
   "item_name",
   "quantity",
+  "available_qty",
   "column_break_wlnz",
   "stock_uom",
   "uom",
@@ -35,6 +36,17 @@
    "in_list_view": 1,
    "label": "Quantity",
    "reqd": 1
+  },
+  {
+   "bold": 1,
+   "fieldname": "available_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Available Qty",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Available stock in source warehouse"
   },
   {
    "fieldname": "column_break_wlnz",
@@ -67,7 +79,7 @@
  "index_web_pages_for_search": 1,
  "istable": 1,
  "links": [],
- "modified": "2026-04-08 13:25:24.463093",
+ "modified": "2026-04-15 17:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Stock Transfer Item",
