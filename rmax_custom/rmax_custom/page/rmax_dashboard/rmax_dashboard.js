@@ -189,6 +189,8 @@ function render_stock_dashboard(data) {
 	html += action_card('layers', 'Stock Balance', 'Current stock levels', 'report', 'Stock Balance');
 	html += action_card('book-open', 'Stock Ledger', 'Stock transactions', 'report', 'Stock Ledger');
 	html += action_card('tag', 'Item Groups', 'Browse item groups', 'list', 'Item Group');
+	html += action_card('alert-triangle', 'Report Damage', 'Create damage slip', 'new', 'Damage Slip');
+	html += action_card('truck', 'Damage Transfer', 'Transfer damaged items', 'list', 'Damage Transfer');
 	html += '</div>';
 
 	// Pending section — split MR + ST
