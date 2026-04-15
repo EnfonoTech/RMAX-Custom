@@ -312,11 +312,24 @@
 		if (!is_restricted_user()) return;
 		// If global default is a company user doesn't have access to,
 		// override with user's permitted company from boot defaults
-		var user_company = (frappe.boot.user_default_company
-			|| (frappe.defaults && frappe.defaults.get_user_default("Company"))
-			|| "");
+		var user_company = frappe.boot.user_default_company || "";
+		if (!user_company && frappe.boot.user && frappe.boot.user.defaults) {
+			user_company = frappe.boot.user.defaults.company || frappe.boot.user.defaults.Company || "";
+		}
 		if (user_company) {
+			// Override ALL default sources so every form picks up the correct company
 			frappe.sys_defaults.company = user_company;
+			if (frappe.boot.sysdefaults) {
+				frappe.boot.sysdefaults.company = user_company;
+			}
+			if (frappe.defaults) {
+				frappe.defaults.set_default("company", user_company);
+				frappe.defaults.set_default("Company", user_company);
+			}
+			if (frappe.boot.user && frappe.boot.user.defaults) {
+				frappe.boot.user.defaults.company = user_company;
+				frappe.boot.user.defaults.Company = user_company;
+			}
 		}
 	}
 

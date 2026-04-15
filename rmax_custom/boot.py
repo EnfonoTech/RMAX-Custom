@@ -46,3 +46,9 @@ def boot_session(bootinfo):
             # Override sysdefaults so frappe.defaults.get_default("company") returns correct value
             if bootinfo.sysdefaults:
                 bootinfo.sysdefaults["company"] = user_company
+            # Also override user_defaults so frappe.defaults.get_user_default("Company") works
+            if not hasattr(bootinfo, "user") or not bootinfo.user:
+                bootinfo.user = frappe._dict()
+            if hasattr(bootinfo, "user") and hasattr(bootinfo.user, "defaults"):
+                bootinfo.user.defaults["company"] = user_company
+                bootinfo.user.defaults["Company"] = user_company

@@ -96,7 +96,13 @@ function render_dashboard(page, data) {
 			frappe.new_doc(target);
 		} else if (action === 'list') {
 			if (filter) {
-				frappe.set_route('List', target, filter);
+				// Parse filter string like "is_return=1" into object {is_return: "1"}
+				var filter_obj = {};
+				filter.split('&').forEach(function(pair) {
+					var kv = pair.split('=');
+					if (kv.length === 2) filter_obj[kv[0]] = kv[1];
+				});
+				frappe.set_route('List', target, filter_obj);
 			} else {
 				frappe.set_route('List', target);
 			}
