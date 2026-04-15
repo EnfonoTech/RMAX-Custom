@@ -189,12 +189,51 @@
 			frappe.set_route("rmax-dashboard");
 			return false;
 		});
+
+		// Also make the logo element have a pointer cursor
+		$(".navbar-brand, .navbar-home").css("cursor", "pointer");
+	}
+
+	// === ADD DASHBOARD BUTTON IN NAVBAR ===
+	function add_dashboard_nav() {
+		if (!is_branch_user()) return;
+		if ($("#rmax-dash-nav-btn").length) return;
+
+		// Add a "Dashboard" button next to the logo in the navbar
+		var $btn = $('<a id="rmax-dash-nav-btn" href="#" style="' +
+			'display:inline-flex;align-items:center;gap:5px;' +
+			'margin-left:12px;padding:4px 14px;' +
+			'font-size:12px;font-weight:600;color:#e94560;' +
+			'border:1px solid #e94560;border-radius:6px;' +
+			'text-decoration:none;vertical-align:middle;' +
+			'transition:all 0.15s ease;' +
+			'">← Dashboard</a>');
+
+		$btn.on("click", function(e) {
+			e.preventDefault();
+			frappe.set_route("rmax-dashboard");
+		});
+		$btn.on("mouseenter", function() {
+			$(this).css({"background": "#e94560", "color": "#fff"});
+		});
+		$btn.on("mouseleave", function() {
+			$(this).css({"background": "transparent", "color": "#e94560"});
+		});
+
+		// Insert after the navbar brand / logo
+		var $brand = $(".navbar-brand, .navbar-home").first();
+		if ($brand.length) {
+			$brand.after($btn);
+		} else {
+			$(".navbar .container").prepend($btn);
+		}
 	}
 
 	// === ENFORCE ON EVERY PAGE CHANGE ===
 	$(document).on("page-change", function () {
 		enforce_route();
 		setTimeout(hide_sidebar, 200);
+		setTimeout(add_dashboard_nav, 300);
 	});
 
 	// === ENFORCE ON INITIAL LOAD ===
@@ -213,6 +252,7 @@
 					enforce_route();
 					hide_sidebar();
 					intercept_logo_click();
+					add_dashboard_nav();
 					// Redirect if on home/workspace
 					var r = frappe.get_route();
 					if (!r.length || r[0] === "" || r[0] === "Workspaces" ||
