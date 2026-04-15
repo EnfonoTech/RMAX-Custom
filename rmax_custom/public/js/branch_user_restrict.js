@@ -143,9 +143,7 @@
 		// Hide everything in sidebar
 		$sidebar.find(".standard-sidebar-section").each(function () {
 			var $section = $(this);
-			var section_title = $section.find(".sidebar-section-header, .desk-sidebar-item.standard-sidebar-label").text().trim().toUpperCase();
 
-			// Hide entire sections we don't want
 			$section.find(".desk-sidebar-item, .sidebar-item-container, a.desk-sidebar-item").each(function () {
 				var $item = $(this);
 				var text = $item.text().trim();
@@ -181,6 +179,18 @@
 		});
 	}
 
+	// === INTERCEPT NAVBAR LOGO CLICK ===
+	function intercept_logo_click() {
+		if (!is_branch_user()) return;
+		// Frappe navbar logo — redirect to dashboard instead of Home
+		$(document).on("click", ".navbar-brand, .navbar-home, .erpnext-icon, a[href='/app'], a[href='/app/home']", function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+			frappe.set_route("rmax-dashboard");
+			return false;
+		});
+	}
+
 	// === ENFORCE ON EVERY PAGE CHANGE ===
 	$(document).on("page-change", function () {
 		enforce_route();
@@ -188,7 +198,6 @@
 	});
 
 	// === ENFORCE ON INITIAL LOAD ===
-	// frappe.ready fires after boot data is loaded
 	$(document).ready(function () {
 		// Wait for frappe boot to be ready
 		var check_count = 0;
@@ -203,10 +212,12 @@
 				if (is_branch_user()) {
 					enforce_route();
 					hide_sidebar();
-					// Also override the Home default
-					if (frappe.get_route()[0] === "" || frappe.get_route()[0] === "Workspaces" ||
-						frappe.get_route()[0] === "workspaces" || frappe.get_route()[0] === "Home" ||
-						(frappe.get_route()[0] === "Workspace" && frappe.get_route()[1] === "Home")) {
+					intercept_logo_click();
+					// Redirect if on home/workspace
+					var r = frappe.get_route();
+					if (!r.length || r[0] === "" || r[0] === "Workspaces" ||
+						r[0] === "workspaces" || r[0] === "Home" ||
+						(r[0] === "Workspace" && r[1] === "Home")) {
 						frappe.set_route("rmax-dashboard");
 					}
 				}
@@ -215,19 +226,19 @@
 	});
 
 	// === OVERRIDE DEFAULT HOME PAGE ===
-	// Intercept frappe's set_default_route
 	var _original_set_route = frappe.set_route;
 	frappe.set_route = function () {
 		var args = Array.prototype.slice.call(arguments);
 		if (is_branch_user()) {
-			// If trying to go to Home/Workspace, redirect to dashboard
 			var target = "";
 			if (args.length === 1 && typeof args[0] === "string") {
 				target = args[0].toLowerCase();
 			} else if (args.length > 0 && typeof args[0] === "string") {
 				target = args[0].toLowerCase();
 			}
-			if (target === "" || target === "home" || target === "workspace" || target === "workspaces" || target === "workspace/home") {
+			if (target === "" || target === "home" || target === "workspace" ||
+				target === "workspaces" || target === "workspace/home" ||
+				target === "/" || target === "/app" || target === "/app/home") {
 				args = ["rmax-dashboard"];
 			}
 		}
