@@ -257,10 +257,12 @@
 		frappe.set_route.__rmax_patched = true;
 	}
 
-	// Also keep polling to fix the logo — in case the navbar gets re-rendered
+	// Keep polling to fix the logo and add button
+	// Navbar is rendered async by Frappe, so we need to keep checking
 	setInterval(function () {
 		if (is_branch_user()) {
 			fix_logo_href();
+			add_dashboard_nav();
 		}
-	}, 2000);
+	}, 1000);
 })();
