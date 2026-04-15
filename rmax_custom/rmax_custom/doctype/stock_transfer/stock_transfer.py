@@ -11,9 +11,67 @@ from frappe.utils.data import get_url_to_form
 class StockTransfer(Document):
 
 	def validate(self):
-		"""Branch-based approval: only target branch users can approve/reject."""
+		"""Validate quantities and branch-based approval."""
+		self._validate_mr_qty_limit()
 		if self.workflow_state in ("Approved", "Rejected"):
 			self._validate_target_branch_user()
+
+	def _validate_mr_qty_limit(self):
+		"""Prevent transferring more than the MR requested qty per item.
+		Checks: this ST item qty + already transferred by OTHER STs <= MR item qty."""
+		if not self.material_request:
+			return
+
+		# Only check items linked to MR items
+		mr_items = [i for i in self.items if i.material_request_item]
+		if not mr_items:
+			return
+
+		from rmax_custom.api.material_request import _get_transferred_qty_map
+		transferred_map = _get_transferred_qty_map(self.material_request)
+
+		over_items = []
+		for item in mr_items:
+			mr_item_name = item.material_request_item
+			mr_qty = flt(item.mr_qty)  # original MR requested qty
+
+			if not mr_qty:
+				continue
+
+			# Already transferred by OTHER Stock Transfers (exclude this one)
+			already_transferred = flt(transferred_map.get(mr_item_name, 0))
+			# If this ST is already saved (not new), its qty is included in transferred_map — subtract it
+			if not self.is_new():
+				old_doc = self.get_doc_before_save()
+				if old_doc:
+					for old_item in old_doc.items:
+						if old_item.material_request_item == mr_item_name:
+							already_transferred -= flt(old_item.quantity)
+							break
+
+			max_allowed = mr_qty - already_transferred
+			if flt(item.quantity) > max_allowed:
+				over_items.append({
+					"item_code": item.item_code,
+					"item_name": item.item_name or item.item_code,
+					"entered_qty": flt(item.quantity),
+					"max_allowed": max_allowed,
+					"mr_qty": mr_qty,
+				})
+
+		if over_items:
+			msg = _("Quantity exceeds Material Request limit for the following items:")
+			msg += "<br><br><table class='table table-bordered table-sm'>"
+			msg += "<thead><tr><th>{}</th><th>{}</th><th>{}</th><th>{}</th></tr></thead>".format(
+				_("Item"), _("MR Qty"), _("Max Allowed"), _("Entered Qty")
+			)
+			msg += "<tbody>"
+			for o in over_items:
+				msg += "<tr><td>{} — {}</td><td>{}</td><td>{}</td><td style='color:red;font-weight:bold'>{}</td></tr>".format(
+					o["item_code"], o["item_name"], o["mr_qty"], o["max_allowed"], o["entered_qty"]
+				)
+			msg += "</tbody></table>"
+			frappe.throw(msg, title=_("Over Quantity"))
 
 	def before_submit(self):
 		"""Validate stock availability before submitting (approval)."""

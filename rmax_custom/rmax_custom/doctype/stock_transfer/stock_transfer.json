@@ -20,7 +20,10 @@
   "section_break_mbwe",
   "items",
   "section_break_mr_link",
-  "material_request"
+  "material_request",
+  "column_break_ref",
+  "stock_entry",
+  "stock_entry_created"
  ],
  "fields": [
   {
@@ -117,13 +120,33 @@
    "options": "Material Request",
    "read_only": 1,
    "no_copy": 1
+  },
+  {
+   "fieldname": "column_break_ref",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "stock_entry",
+   "fieldtype": "Link",
+   "label": "Stock Entry",
+   "options": "Stock Entry",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "stock_entry_created",
+   "fieldtype": "Check",
+   "label": "Stock Entry Created",
+   "read_only": 1,
+   "no_copy": 1,
+   "hidden": 1
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-04-14 19:00:00.000000",
+ "modified": "2026-04-15 18:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Stock Transfer",
