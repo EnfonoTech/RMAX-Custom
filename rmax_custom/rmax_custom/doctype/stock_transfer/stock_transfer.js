@@ -17,11 +17,18 @@ frappe.ui.form.on('Stock Transfer', {
             }, 200);
         }
 
-        // Fetch and display available qty for all items
-        _fetch_available_qty(frm);
+        // Fetch available qty once on load (don't re-fetch on every refresh)
+        if (!frm.doc.__avail_qty_fetched && frm.doc.set_source_warehouse) {
+            frm.doc.__avail_qty_fetched = true;
+            _fetch_available_qty(frm);
+        } else {
+            // Just re-color existing data
+            setTimeout(function() { _color_code_rows(frm); }, 200);
+        }
     },
     set_source_warehouse: function(frm) {
         // Re-fetch available qty when source warehouse changes
+        frm.doc.__avail_qty_fetched = false;
         _fetch_available_qty(frm);
     },
 });
@@ -45,6 +52,9 @@ function _fetch_available_qty(frm) {
 
     if (!item_codes.length) return;
 
+    // Remember dirty state before setting values
+    var was_dirty = frm.dirty();
+
     frappe.call({
         method: "rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_items_available_qty",
         args: {
@@ -55,15 +65,25 @@ function _fetch_available_qty(frm) {
             if (!r.message) return;
             var qty_map = r.message;
 
+            // Set values directly on the doc object to avoid marking dirty
             (frm.doc.items || []).forEach(function(item) {
                 if (item.item_code && qty_map.hasOwnProperty(item.item_code)) {
-                    var avail = flt(qty_map[item.item_code]);
-                    frappe.model.set_value(item.doctype, item.name, "available_qty", avail);
+                    item.available_qty = flt(qty_map[item.item_code]);
                 }
             });
 
             frm.refresh_field("items");
-            // Color-code after refresh
+
+            // Restore dirty state — available_qty is display-only
+            if (!was_dirty) {
+                frm.dirty_state_set = false;
+                frm.save_disabled = false;
+                frm.page.clear_indicator();
+                // Remove "Not Saved" indicator
+                $(frm.wrapper).find('.indicator-pill').remove();
+                frm.page.set_indicator('');
+            }
+
             setTimeout(function() {
                 _color_code_rows(frm);
             }, 200);
@@ -216,7 +236,8 @@ function _fetch_single_item_qty(frm, row) {
         },
         callback: function(r) {
             if (r.message && r.message[row.item_code] !== undefined) {
-                frappe.model.set_value(row.doctype, row.name, "available_qty", flt(r.message[row.item_code]));
+                // Set directly to avoid extra dirty marking
+                row.available_qty = flt(r.message[row.item_code]);
                 frm.refresh_field("items");
                 setTimeout(function() { _color_code_rows(frm); }, 200);
             }

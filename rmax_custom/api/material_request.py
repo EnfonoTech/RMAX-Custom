@@ -197,23 +197,30 @@ def _get_transferred_qty_map(material_request):
 @frappe.whitelist()
 def get_mr_transfer_status(material_request):
     """Get transfer status for each item in a Material Request.
-    Includes available qty from source warehouse.
-    Returns list of {item_code, item_name, requested_qty, transferred_qty, pending_qty, available_qty, source_warehouse}
+    Includes available qty from both source and target warehouses.
     """
     mr = frappe.get_doc("Material Request", material_request)
     transferred_map = _get_transferred_qty_map(material_request)
 
     source_wh = mr.set_from_warehouse
+    target_wh = mr.set_warehouse
 
     result = []
     for item in mr.items:
         transferred = flt(transferred_map.get(item.name, 0))
         item_source_wh = item.from_warehouse or source_wh or ""
+        item_target_wh = item.warehouse or target_wh or ""
 
-        available_qty = 0.0
+        source_available = 0.0
         if item_source_wh:
-            available_qty = flt(
+            source_available = flt(
                 frappe.db.get_value("Bin", {"item_code": item.item_code, "warehouse": item_source_wh}, "actual_qty")
+            )
+
+        target_available = 0.0
+        if item_target_wh:
+            target_available = flt(
+                frappe.db.get_value("Bin", {"item_code": item.item_code, "warehouse": item_target_wh}, "actual_qty")
             )
 
         result.append({
@@ -222,8 +229,10 @@ def get_mr_transfer_status(material_request):
             "requested_qty": flt(item.qty),
             "transferred_qty": transferred,
             "pending_qty": flt(item.qty) - transferred,
-            "available_qty": available_qty,
+            "source_available": source_available,
+            "target_available": target_available,
             "source_warehouse": item_source_wh,
+            "target_warehouse": item_target_wh,
         })
 
     return result
