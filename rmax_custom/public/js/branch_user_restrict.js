@@ -53,7 +53,6 @@
 	];
 
 	function is_branch_user() {
-		// Check boot info (most reliable)
 		if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
 			var roles = frappe.boot.user.roles;
 			if (roles.indexOf("System Manager") !== -1) return false;
@@ -61,7 +60,6 @@
 			if (roles.indexOf("Stock Manager") !== -1) return false;
 			if (roles.indexOf("Branch User") !== -1) return true;
 		}
-		// Fallback to user_roles
 		if (frappe.user_roles && frappe.user_roles.length) {
 			if (frappe.user_roles.indexOf("System Manager") !== -1) return false;
 			if (frappe.user_roles.indexOf("Administrator") !== -1) return false;
@@ -77,15 +75,12 @@
 		var first = (route[0] || "").toLowerCase();
 		var second = route[1] || "";
 
-		// Always allow dashboard
 		if (first === "rmax-dashboard") return true;
 
-		// Allow specific pages
 		for (var i = 0; i < ALLOWED_PAGES.length; i++) {
 			if (first === ALLOWED_PAGES[i].toLowerCase()) return true;
 		}
 
-		// Allow Form and List views for allowed DocTypes
 		if (first === "form" || first === "list") {
 			for (var j = 0; j < ALLOWED_DOCTYPES.length; j++) {
 				if (second === ALLOWED_DOCTYPES[j]) return true;
@@ -93,7 +88,6 @@
 			return false;
 		}
 
-		// Allow query-report for allowed reports
 		if (first === "query-report") {
 			for (var k = 0; k < ALLOWED_REPORTS.length; k++) {
 				if (second === ALLOWED_REPORTS[k]) return true;
@@ -101,18 +95,14 @@
 			return false;
 		}
 
-		// Allow app/doctype patterns (URL style used by Frappe v15)
 		if (first === "app") {
-			// app/rmax-dashboard
 			for (var n = 0; n < ALLOWED_PAGES.length; n++) {
 				if (second === ALLOWED_PAGES[n]) return true;
 			}
-			// app/sales-invoice, app/sales-invoice/SI-00001
 			var slug = (second || "").replace(/-/g, " ");
 			for (var m = 0; m < ALLOWED_DOCTYPES.length; m++) {
 				if (slug.toLowerCase() === ALLOWED_DOCTYPES[m].toLowerCase()) return true;
 			}
-			// app/query-report/Stock Sales Report
 			if (second === "query-report" && route[2]) {
 				for (var p = 0; p < ALLOWED_REPORTS.length; p++) {
 					if (route[2] === ALLOWED_REPORTS[p]) return true;
@@ -121,7 +111,6 @@
 			return false;
 		}
 
-		// Block workspace, module, home, setup pages
 		return false;
 	}
 
@@ -136,74 +125,49 @@
 	function hide_sidebar() {
 		if (!is_branch_user()) return;
 
-		// Hide ALL sidebar items, then show only allowed ones
 		var $sidebar = $(".desk-sidebar");
 		if (!$sidebar.length) return;
 
-		// Hide everything in sidebar
 		$sidebar.find(".standard-sidebar-section").each(function () {
 			var $section = $(this);
-
 			$section.find(".desk-sidebar-item, .sidebar-item-container, a.desk-sidebar-item").each(function () {
 				var $item = $(this);
-				var text = $item.text().trim();
+				var text = $item.text().trim().toLowerCase();
 				var href = ($item.attr("href") || $item.find("a").attr("href") || "").toLowerCase();
 
-				// Only keep specific items
-				var keep = false;
-				var allowed_sidebar = ["home"];
-
-				for (var i = 0; i < allowed_sidebar.length; i++) {
-					if (text.toLowerCase() === allowed_sidebar[i]) {
-						keep = true;
-						break;
-					}
-				}
-
-				// Check href for dashboard
-				if (href.indexOf("rmax-dashboard") !== -1) keep = true;
-
-				if (!keep) {
-					$item.hide();
-				}
+				var keep = (text === "home") || (href.indexOf("rmax-dashboard") !== -1);
+				if (!keep) $item.hide();
 			});
 		});
 
-		// Also hide section headers for hidden sections
 		$sidebar.find(".standard-sidebar-section").each(function () {
 			var $section = $(this);
-			var visible_items = $section.find(".desk-sidebar-item:visible, .sidebar-item-container:visible").length;
-			if (visible_items === 0) {
+			if ($section.find(".desk-sidebar-item:visible, .sidebar-item-container:visible").length === 0) {
 				$section.hide();
 			}
 		});
 	}
 
-	// === INTERCEPT NAVBAR LOGO CLICK ===
-	function intercept_logo_click() {
+	// === FIX LOGO HREF ===
+	function fix_logo_href() {
 		if (!is_branch_user()) return;
 
-		// The logo is: <a class="navbar-brand" href="/app/branch-user"> (or /app/home, etc.)
-		// Directly rewrite the href to dashboard route
-		$(".navbar-brand").attr("href", "/app/rmax-dashboard");
-
-		// Also catch any navbar logo link regardless of class
-		$("header a, nav a").each(function() {
-			var href = ($(this).attr("href") || "");
-			if (href === "/app" || href === "/" || href === "/app/home" ||
-				href === "/app/branch-user" || href.indexOf("/app/workspace") === 0) {
-				$(this).attr("href", "/app/rmax-dashboard");
+		// Change the actual href attribute on the logo link
+		$(".navbar-brand, .navbar-home").each(function () {
+			var $el = $(this);
+			var href = $el.attr("href") || "";
+			if (href !== "/app/rmax-dashboard") {
+				$el.attr("href", "/app/rmax-dashboard");
 			}
 		});
 	}
 
-	// === ADD DASHBOARD BUTTON IN NAVBAR ===
+	// === ADD DASHBOARD BUTTON ===
 	function add_dashboard_nav() {
 		if (!is_branch_user()) return;
 		if ($("#rmax-dash-nav-btn").length) return;
 
-		// Add a "Dashboard" button next to the logo in the navbar
-		var $btn = $('<a id="rmax-dash-nav-btn" href="#" style="' +
+		var $btn = $('<a id="rmax-dash-nav-btn" href="/app/rmax-dashboard" style="' +
 			'display:inline-flex;align-items:center;gap:5px;' +
 			'margin-left:12px;padding:4px 14px;' +
 			'font-size:12px;font-weight:600;color:#e94560;' +
@@ -212,39 +176,35 @@
 			'transition:all 0.15s ease;' +
 			'">← Dashboard</a>');
 
-		$btn.on("click", function(e) {
-			e.preventDefault();
-			frappe.set_route("rmax-dashboard");
+		$btn.on("mouseenter", function () {
+			$(this).css({ "background": "#e94560", "color": "#fff" });
 		});
-		$btn.on("mouseenter", function() {
-			$(this).css({"background": "#e94560", "color": "#fff"});
-		});
-		$btn.on("mouseleave", function() {
-			$(this).css({"background": "transparent", "color": "#e94560"});
+		$btn.on("mouseleave", function () {
+			$(this).css({ "background": "transparent", "color": "#e94560" });
 		});
 
-		// Insert after the navbar brand / logo
-		var $brand = $(".navbar-brand, .navbar-home").first();
+		var $brand = $(".navbar-brand").first();
 		if ($brand.length) {
 			$brand.after($btn);
-		} else {
-			$(".navbar .container").prepend($btn);
 		}
+	}
+
+	// === APPLY ALL RESTRICTIONS ===
+	function apply_all() {
+		if (!is_branch_user()) return;
+		enforce_route();
+		hide_sidebar();
+		fix_logo_href();
+		add_dashboard_nav();
 	}
 
 	// === ENFORCE ON EVERY PAGE CHANGE ===
 	$(document).on("page-change", function () {
-		enforce_route();
-		setTimeout(hide_sidebar, 200);
-		setTimeout(function() {
-			add_dashboard_nav();
-			intercept_logo_click();
-		}, 300);
+		setTimeout(apply_all, 200);
 	});
 
 	// === ENFORCE ON INITIAL LOAD ===
 	$(document).ready(function () {
-		// Wait for frappe boot to be ready
 		var check_count = 0;
 		var check_interval = setInterval(function () {
 			check_count++;
@@ -255,10 +215,8 @@
 			if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
 				clearInterval(check_interval);
 				if (is_branch_user()) {
-					enforce_route();
-					hide_sidebar();
-					intercept_logo_click();
-					add_dashboard_nav();
+					apply_all();
+
 					// Redirect if on home/workspace
 					var r = frappe.get_route();
 					if (!r.length || r[0] === "" || r[0] === "Workspaces" ||
@@ -266,28 +224,43 @@
 						(r[0] === "Workspace" && r[1] === "Home")) {
 						frappe.set_route("rmax-dashboard");
 					}
+
+					// Override set_route AFTER frappe is fully loaded
+					setup_route_override();
 				}
 			}
 		}, 100);
 	});
 
-	// === OVERRIDE DEFAULT HOME PAGE ===
-	var _original_set_route = frappe.set_route;
-	frappe.set_route = function () {
-		var args = Array.prototype.slice.call(arguments);
+	// === OVERRIDE frappe.set_route AFTER BOOT ===
+	function setup_route_override() {
+		if (!frappe.set_route || frappe.set_route.__rmax_patched) return;
+
+		var _orig = frappe.set_route;
+		frappe.set_route = function () {
+			var args = Array.prototype.slice.call(arguments);
+			if (is_branch_user()) {
+				var target = "";
+				if (args.length >= 1 && typeof args[0] === "string") {
+					target = args[0].toLowerCase().replace(/^\/+/, "");
+				}
+				// Redirect home-like routes to dashboard
+				if (target === "" || target === "app" || target === "app/home" ||
+					target === "home" || target === "workspace" || target === "workspaces" ||
+					target === "workspace/home" || target === "app/branch-user" ||
+					target === "Workspace/Branch User".toLowerCase()) {
+					args = ["rmax-dashboard"];
+				}
+			}
+			return _orig.apply(frappe, args);
+		};
+		frappe.set_route.__rmax_patched = true;
+	}
+
+	// Also keep polling to fix the logo — in case the navbar gets re-rendered
+	setInterval(function () {
 		if (is_branch_user()) {
-			var target = "";
-			if (args.length === 1 && typeof args[0] === "string") {
-				target = args[0].toLowerCase();
-			} else if (args.length > 0 && typeof args[0] === "string") {
-				target = args[0].toLowerCase();
-			}
-			if (target === "" || target === "home" || target === "workspace" ||
-				target === "workspaces" || target === "workspace/home" ||
-				target === "/" || target === "/app" || target === "/app/home") {
-				args = ["rmax-dashboard"];
-			}
+			fix_logo_href();
 		}
-		return _original_set_route.apply(frappe, args);
-	};
+	}, 2000);
 })();
