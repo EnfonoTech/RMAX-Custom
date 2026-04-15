@@ -53,8 +53,8 @@ frappe.listview_settings["Sales Invoice"].refresh = function (listview) {
         listview.page.set_primary_action(
             __("New Credit Note"),
             function () {
-                frappe.route_options = { is_return: 1 };
                 frappe.new_doc("Sales Invoice");
+                _wait_and_set_return("Sales Invoice");
             }
         );
     }
@@ -78,4 +78,18 @@ function _is_return_filter_active(listview) {
         }
     }
     return false;
+}
+
+function _wait_and_set_return(doctype) {
+    // Wait for the new form to fully load, then tick is_return
+    var attempts = 0;
+    var check = setInterval(function () {
+        attempts++;
+        if (attempts > 50) { clearInterval(check); return; }
+        if (cur_frm && cur_frm.doc.doctype === doctype && cur_frm.doc.__islocal) {
+            clearInterval(check);
+            cur_frm.set_value("is_return", 1);
+            cur_frm.dirty();
+        }
+    }, 100);
 }
