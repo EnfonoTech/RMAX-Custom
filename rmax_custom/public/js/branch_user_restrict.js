@@ -232,11 +232,19 @@
 		}
 	}
 
-	// === HIDE COST COLUMNS IN STOCK BALANCE REPORT ===
-	var COST_COLUMNS_TO_HIDE = [
+	// === HIDE COST/VALUE COLUMNS IN REPORTS ===
+	// Fieldnames that should be hidden in Stock Balance / Stock Ledger
+	var COST_FIELDNAMES_TO_HIDE = [
 		"opening_value", "val_rate", "in_val", "out_val", "bal_val",
 		"valuation_rate", "stock_value", "stock_value_difference",
-		"opening_qty_value"  // cover various naming conventions
+		"opening_qty_value", "incoming_rate", "outgoing_rate",
+		"stock_value_difference"
+	];
+
+	// Reports where cost columns should be hidden
+	var REPORTS_TO_FILTER = [
+		"Stock Balance",
+		"Stock Ledger",
 	];
 
 	function hide_cost_columns_in_reports() {
@@ -245,8 +253,11 @@
 		if (!route || route[0] !== "query-report") return;
 
 		var report_name = route[1] || "";
-		// Apply to Stock Balance and Stock Ledger reports
-		if (report_name !== "Stock Balance" && report_name !== "Stock Ledger") return;
+		var should_filter = false;
+		for (var r = 0; r < REPORTS_TO_FILTER.length; r++) {
+			if (report_name === REPORTS_TO_FILTER[r]) { should_filter = true; break; }
+		}
+		if (!should_filter) return;
 
 		// Wait for report to render, then hide columns
 		var attempts = 0;
@@ -266,19 +277,22 @@
 				var label = (col.label || col.name || "").toLowerCase();
 				var is_cost = false;
 
-				for (var i = 0; i < COST_COLUMNS_TO_HIDE.length; i++) {
-					if (id === COST_COLUMNS_TO_HIDE[i]) { is_cost = true; break; }
+				for (var i = 0; i < COST_FIELDNAMES_TO_HIDE.length; i++) {
+					if (id === COST_FIELDNAMES_TO_HIDE[i]) { is_cost = true; break; }
 				}
 				// Also match by label keywords
 				if (!is_cost && (
 					label.indexOf("value") !== -1 ||
-					label.indexOf("valuation") !== -1 ||
-					label.indexOf("rate") !== -1
+					label.indexOf("valuation") !== -1
 				)) {
-					// Only hide value/rate columns, not qty-related
+					// Only hide value/valuation columns, not qty-related
 					if (label.indexOf("qty") === -1 && label.indexOf("quantity") === -1) {
 						is_cost = true;
 					}
+				}
+				// Hide any "rate" column (incoming rate, outgoing rate, valuation rate)
+				if (!is_cost && label.indexOf("rate") !== -1) {
+					is_cost = true;
 				}
 
 				if (is_cost && !col.hidden) {

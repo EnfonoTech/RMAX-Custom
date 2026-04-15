@@ -129,7 +129,8 @@ def pr_permission_query(user):
 
 
 def pe_permission_query(user):
-    """Filter Payment Entries — show only those created by the user."""
+    """Filter Payment Entries — show those created by the user
+    OR linked to Sales Invoices the user can see (via branch warehouse)."""
     if not user or user == "Administrator":
         return ""
 
@@ -140,7 +141,22 @@ def pe_permission_query(user):
     if not _is_branch_configured_user(user):
         return ""
 
-    return f"""`tabPayment Entry`.`owner` = {frappe.db.escape(user)}"""
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return f"""`tabPayment Entry`.`owner` = {frappe.db.escape(user)}"""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabPayment Entry`.`owner` = {frappe.db.escape(user)}
+        OR `tabPayment Entry`.`name` IN (
+            SELECT DISTINCT per.parent
+            FROM `tabPayment Entry Reference` per
+            INNER JOIN `tabSales Invoice Item` sii ON sii.parent = per.reference_name
+            WHERE per.reference_doctype = 'Sales Invoice'
+            AND sii.warehouse IN ({wh_list})
+        )
+    )"""
 
 
 def quotation_permission_query(user):

@@ -53,13 +53,36 @@ def get_columns():
 
 
 def get_selling_price_lists():
-    """Return names of all enabled selling Price Lists."""
-    return frappe.get_all(
+    """Return names of all enabled selling Price Lists.
+    For restricted users (Branch User / Stock User), exclude buying and inter-company lists.
+    """
+    user = frappe.session.user
+    roles = frappe.get_roles(user)
+
+    is_restricted = (
+        "Branch User" in roles or "Stock User" in roles or "Damage User" in roles
+    ) and "System Manager" not in roles and "Stock Manager" not in roles
+
+    filters = {"selling": 1, "enabled": 1}
+    if is_restricted:
+        # Exclude buying-only price lists and inter-company lists
+        filters["buying"] = 0
+
+    price_lists = frappe.get_all(
         "Price List",
-        filters={"selling": 1, "enabled": 1},
+        filters=filters,
         pluck="name",
         order_by="name asc",
     )
+
+    if is_restricted:
+        # Also exclude price lists with "Inter" or "Buying" in name
+        price_lists = [
+            pl for pl in price_lists
+            if "inter" not in pl.lower() and "buying" not in pl.lower()
+        ]
+
+    return price_lists
 
 
 def get_data(filters):
