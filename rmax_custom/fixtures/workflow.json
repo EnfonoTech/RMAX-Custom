@@ -10,7 +10,7 @@
   "send_email_alert": 0,
   "states": [
    {
-    "allow_edit": "Branch User",
+    "allow_edit": "All",
     "doc_status": "0",
     "is_optional_state": 0,
     "parent": "Stock Transfer Workflow",
@@ -19,7 +19,7 @@
     "state": "Draft"
    },
    {
-    "allow_edit": "Branch User",
+    "allow_edit": "All",
     "doc_status": "0",
     "is_optional_state": 0,
     "parent": "Stock Transfer Workflow",
@@ -28,7 +28,7 @@
     "state": "Waiting for Approval"
    },
    {
-    "allow_edit": "Branch User",
+    "allow_edit": "All",
     "doc_status": "1",
     "is_optional_state": 0,
     "parent": "Stock Transfer Workflow",
@@ -37,7 +37,7 @@
     "state": "Approved"
    },
    {
-    "allow_edit": "Branch User",
+    "allow_edit": "All",
     "doc_status": "0",
     "is_optional_state": 0,
     "parent": "Stock Transfer Workflow",

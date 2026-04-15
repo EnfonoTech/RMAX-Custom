@@ -102,13 +102,8 @@ class BranchConfiguration(Document):
 			selected_role = u.get("role") or BRANCH_USER_ROLE
 			_assign_role(u.user, selected_role)
 
-			# Stock Users also need Branch User role for workflow allow_edit
-			# (Frappe workflow only allows one role per state, set to Branch User)
-			if selected_role == "Stock User":
-				_assign_role(u.user, BRANCH_USER_ROLE)
-
 			# Auto-set Module Profile to restrict sidebar modules
-			if selected_role in (BRANCH_USER_ROLE, "Stock User"):
+			if selected_role == BRANCH_USER_ROLE:
 				_set_module_profile(u.user, "Branch User")
 
 
