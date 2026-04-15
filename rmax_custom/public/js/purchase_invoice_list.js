@@ -2,7 +2,7 @@
  * RMAX Custom: Purchase Invoice List View
  *
  * When is_return=1 filter is active, the "+ Add" button becomes "New Debit Note"
- * and prompts for the original invoice to create a proper return.
+ * and creates a Purchase Invoice with is_return=1 pre-set.
  */
 frappe.listview_settings["Purchase Invoice"] = frappe.listview_settings["Purchase Invoice"] || {};
 
@@ -35,45 +35,9 @@ frappe.listview_settings["Purchase Invoice"].refresh = function (listview) {
         listview.page.set_primary_action(
             __("New Debit Note"),
             function () {
-                var d = new frappe.ui.Dialog({
-                    title: __("Create Debit Note"),
-                    fields: [
-                        {
-                            fieldname: "source_invoice",
-                            fieldtype: "Link",
-                            label: __("Original Purchase Invoice"),
-                            options: "Purchase Invoice",
-                            reqd: 1,
-                            get_query: function () {
-                                return {
-                                    filters: {
-                                        docstatus: 1,
-                                        is_return: 0,
-                                        company: frappe.defaults.get_default("company"),
-                                    }
-                                };
-                            },
-                            description: __("Select the original invoice to create a return against")
-                        }
-                    ],
-                    primary_action_label: __("Create"),
-                    primary_action: function (values) {
-                        d.hide();
-                        frappe.call({
-                            method: "erpnext.accounts.doctype.purchase_invoice.purchase_invoice.make_debit_note",
-                            args: { source_name: values.source_invoice },
-                            freeze: true,
-                            freeze_message: __("Creating Debit Note..."),
-                            callback: function (r) {
-                                if (r.message) {
-                                    var doc = frappe.model.sync(r.message)[0];
-                                    frappe.set_route("Form", doc.doctype, doc.name);
-                                }
-                            }
-                        });
-                    }
-                });
-                d.show();
+                var doc = frappe.model.get_new_doc("Purchase Invoice");
+                doc.is_return = 1;
+                frappe.set_route("Form", "Purchase Invoice", doc.name);
             }
         );
     }

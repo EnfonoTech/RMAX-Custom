@@ -2,7 +2,7 @@
  * RMAX Custom: Sales Invoice List View
  *
  * When is_return=1 filter is active, the "+ Add" button becomes "New Credit Note"
- * and prompts for the original invoice to create a proper return.
+ * and creates a Sales Invoice with is_return=1 pre-set.
  */
 frappe.listview_settings["Sales Invoice"] = frappe.listview_settings["Sales Invoice"] || {};
 
@@ -47,7 +47,9 @@ frappe.listview_settings["Sales Invoice"].refresh = function (listview) {
         listview.page.set_primary_action(
             __("New Credit Note"),
             function () {
-                _show_return_dialog("Sales Invoice", "Credit Note");
+                var doc = frappe.model.get_new_doc("Sales Invoice");
+                doc.is_return = 1;
+                frappe.set_route("Form", "Sales Invoice", doc.name);
             }
         );
     }
@@ -65,49 +67,4 @@ function _si_is_return_filter_active(listview) {
         }
     }
     return false;
-}
-
-function _show_return_dialog(doctype, label) {
-    var d = new frappe.ui.Dialog({
-        title: __("Create {0}", [__(label)]),
-        fields: [
-            {
-                fieldname: "source_invoice",
-                fieldtype: "Link",
-                label: __("Original {0}", [__(doctype)]),
-                options: doctype,
-                reqd: 1,
-                get_query: function () {
-                    return {
-                        filters: {
-                            docstatus: 1,
-                            is_return: 0,
-                            company: frappe.defaults.get_default("company"),
-                        }
-                    };
-                },
-                description: __("Select the original invoice to create a return against")
-            }
-        ],
-        primary_action_label: __("Create"),
-        primary_action: function (values) {
-            d.hide();
-            frappe.call({
-                method: "erpnext.accounts.doctype."
-                    + frappe.model.scrub(doctype) + "."
-                    + frappe.model.scrub(doctype)
-                    + ".make_sales_return",
-                args: { source_name: values.source_invoice },
-                freeze: true,
-                freeze_message: __("Creating {0}...", [__(label)]),
-                callback: function (r) {
-                    if (r.message) {
-                        var doc = frappe.model.sync(r.message)[0];
-                        frappe.set_route("Form", doc.doctype, doc.name);
-                    }
-                }
-            });
-        }
-    });
-    d.show();
 }
