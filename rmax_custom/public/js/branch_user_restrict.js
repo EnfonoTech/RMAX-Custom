@@ -265,4 +265,15 @@
 			add_dashboard_nav();
 		}
 	}, 1000);
+
+	// Debug: log to console to confirm script is running
+	console.log("[RMAX] branch_user_restrict.js loaded");
+	$(document).ready(function() {
+		setTimeout(function() {
+			console.log("[RMAX] is_branch_user:", is_branch_user());
+			console.log("[RMAX] navbar-brand count:", $(".navbar-brand").length);
+			console.log("[RMAX] navbar-brand href:", $(".navbar-brand").attr("href"));
+			console.log("[RMAX] #rmax-dash-nav-btn exists:", $("#rmax-dash-nav-btn").length > 0);
+		}, 3000);
+	});
 })();
