@@ -199,6 +199,7 @@ frappe 15.x, erpnext 15.x, hrms 15.x, grey_theme, ksa_compliance, fateh_trading,
 | suhailsudu@gmail.com | Jeddah | Warehouse Jeddah - CNC | Branch User |
 | andru@gmail.com | Riyadh | Warehouse Riyadh - CNC | Branch User |
 | warehouse@rmax.com | Warehouse Bahra | Warehouse Bahrah - CNC | Stock User |
+| sabith@gmail.com | — | — | Damage User |
 
 ---
 
