@@ -17,16 +17,13 @@ def boot_session(bootinfo):
         # Force default route to rmax-dashboard
         bootinfo.default_route = "rmax-dashboard"
 
-        # Set allowed modules — hide everything else from sidebar
-        bootinfo.allowed_modules = [
-            "Selling",
-            "Buying",
-            "Stock",
-            "Accounts",
-        ]
+        # Only allow Rmax Custom module workspaces in sidebar
+        bootinfo.allowed_modules = ["Rmax Custom"]
 
-        # Block workspaces — only allow the dashboard
-        bootinfo.allowed_workspaces = []
+        # Only show the Branch User workspace
+        bootinfo.allowed_workspaces = [
+            {"name": "Branch User"},
+        ]
 
         # Add flag for JS to use
         bootinfo.is_branch_user_restricted = True
