@@ -93,7 +93,7 @@ function render_dashboard(page, data) {
 		var target = $(this).data('target');
 		var filter = $(this).data('filter');
 		if (action === 'new') {
-			frappe.new_doc(target);
+			frappe.set_route('Form', target, 'new');
 		} else if (action === 'list') {
 			if (filter) {
 				frappe.set_route('List', target, filter);
