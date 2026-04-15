@@ -95,7 +95,9 @@ def can_create_stock_transfer(source_warehouse):
 
 @frappe.whitelist()
 def create_stock_transfer_from_mr(material_request):
-    """Create a Stock Transfer from a submitted Material Request."""
+    """Create a Stock Transfer from a submitted Material Request.
+    Supports partial fulfillment — only includes pending qty per item.
+    """
     mr = frappe.get_doc("Material Request", material_request)
 
     if mr.docstatus != 1:
@@ -110,35 +112,38 @@ def create_stock_transfer_from_mr(material_request):
     if not source_wh and not target_wh:
         frappe.throw(_("Source or Target Warehouse is required on the Material Request"))
 
-    # Check if ST already exists for this MR (prevent duplicates)
-    existing_st = frappe.db.sql("""
-        SELECT c.reference_name
-        FROM `tabComment` c
-        WHERE c.reference_doctype = 'Material Request'
-        AND c.reference_name = %s
-        AND c.content LIKE '%%Stock Transfer%%created%%'
-    """, mr.name)
-    if existing_st:
-        frappe.throw(_("A Stock Transfer has already been created from this Material Request."))
+    # Calculate already transferred qty per MR item
+    transferred_map = _get_transferred_qty_map(mr.name)
 
     st = frappe.new_doc("Stock Transfer")
     st.company = mr.company
     st.set_source_warehouse = source_wh or ""
     st.set_target_warehouse = target_wh or ""
     st.material_request_type = "Material Transfer"
+    st.material_request = mr.name
     st.transaction_date = nowdate()
 
+    has_pending = False
     for item in mr.items:
+        already_transferred = flt(transferred_map.get(item.name, 0))
+        pending_qty = flt(item.qty) - already_transferred
+
+        if pending_qty <= 0:
+            continue
+
+        has_pending = True
         uom = item.uom or item.stock_uom
         conversion_factor = flt(item.conversion_factor) or 1
 
         st.append("items", {
             "item_code": item.item_code,
             "item_name": item.item_name,
-            "quantity": flt(item.qty),
+            "quantity": pending_qty,
             "uom": uom,
             "stock_uom": item.stock_uom,
             "uom_conversion_factor": conversion_factor,
+            "material_request_item": item.name,
+            "mr_qty": flt(item.qty),
         })
 
         # Use item-level warehouses if header-level not set
@@ -146,6 +151,9 @@ def create_stock_transfer_from_mr(material_request):
             st.set_source_warehouse = item.from_warehouse
         if not st.set_target_warehouse and item.warehouse:
             st.set_target_warehouse = item.warehouse
+
+    if not has_pending:
+        frappe.throw(_("All items in this Material Request have already been fully transferred."))
 
     st.insert(ignore_permissions=True)
 
@@ -161,3 +169,46 @@ def create_stock_transfer_from_mr(material_request):
     }).insert(ignore_permissions=True)
 
     return st.name
+
+
+def _get_transferred_qty_map(material_request):
+    """Get total transferred qty per MR item from all non-cancelled Stock Transfers.
+    Returns dict: {material_request_item_name: total_transferred_qty}
+    """
+    data = frappe.db.sql(
+        """
+        SELECT sti.material_request_item, SUM(sti.quantity) AS total_qty
+        FROM `tabStock Transfer Item` sti
+        INNER JOIN `tabStock Transfer` st ON st.name = sti.parent
+        WHERE st.material_request = %s
+        AND st.docstatus != 2
+        AND sti.material_request_item IS NOT NULL
+        AND sti.material_request_item != ''
+        GROUP BY sti.material_request_item
+        """,
+        (material_request,),
+        as_dict=True,
+    )
+    return {row.material_request_item: flt(row.total_qty) for row in data}
+
+
+@frappe.whitelist()
+def get_mr_transfer_status(material_request):
+    """Get transfer status for each item in a Material Request.
+    Returns list of {item_name, item_code, requested_qty, transferred_qty, pending_qty}
+    """
+    mr = frappe.get_doc("Material Request", material_request)
+    transferred_map = _get_transferred_qty_map(material_request)
+
+    result = []
+    for item in mr.items:
+        transferred = flt(transferred_map.get(item.name, 0))
+        result.append({
+            "item_code": item.item_code,
+            "item_name": item.item_name,
+            "requested_qty": flt(item.qty),
+            "transferred_qty": transferred,
+            "pending_qty": flt(item.qty) - transferred,
+        })
+
+    return result

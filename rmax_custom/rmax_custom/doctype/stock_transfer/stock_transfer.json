@@ -18,7 +18,9 @@
   "column_break_cpel",
   "set_target_warehouse",
   "section_break_mbwe",
-  "items"
+  "items",
+  "section_break_mr_link",
+  "material_request"
  ],
  "fields": [
   {
@@ -101,6 +103,20 @@
    "ignore_user_permissions": 1,
    "label": "Set Target Warehouse",
    "options": "Warehouse"
+  },
+  {
+   "fieldname": "section_break_mr_link",
+   "fieldtype": "Section Break",
+   "label": "Reference",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "material_request",
+   "fieldtype": "Link",
+   "label": "Material Request",
+   "options": "Material Request",
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "grid_page_length": 50,

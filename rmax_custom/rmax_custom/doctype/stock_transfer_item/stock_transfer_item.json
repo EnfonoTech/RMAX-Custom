@@ -13,7 +13,9 @@
   "column_break_wlnz",
   "stock_uom",
   "uom",
-  "uom_conversion_factor"
+  "uom_conversion_factor",
+  "material_request_item",
+  "mr_qty"
  ],
  "fields": [
   {
@@ -73,6 +75,24 @@
    "fieldtype": "Float",
    "label": "UOM Conversion Factor",
    "reqd": 1
+  },
+  {
+   "fieldname": "material_request_item",
+   "fieldtype": "Data",
+   "label": "Material Request Item",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "hidden": 1
+  },
+  {
+   "fieldname": "mr_qty",
+   "fieldtype": "Float",
+   "label": "Requested Qty",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Original qty requested in Material Request"
   }
  ],
  "grid_page_length": 50,
