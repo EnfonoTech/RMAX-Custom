@@ -9,7 +9,10 @@
   "date",
   "column_break_1",
   "company",
+  "section_break_wh",
   "branch_warehouse",
+  "column_break_wh",
+  "damage_warehouse",
   "section_break_customer",
   "customer",
   "column_break_2",
@@ -51,11 +54,29 @@
    "reqd": 1
   },
   {
+   "fieldname": "section_break_wh",
+   "fieldtype": "Section Break",
+   "label": "Warehouses"
+  },
+  {
    "description": "Warehouse where damage occurred",
    "fieldname": "branch_warehouse",
    "fieldtype": "Link",
    "in_list_view": 1,
    "label": "Branch Warehouse",
+   "options": "Warehouse",
+   "reqd": 1
+  },
+  {
+   "fieldname": "column_break_wh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Target warehouse for damaged goods (e.g. Damage Jeddah, Damage Riyadh)",
+   "fieldname": "damage_warehouse",
+   "fieldtype": "Link",
+   "ignore_user_permissions": 1,
+   "label": "Damage Warehouse",
    "options": "Warehouse",
    "reqd": 1
   },

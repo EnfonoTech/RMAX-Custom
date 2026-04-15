@@ -4,6 +4,7 @@
 frappe.ui.form.on('Damage Transfer', {
 	onload: function(frm) {
 		_setup_dt_warehouse_query(frm);
+		_setup_dt_damage_warehouse_query(frm);
 	},
 
 	refresh: function(frm) {
@@ -223,7 +224,36 @@ function _add_slips_to_transfer(frm, selected_slips) {
 	frm.refresh_field('damage_slips');
 	frm.refresh_field('items');
 	frm.dirty();
+
+	// Auto-set damage_warehouse if all slips share the same one and it's not already set
+	if (!frm.doc.damage_warehouse) {
+		var damage_whs = {};
+		selected_slips.forEach(function(slip) {
+			if (slip.damage_warehouse) {
+				damage_whs[slip.damage_warehouse] = true;
+			}
+		});
+		var unique_whs = Object.keys(damage_whs);
+		if (unique_whs.length === 1) {
+			frm.set_value('damage_warehouse', unique_whs[0]);
+		}
+	}
+
 	frappe.show_alert({ message: __('Damage Slips added.'), indicator: 'green' });
+}
+
+function _setup_dt_damage_warehouse_query(frm) {
+	// Show only damage warehouses (name starts with "Damage")
+	frm.set_query('damage_warehouse', function() {
+		return {
+			ignore_user_permissions: 1,
+			filters: {
+				company: frm.doc.company,
+				is_group: 0,
+				name: ["like", "Damage%"]
+			}
+		};
+	});
 }
 
 function _setup_dt_warehouse_query(frm) {

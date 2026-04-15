@@ -4,6 +4,7 @@
 frappe.ui.form.on('Damage Slip', {
 	onload: function(frm) {
 		_setup_ds_warehouse_query(frm);
+		_setup_ds_damage_warehouse_query(frm);
 	},
 
 	refresh: function(frm) {
@@ -54,6 +55,20 @@ frappe.ui.form.on('Damage Slip', {
 		}
 	}
 });
+
+function _setup_ds_damage_warehouse_query(frm) {
+	// Show only damage warehouses (name starts with "Damage")
+	frm.set_query('damage_warehouse', function() {
+		return {
+			ignore_user_permissions: 1,
+			filters: {
+				company: frm.doc.company,
+				is_group: 0,
+				name: ["like", "Damage%"]
+			}
+		};
+	});
+}
 
 function _setup_ds_warehouse_query(frm) {
 	// Branch warehouse: only user's permitted warehouses

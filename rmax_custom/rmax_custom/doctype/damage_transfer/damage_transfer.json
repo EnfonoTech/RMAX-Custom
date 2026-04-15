@@ -69,13 +69,14 @@
    "fieldtype": "Column Break"
   },
   {
-   "description": "Auto-fetched from Company on approve",
+   "description": "Target warehouse for damaged goods (e.g. Damage Jeddah, Damage Riyadh)",
    "fieldname": "damage_warehouse",
    "fieldtype": "Link",
    "ignore_user_permissions": 1,
+   "in_list_view": 1,
    "label": "Damage Warehouse",
    "options": "Warehouse",
-   "read_only": 1
+   "reqd": 1
   },
   {
    "fieldname": "section_break_items",

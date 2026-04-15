@@ -80,22 +80,21 @@ class DamageTransfer(Document):
 		self._mark_slips_transferred()
 
 	def _create_transfer_stock_entry(self):
-		"""Create Stock Entry (Material Transfer): Branch WH -> Damage WH."""
-		damage_wh = frappe.db.get_value("Company", self.company, "custom_damage_warehouse")
-		if not damage_wh:
+		"""Create Stock Entry (Material Transfer): Branch WH -> Damage WH.
+		Uses the user-selected damage_warehouse (not Company default).
+		No GL entry is created — only Stock Ledger moves qty between warehouses.
+		"""
+		if not self.damage_warehouse:
 			frappe.throw(
-				_("Damage Warehouse is not configured for company {0}. "
-				  "Go to Company > Damage Warehouse and set it.").format(self.company)
+				_("Please select a Damage Warehouse before approving.")
 			)
-
-		self.damage_warehouse = damage_wh
 
 		se = frappe.new_doc("Stock Entry")
 		se.stock_entry_type = "Material Transfer"
 		se.from_warehouse = self.branch_warehouse
-		se.to_warehouse = damage_wh
+		se.to_warehouse = self.damage_warehouse
 		se.company = self.company
-		se.remarks = f"Damage Transfer: {self.name} (Branch -> Damage WH)"
+		se.remarks = f"Damage Transfer: {self.name} ({self.branch_warehouse} → {self.damage_warehouse})"
 
 		for item in self.items:
 			se.append("items", {
@@ -103,7 +102,7 @@ class DamageTransfer(Document):
 				"qty": item.qty,
 				"uom": item.stock_uom,
 				"s_warehouse": self.branch_warehouse,
-				"t_warehouse": damage_wh,
+				"t_warehouse": self.damage_warehouse,
 			})
 
 		se.insert(ignore_permissions=True)
@@ -114,7 +113,6 @@ class DamageTransfer(Document):
 		# Save fields via db_set to avoid re-triggering validate
 		self.db_set("stock_entry_transfer", se.name, update_modified=False)
 		self.db_set("transfer_entry_created", 1, update_modified=False)
-		self.db_set("damage_warehouse", damage_wh, update_modified=False)
 
 		frappe.msgprint(
 			_('Stock Entry Created: <a href="/app/stock-entry/{0}">{0}</a>').format(se.name),
@@ -149,7 +147,7 @@ def get_pending_damage_slips(branch_warehouse, company):
 			"company": company,
 			"status": "Open",
 		},
-		fields=["name", "date", "damage_category", "customer", "remarks"],
+		fields=["name", "date", "damage_category", "customer", "remarks", "damage_warehouse"],
 		order_by="date desc",
 	)
 
@@ -181,9 +179,7 @@ def write_off_damage(damage_transfer_name):
 
 	damage_wh = dt.damage_warehouse
 	if not damage_wh:
-		damage_wh = frappe.db.get_value("Company", dt.company, "custom_damage_warehouse")
-	if not damage_wh:
-		frappe.throw(_("Damage Warehouse not configured for company {0}.").format(dt.company))
+		frappe.throw(_("Damage Warehouse is not set on this Damage Transfer."))
 
 	expense_account = frappe.db.get_value("Company", dt.company, "custom_damage_loss_account")
 	if not expense_account:
