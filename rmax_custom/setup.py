@@ -44,6 +44,23 @@ BRANCH_USER_PERMISSIONS = [
 ]
 
 
+STOCK_USER_ROLE = "Stock User"
+
+# Extra permissions for Stock User (only what ERPNext doesn't provide by default)
+STOCK_USER_EXTRA_PERMISSIONS = [
+    {"parent": "Item Price", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "UOM", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Item Group", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Brand", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+]
+
+# Reports that Branch User / Stock User need access to
+REPORT_ROLE_GRANTS = [
+    {"report": "General Ledger", "roles": [BRANCH_USER_ROLE, STOCK_USER_ROLE]},
+    {"report": "Stock Balance", "roles": [BRANCH_USER_ROLE, STOCK_USER_ROLE]},
+    {"report": "Stock Ledger", "roles": [BRANCH_USER_ROLE, STOCK_USER_ROLE]},
+]
+
 BRANCH_USER_ALLOWED_MODULES = [
     "Rmax Custom",
     "Desk", "Core", "Workflow", "Printing", "Contacts", "Communication",
@@ -53,6 +70,8 @@ BRANCH_USER_ALLOWED_MODULES = [
 def after_migrate():
     """Set up Branch User role permissions after migration."""
     setup_branch_user_permissions()
+    setup_stock_user_extra_permissions()
+    setup_report_role_grants()
     setup_branch_user_module_profile()
     restrict_core_workspaces()
     setup_role_home_pages()
@@ -99,6 +118,72 @@ def setup_branch_user_permissions():
                 **{k: v for k, v in perm.items() if k != "parent"},
             })
             doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def setup_stock_user_extra_permissions():
+    """Create Custom DocPerm records for Stock User (only missing ones)."""
+    if not frappe.db.exists("Role", STOCK_USER_ROLE):
+        return
+
+    for perm in STOCK_USER_EXTRA_PERMISSIONS:
+        doctype = perm["parent"]
+
+        existing = frappe.db.exists("Custom DocPerm", {
+            "parent": doctype,
+            "role": STOCK_USER_ROLE,
+            "permlevel": 0,
+        })
+
+        if existing:
+            frappe.db.set_value("Custom DocPerm", existing, {
+                k: v for k, v in perm.items() if k != "parent"
+            })
+        else:
+            doc = frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": STOCK_USER_ROLE,
+                "permlevel": 0,
+                **{k: v for k, v in perm.items() if k != "parent"},
+            })
+            doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def setup_report_role_grants():
+    """Add Branch User / Stock User roles to reports (e.g. General Ledger).
+
+    ERPNext reports restrict access via Has Role entries on the Report doc.
+    We add our roles without removing existing ones.
+    """
+    for grant in REPORT_ROLE_GRANTS:
+        report_name = grant["report"]
+        if not frappe.db.exists("Report", report_name):
+            continue
+
+        for role in grant["roles"]:
+            if not frappe.db.exists("Role", role):
+                continue
+
+            # Check if role already granted
+            exists = frappe.db.exists("Has Role", {
+                "parent": report_name,
+                "parenttype": "Report",
+                "role": role,
+            })
+            if not exists:
+                frappe.get_doc({
+                    "doctype": "Has Role",
+                    "parent": report_name,
+                    "parenttype": "Report",
+                    "parentfield": "roles",
+                    "role": role,
+                }).insert(ignore_permissions=True)
 
     frappe.db.commit()
 
