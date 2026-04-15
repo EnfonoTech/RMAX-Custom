@@ -148,29 +148,8 @@ function render_branch_dashboard(data) {
 	html += action_card('tag', 'Price List', 'View price lists', 'list', 'Item Price');
 	html += '</div>';
 
-	// Pending Approvals
-	if (data.pending_transfers && data.pending_transfers.length > 0) {
-		html += '<h3 class="section-title">Pending Approvals</h3>';
-		html += '<div class="pending-list">';
-		data.pending_transfers.forEach(function(st) {
-			html += '<div class="pending-item">';
-			html += '<div class="pending-info">';
-			html += '<a class="pending-link" data-name="' + frappe.utils.escape_html(st.name) + '">';
-			html += frappe.utils.escape_html(st.name) + '</a>';
-			html += '<div class="pending-route">';
-			html += '<span class="wh-from">' + frappe.utils.escape_html(st.set_source_warehouse || '') + '</span>';
-			html += '<span class="route-arrow">→</span>';
-			html += '<span class="wh-to">' + frappe.utils.escape_html(st.set_target_warehouse || '') + '</span>';
-			html += '</div>';
-			html += '</div>';
-			html += '<div class="pending-meta">';
-			html += '<div class="pending-date">' + frappe.datetime.str_to_user(st.transaction_date) + '</div>';
-			html += '<div class="pending-status">Waiting</div>';
-			html += '</div>';
-			html += '</div>';
-		});
-		html += '</div>';
-	}
+	// Pending section — split MR + ST
+	html += render_pending_split(data);
 
 	return html;
 }
@@ -199,9 +178,25 @@ function render_stock_dashboard(data) {
 	html += action_card('tag', 'Item Groups', 'Browse item groups', 'list', 'Item Group');
 	html += '</div>';
 
-	// Pending Material Requests
-	if (data.pending_mr_list && data.pending_mr_list.length > 0) {
-		html += '<h3 class="section-title">Pending Material Requests</h3>';
+	// Pending section — split MR + ST
+	html += render_pending_split(data);
+
+	return html;
+}
+
+function render_pending_split(data) {
+	var has_mrs = data.pending_mr_list && data.pending_mr_list.length > 0;
+	var has_sts = data.pending_transfers && data.pending_transfers.length > 0;
+
+	if (!has_mrs && !has_sts) return '';
+
+	var html = '<h3 class="section-title">Pending Items</h3>';
+	html += '<div class="pending-split-row">';
+
+	// Left column — Pending Material Requests
+	html += '<div class="pending-split-col">';
+	html += '<div class="pending-col-header"><span class="pending-col-icon">📋</span> Material Requests</div>';
+	if (has_mrs) {
 		html += '<div class="pending-list">';
 		data.pending_mr_list.forEach(function(mr) {
 			var urgent_badge = mr.custom_is_urgent ? '<span class="mr-urgent-badge">URGENT</span>' : '';
@@ -222,8 +217,40 @@ function render_stock_dashboard(data) {
 			html += '</div>';
 		});
 		html += '</div>';
+	} else {
+		html += '<div class="pending-empty">No pending requests</div>';
 	}
+	html += '</div>';
 
+	// Right column — Pending Stock Transfers
+	html += '<div class="pending-split-col">';
+	html += '<div class="pending-col-header"><span class="pending-col-icon">📦</span> Stock Transfers</div>';
+	if (has_sts) {
+		html += '<div class="pending-list">';
+		data.pending_transfers.forEach(function(st) {
+			html += '<div class="pending-item">';
+			html += '<div class="pending-info">';
+			html += '<a class="pending-link" data-name="' + frappe.utils.escape_html(st.name) + '">';
+			html += frappe.utils.escape_html(st.name) + '</a>';
+			html += '<div class="pending-route">';
+			html += '<span class="wh-from">' + frappe.utils.escape_html(st.set_source_warehouse || '') + '</span>';
+			html += '<span class="route-arrow">→</span>';
+			html += '<span class="wh-to">' + frappe.utils.escape_html(st.set_target_warehouse || '') + '</span>';
+			html += '</div>';
+			html += '</div>';
+			html += '<div class="pending-meta">';
+			html += '<div class="pending-date">' + frappe.datetime.str_to_user(st.transaction_date) + '</div>';
+			html += '<div class="pending-status">Waiting</div>';
+			html += '</div>';
+			html += '</div>';
+		});
+		html += '</div>';
+	} else {
+		html += '<div class="pending-empty">No pending transfers</div>';
+	}
+	html += '</div>';
+
+	html += '</div>'; // close pending-split-row
 	return html;
 }
 
@@ -590,6 +617,48 @@ function get_dashboard_css() {
 			letter-spacing: 0.5px;
 		}
 
+		/* ─── Pending Split Layout ─────────────────── */
+		.rmax-dash .pending-split-row {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 16px;
+			margin-top: 4px;
+		}
+		.rmax-dash .pending-split-col {
+			min-width: 0;
+		}
+		.rmax-dash .pending-col-header {
+			font-size: 13px;
+			font-weight: 700;
+			color: #1a1a2e;
+			padding: 10px 16px;
+			background: #f8f9fb;
+			border-radius: 10px 10px 0 0;
+			border: 1px solid #e8ecf1;
+			border-bottom: none;
+			display: flex;
+			align-items: center;
+			gap: 6px;
+		}
+		.rmax-dash .pending-col-icon {
+			font-size: 15px;
+		}
+		.rmax-dash .pending-split-col .pending-list {
+			border-radius: 0 0 10px 10px;
+			max-height: 400px;
+			overflow-y: auto;
+		}
+		.rmax-dash .pending-empty {
+			text-align: center;
+			padding: 32px 16px;
+			color: #8492a6;
+			font-size: 13px;
+			background: #fff;
+			border: 1px solid #e8ecf1;
+			border-top: none;
+			border-radius: 0 0 10px 10px;
+		}
+
 		/* ─── Urgent MR Badge ──────────────────────── */
 		.rmax-dash .mr-urgent {
 			border-left: 3px solid #e94560;
@@ -615,6 +684,9 @@ function get_dashboard_css() {
 			}
 		}
 		@media (max-width: 768px) {
+			.rmax-dash .pending-split-row {
+				grid-template-columns: 1fr;
+			}
 			.rmax-dash {
 				padding: 16px;
 			}

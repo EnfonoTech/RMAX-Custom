@@ -111,7 +111,19 @@ def get_dashboard_data():
             or 0
         )
 
-        # Pending stock transfers list
+    if is_stock_user or is_admin:
+        # Stock KPIs
+        data["pending_mrs"] = frappe.db.count(
+            "Material Request", {"status": "Pending", "docstatus": 1}
+        )
+        data["pending_sts"] = frappe.db.count(
+            "Stock Transfer", {"workflow_state": "Waiting for Approval"}
+        )
+        data["total_items"] = frappe.db.count("Item", {"disabled": 0})
+
+    # Pending lists — shown for BOTH branch and stock users (split view)
+    if is_branch_user or is_stock_user or is_admin:
+        # Pending Stock Transfers
         st_filter = ""
         st_params = []
         if warehouses and not is_admin:
@@ -132,17 +144,8 @@ def get_dashboard_data():
             as_dict=True,
         )
 
-    if is_stock_user or is_admin:
-        # Stock KPIs
-        data["pending_mrs"] = frappe.db.count(
-            "Material Request", {"status": "Pending", "docstatus": 1}
-        )
-        data["pending_sts"] = frappe.db.count(
-            "Stock Transfer", {"workflow_state": "Waiting for Approval"}
-        )
-        data["total_items"] = frappe.db.count("Item", {"disabled": 0})
-
-        # Pending Material Requests list (submitted, not fully fulfilled)
+    # Pending Material Requests list
+    if is_branch_user or is_stock_user or is_admin:
         mr_filter = ""
         mr_params = []
         if warehouses and not is_admin:
@@ -161,7 +164,7 @@ def get_dashboard_data():
             AND mr.material_request_type = 'Material Transfer'
             {mr_filter}
             ORDER BY mr.custom_is_urgent DESC, mr.transaction_date DESC
-            LIMIT 15
+            LIMIT 10
         """,
             tuple(mr_params) if mr_params else None,
             as_dict=True,
