@@ -117,6 +117,17 @@
 	function enforce_route() {
 		if (!is_branch_user()) return;
 		var route = frappe.get_route();
+
+		// Redirect home-like routes to dashboard
+		var first = (route[0] || "").toLowerCase();
+		if (!route.length || first === "" || first === "workspaces" ||
+			first === "home" || first === "workspace" ||
+			(first === "workspace" && (route[1] || "").toLowerCase() === "home") ||
+			(first === "workspace" && (route[1] || "").toLowerCase() === "branch user")) {
+			frappe.set_route("rmax-dashboard");
+			return;
+		}
+
 		if (!is_route_allowed(route)) {
 			frappe.set_route("rmax-dashboard");
 		}
@@ -224,38 +235,10 @@
 						(r[0] === "Workspace" && r[1] === "Home")) {
 						frappe.set_route("rmax-dashboard");
 					}
-
-					// Override set_route AFTER frappe is fully loaded
-					setup_route_override();
 				}
 			}
 		}, 100);
 	});
-
-	// === OVERRIDE frappe.set_route AFTER BOOT ===
-	function setup_route_override() {
-		if (!frappe.set_route || frappe.set_route.__rmax_patched) return;
-
-		var _orig = frappe.set_route;
-		frappe.set_route = function () {
-			var args = Array.prototype.slice.call(arguments);
-			if (is_branch_user()) {
-				var target = "";
-				if (args.length >= 1 && typeof args[0] === "string") {
-					target = args[0].toLowerCase().replace(/^\/+/, "");
-				}
-				// Redirect home-like routes to dashboard
-				if (target === "" || target === "app" || target === "app/home" ||
-					target === "home" || target === "workspace" || target === "workspaces" ||
-					target === "workspace/home" || target === "app/branch-user" ||
-					target === "Workspace/Branch User".toLowerCase()) {
-					args = ["rmax-dashboard"];
-				}
-			}
-			return _orig.apply(frappe, args);
-		};
-		frappe.set_route.__rmax_patched = true;
-	}
 
 	// Keep polling to fix the logo and add button
 	// Navbar is rendered async by Frappe, so we need to keep checking
@@ -266,14 +249,4 @@
 		}
 	}, 1000);
 
-	// Debug: log to console to confirm script is running
-	console.log("[RMAX] branch_user_restrict.js loaded");
-	$(document).ready(function() {
-		setTimeout(function() {
-			console.log("[RMAX] is_branch_user:", is_branch_user());
-			console.log("[RMAX] navbar-brand count:", $(".navbar-brand").length);
-			console.log("[RMAX] navbar-brand href:", $(".navbar-brand").attr("href"));
-			console.log("[RMAX] #rmax-dash-nav-btn exists:", $("#rmax-dash-nav-btn").length > 0);
-		}, 3000);
-	});
 })();
