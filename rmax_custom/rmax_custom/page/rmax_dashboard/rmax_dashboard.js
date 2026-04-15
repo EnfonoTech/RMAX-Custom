@@ -36,26 +36,28 @@ function render_dashboard(page, data) {
 	html += '<div>';
 	html += '<h2 class="dash-company">RMAX</h2>';
 	if (data.is_branch_user && !data.is_admin) {
-		html += '<span class="dash-subtitle">Sales Dashboard' + (data.branch_name ? ' &mdash; ' + frappe.utils.escape_html(data.branch_name) : '') + '</span>';
-	} else if (data.is_stock_user && !data.is_branch_user) {
-		html += '<span class="dash-subtitle">Stock Dashboard</span>';
+		html += '<span class="dash-subtitle">' + (data.branch_name ? frappe.utils.escape_html(data.branch_name) : 'Sales') + '</span>';
+	} else if (data.is_stock_user && !data.is_branch_user && !data.is_admin) {
+		html += '<span class="dash-subtitle">Warehouse</span>';
 	} else {
-		html += '<span class="dash-subtitle">Dashboard</span>';
+		html += '<span class="dash-subtitle">Management</span>';
 	}
 	html += '</div>';
 	html += '</div>';
 
-	// Branch User Dashboard
-	if (data.is_branch_user || data.is_admin) {
+	// Branch User: sales dashboard ONLY — no stock section
+	if (data.is_branch_user && !data.is_admin) {
 		html += render_branch_dashboard(data);
 	}
-
-	// Stock User Dashboard (only if NOT also branch user, or admin sees both)
-	if ((data.is_stock_user && !data.is_branch_user) || data.is_admin) {
-		if (data.is_admin && data.is_branch_user) {
-			html += '<hr class="dash-divider">';
-			html += '<h3 class="section-title" style="margin-top:32px;">Stock Operations</h3>';
-		}
+	// Stock User (not branch user): stock dashboard only
+	else if (data.is_stock_user && !data.is_branch_user && !data.is_admin) {
+		html += render_stock_dashboard(data);
+	}
+	// Admin/Stock Manager: sees both
+	else if (data.is_admin) {
+		html += render_branch_dashboard(data);
+		html += '<hr class="dash-divider">';
+		html += '<h3 class="section-title" style="margin-top:32px;">Stock Operations</h3>';
 		html += render_stock_dashboard(data);
 	}
 

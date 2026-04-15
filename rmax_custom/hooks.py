@@ -36,7 +36,8 @@ app_include_js = [
     "/assets/rmax_custom/js/materiel_request.js",
     "/assets/rmax_custom/js/vat_validation.js",
     "/assets/rmax_custom/js/contact_validation.js",
-    "/assets/rmax_custom/js/item_branch_user.js"
+    "/assets/rmax_custom/js/item_branch_user.js",
+    "/assets/rmax_custom/js/branch_user_restrict.js"
 ]
 
 
