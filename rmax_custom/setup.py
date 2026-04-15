@@ -107,19 +107,26 @@ def setup_branch_user_module_profile():
     all_modules = frappe.get_all("Module Def", pluck="name")
     blocked_modules = [m for m in all_modules if m not in BRANCH_USER_ALLOWED_MODULES]
 
-    # 1. Create/update the Module Profile
-    if frappe.db.exists("Module Profile", "Branch User"):
-        mp = frappe.get_doc("Module Profile", "Branch User")
-        mp.block_modules = []
-    else:
-        mp = frappe.new_doc("Module Profile")
-        mp.module_profile_name = "Branch User"
+    # 1. Create/update the Module Profile using DIRECT DB to avoid
+    #    on_update → queue_action → DocumentLockedError during migrate.
+    if not frappe.db.exists("Module Profile", "Branch User"):
+        frappe.db.sql(
+            "INSERT INTO `tabModule Profile` (name, module_profile_name, owner, creation, modified, modified_by, docstatus)"
+            " VALUES ('Branch User', 'Branch User', 'Administrator', NOW(), NOW(), 'Administrator', 0)"
+        )
 
+    # Clear existing block_modules
+    frappe.db.delete("Block Module", {"parent": "Branch User", "parenttype": "Module Profile"})
+
+    # Insert blocked modules
     for mod in blocked_modules:
-        mp.append("block_modules", {"module": mod})
-
-    mp.flags.ignore_document_lock = True
-    mp.save(ignore_permissions=True)
+        frappe.get_doc({
+            "doctype": "Block Module",
+            "parent": "Branch User",
+            "parenttype": "Module Profile",
+            "parentfield": "block_modules",
+            "module": mod,
+        }).db_insert()
 
     # 2. Apply profile + sync block_modules on every Branch User
     #    Uses direct DB to avoid user.save() failures (password validation etc.)
