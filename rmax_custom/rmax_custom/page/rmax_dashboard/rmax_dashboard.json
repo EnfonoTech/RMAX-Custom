@@ -15,7 +15,8 @@
   {"role": "Branch User"},
   {"role": "Stock User"},
   {"role": "Stock Manager"},
-  {"role": "System Manager"}
+  {"role": "System Manager"},
+  {"role": "Damage User"}
  ],
  "standard": "Yes",
  "system_page": 0,
