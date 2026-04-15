@@ -45,11 +45,13 @@ def get_dashboard_data():
     first_of_month = frappe.utils.get_first_day(today)
 
     if is_branch_user or is_admin:
-        # Build warehouse filter for branch users
+        # Build warehouse filter for branch users using parameterized queries
         wh_filter = ""
+        wh_params = []
         if warehouses and not is_admin:
-            wh_list = ", ".join(f"'{frappe.db.escape(w)}'" for w in warehouses)
-            wh_filter = f"AND si.set_warehouse IN ({wh_list})"
+            placeholders = ", ".join(["%s"] * len(warehouses))
+            wh_filter = f"AND si.set_warehouse IN ({placeholders})"
+            wh_params = list(warehouses)
 
         # Daily sales
         data["daily_sales"] = (
@@ -59,7 +61,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.posting_date = %s AND si.docstatus = 1 {wh_filter}
             """,
-                today,
+                [today] + wh_params,
             )[0][0]
             or 0
         )
@@ -73,7 +75,7 @@ def get_dashboard_data():
                 WHERE si.posting_date >= %s AND si.posting_date <= %s
                 AND si.docstatus = 1 {wh_filter}
             """,
-                (first_of_month, today),
+                [first_of_month, today] + wh_params,
             )[0][0]
             or 0
         )
@@ -86,7 +88,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.posting_date >= %s AND si.docstatus = 1 {wh_filter}
             """,
-                first_of_month,
+                [first_of_month] + wh_params,
             )[0][0]
             or 0
         )
@@ -103,16 +105,19 @@ def get_dashboard_data():
                 SELECT COALESCE(SUM(outstanding_amount), 0)
                 FROM `tabSales Invoice` si
                 WHERE si.docstatus = 1 AND si.outstanding_amount > 0 {wh_filter}
-            """
+            """,
+                wh_params or None,
             )[0][0]
             or 0
         )
 
         # Pending stock transfers list
         st_filter = ""
+        st_params = []
         if warehouses and not is_admin:
-            wh_list = ", ".join(f"'{frappe.db.escape(w)}'" for w in warehouses)
-            st_filter = f"AND (set_source_warehouse IN ({wh_list}) OR set_target_warehouse IN ({wh_list}))"
+            placeholders = ", ".join(["%s"] * len(warehouses))
+            st_filter = f"AND (set_source_warehouse IN ({placeholders}) OR set_target_warehouse IN ({placeholders}))"
+            st_params = list(warehouses) + list(warehouses)
 
         data["pending_transfers"] = frappe.db.sql(
             f"""
@@ -123,6 +128,7 @@ def get_dashboard_data():
             ORDER BY transaction_date DESC
             LIMIT 10
         """,
+            st_params or None,
             as_dict=True,
         )
 
