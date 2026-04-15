@@ -22,7 +22,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Role",
-   "options": "Branch User\nStock User\nStock Manager",
+   "options": "Branch User\nStock User\nStock Manager\nDamage User",
    "default": "Branch User",
    "reqd": 1
   }

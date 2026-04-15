@@ -68,9 +68,10 @@
 		if (roles.indexOf("System Manager") !== -1) return false;
 		if (roles.indexOf("Administrator") !== -1) return false;
 		if (roles.indexOf("Stock Manager") !== -1) return false;
-		// Branch User or Stock User = restricted
+		// Branch User, Stock User, or Damage User = restricted
 		if (roles.indexOf("Branch User") !== -1) return true;
 		if (roles.indexOf("Stock User") !== -1) return true;
+		if (roles.indexOf("Damage User") !== -1) return true;
 		return false;
 	}
 

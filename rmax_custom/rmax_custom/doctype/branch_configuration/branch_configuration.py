@@ -105,6 +105,8 @@ class BranchConfiguration(Document):
 			# Auto-set Module Profile to restrict sidebar modules
 			if selected_role == BRANCH_USER_ROLE:
 				_set_module_profile(u.user, "Branch User")
+			elif selected_role == "Damage User":
+				_set_module_profile(u.user, "Damage User")
 
 
 def create_permission(user, allow, value, is_default=0):
