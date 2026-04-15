@@ -5,7 +5,7 @@
  * - rmax-dashboard (home page)
  * - Sales Invoice, Quotation, Customer, Payment Entry
  * - Purchase Receipt, Purchase Invoice
- * - Material Request, Stock Transfer
+ * - Material Request, Stock Transfer, Damage Transfer
  * - Item, Item Price
  * - Reports: Stock Sales Report, Collection Report, Stock Balance, Stock Ledger, General Ledger
  * - Their own User profile
@@ -15,18 +15,6 @@
 (function () {
 	"use strict";
 
-	// Only restrict Branch Users (not admins)
-	if (
-		!frappe.user_roles ||
-		!frappe.user_roles.includes("Branch User") ||
-		frappe.user_roles.includes("System Manager") ||
-		frappe.user_roles.includes("Administrator") ||
-		frappe.user_roles.includes("Stock Manager")
-	) {
-		return;
-	}
-
-	// Allowed DocTypes for Branch User
 	var ALLOWED_DOCTYPES = [
 		"Sales Invoice",
 		"Quotation",
@@ -36,6 +24,7 @@
 		"Purchase Invoice",
 		"Material Request",
 		"Stock Transfer",
+		"Damage Transfer",
 		"Item",
 		"Item Price",
 		"Item Group",
@@ -48,7 +37,6 @@
 		"Branch Configuration",
 	];
 
-	// Allowed report names
 	var ALLOWED_REPORTS = [
 		"Stock Sales Report",
 		"Collection Report",
@@ -57,16 +45,34 @@
 		"General Ledger",
 	];
 
-	// Allowed page routes
 	var ALLOWED_PAGES = [
 		"rmax-dashboard",
 		"user-guide",
 		"print",
-		"user",
+		"printview",
 	];
 
+	function is_branch_user() {
+		// Check boot info (most reliable)
+		if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
+			var roles = frappe.boot.user.roles;
+			if (roles.indexOf("System Manager") !== -1) return false;
+			if (roles.indexOf("Administrator") !== -1) return false;
+			if (roles.indexOf("Stock Manager") !== -1) return false;
+			if (roles.indexOf("Branch User") !== -1) return true;
+		}
+		// Fallback to user_roles
+		if (frappe.user_roles && frappe.user_roles.length) {
+			if (frappe.user_roles.indexOf("System Manager") !== -1) return false;
+			if (frappe.user_roles.indexOf("Administrator") !== -1) return false;
+			if (frappe.user_roles.indexOf("Stock Manager") !== -1) return false;
+			if (frappe.user_roles.indexOf("Branch User") !== -1) return true;
+		}
+		return false;
+	}
+
 	function is_route_allowed(route) {
-		if (!route || !route.length) return true;
+		if (!route || !route.length) return false;
 
 		var first = (route[0] || "").toLowerCase();
 		var second = route[1] || "";
@@ -95,18 +101,18 @@
 			return false;
 		}
 
-		// Allow app/doctype patterns (URL style)
+		// Allow app/doctype patterns (URL style used by Frappe v15)
 		if (first === "app") {
-			var slug = (second || "").replace(/-/g, " ");
-			// Check if it maps to an allowed doctype
-			for (var m = 0; m < ALLOWED_DOCTYPES.length; m++) {
-				if (slug.toLowerCase() === ALLOWED_DOCTYPES[m].toLowerCase()) return true;
-			}
-			// Check allowed pages
+			// app/rmax-dashboard
 			for (var n = 0; n < ALLOWED_PAGES.length; n++) {
 				if (second === ALLOWED_PAGES[n]) return true;
 			}
-			// Allow query-report under app
+			// app/sales-invoice, app/sales-invoice/SI-00001
+			var slug = (second || "").replace(/-/g, " ");
+			for (var m = 0; m < ALLOWED_DOCTYPES.length; m++) {
+				if (slug.toLowerCase() === ALLOWED_DOCTYPES[m].toLowerCase()) return true;
+			}
+			// app/query-report/Stock Sales Report
 			if (second === "query-report" && route[2]) {
 				for (var p = 0; p < ALLOWED_REPORTS.length; p++) {
 					if (route[2] === ALLOWED_REPORTS[p]) return true;
@@ -115,69 +121,116 @@
 			return false;
 		}
 
-		// Block workspace, module, setup pages
-		if (first === "workspace" || first === "modules" || first === "setup-wizard") {
-			return false;
-		}
-
-		// Block everything else by default
+		// Block workspace, module, home, setup pages
 		return false;
 	}
 
-	// Intercept route changes
-	$(document).on("page-change", function () {
+	function enforce_route() {
+		if (!is_branch_user()) return;
 		var route = frappe.get_route();
 		if (!is_route_allowed(route)) {
 			frappe.set_route("rmax-dashboard");
 		}
-	});
+	}
 
-	// Hide sidebar modules that Branch User shouldn't see
-	frappe.after_ajax(function () {
-		_hide_sidebar_items();
-	});
+	function hide_sidebar() {
+		if (!is_branch_user()) return;
 
-	$(document).on("page-change", function () {
-		setTimeout(_hide_sidebar_items, 300);
-	});
+		// Hide ALL sidebar items, then show only allowed ones
+		var $sidebar = $(".desk-sidebar");
+		if (!$sidebar.length) return;
 
-	function _hide_sidebar_items() {
-		// Hide the main sidebar/module links
-		$(".desk-sidebar .sidebar-menu a").each(function () {
-			var href = $(this).attr("href") || "";
-			var text = $(this).text().trim();
+		// Hide everything in sidebar
+		$sidebar.find(".standard-sidebar-section").each(function () {
+			var $section = $(this);
+			var section_title = $section.find(".sidebar-section-header, .desk-sidebar-item.standard-sidebar-label").text().trim().toUpperCase();
 
-			// Keep only relevant modules
-			var keep = false;
-			var allowed_modules = [
-				"rmax-dashboard", "selling", "buying", "stock",
-				"accounts", "assets"
-			];
+			// Hide entire sections we don't want
+			$section.find(".desk-sidebar-item, .sidebar-item-container, a.desk-sidebar-item").each(function () {
+				var $item = $(this);
+				var text = $item.text().trim();
+				var href = ($item.attr("href") || $item.find("a").attr("href") || "").toLowerCase();
 
-			for (var i = 0; i < allowed_modules.length; i++) {
-				if (href.toLowerCase().indexOf(allowed_modules[i]) !== -1) {
-					keep = true;
-					break;
-				}
-			}
+				// Only keep specific items
+				var keep = false;
+				var allowed_sidebar = ["home"];
 
-			// Hide HR, Manufacturing, Settings, etc.
-			if (!keep && text) {
-				var hide_keywords = [
-					"HR", "Payroll", "Manufacturing", "Projects",
-					"Website", "Settings", "Integrations", "Users",
-					"Customization", "CRM", "Support", "Quality",
-					"Education", "Healthcare", "Agriculture", "Non Profit",
-					"Utilities", "ERPNext Settings", "Setup", "Build",
-					"Getting Started"
-				];
-				for (var j = 0; j < hide_keywords.length; j++) {
-					if (text.indexOf(hide_keywords[j]) !== -1) {
-						$(this).closest("li, .sidebar-item").hide();
-						return;
+				for (var i = 0; i < allowed_sidebar.length; i++) {
+					if (text.toLowerCase() === allowed_sidebar[i]) {
+						keep = true;
+						break;
 					}
 				}
+
+				// Check href for dashboard
+				if (href.indexOf("rmax-dashboard") !== -1) keep = true;
+
+				if (!keep) {
+					$item.hide();
+				}
+			});
+		});
+
+		// Also hide section headers for hidden sections
+		$sidebar.find(".standard-sidebar-section").each(function () {
+			var $section = $(this);
+			var visible_items = $section.find(".desk-sidebar-item:visible, .sidebar-item-container:visible").length;
+			if (visible_items === 0) {
+				$section.hide();
 			}
 		});
 	}
+
+	// === ENFORCE ON EVERY PAGE CHANGE ===
+	$(document).on("page-change", function () {
+		enforce_route();
+		setTimeout(hide_sidebar, 200);
+	});
+
+	// === ENFORCE ON INITIAL LOAD ===
+	// frappe.ready fires after boot data is loaded
+	$(document).ready(function () {
+		// Wait for frappe boot to be ready
+		var check_count = 0;
+		var check_interval = setInterval(function () {
+			check_count++;
+			if (check_count > 50) {
+				clearInterval(check_interval);
+				return;
+			}
+			if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
+				clearInterval(check_interval);
+				if (is_branch_user()) {
+					enforce_route();
+					hide_sidebar();
+					// Also override the Home default
+					if (frappe.get_route()[0] === "" || frappe.get_route()[0] === "Workspaces" ||
+						frappe.get_route()[0] === "workspaces" || frappe.get_route()[0] === "Home" ||
+						(frappe.get_route()[0] === "Workspace" && frappe.get_route()[1] === "Home")) {
+						frappe.set_route("rmax-dashboard");
+					}
+				}
+			}
+		}, 100);
+	});
+
+	// === OVERRIDE DEFAULT HOME PAGE ===
+	// Intercept frappe's set_default_route
+	var _original_set_route = frappe.set_route;
+	frappe.set_route = function () {
+		var args = Array.prototype.slice.call(arguments);
+		if (is_branch_user()) {
+			// If trying to go to Home/Workspace, redirect to dashboard
+			var target = "";
+			if (args.length === 1 && typeof args[0] === "string") {
+				target = args[0].toLowerCase();
+			} else if (args.length > 0 && typeof args[0] === "string") {
+				target = args[0].toLowerCase();
+			}
+			if (target === "" || target === "home" || target === "workspace" || target === "workspaces" || target === "workspace/home") {
+				args = ["rmax-dashboard"];
+			}
+		}
+		return _original_set_route.apply(frappe, args);
+	};
 })();

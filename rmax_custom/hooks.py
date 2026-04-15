@@ -88,6 +88,8 @@ role_home_page = {
 	"Stock User": "rmax-dashboard",
 }
 
+boot_session = "rmax_custom.boot.boot_session"
+
 # Generators
 # ----------
 
