@@ -86,6 +86,7 @@ doctype_list_js = {
 role_home_page = {
 	"Branch User": "rmax-dashboard",
 	"Stock User": "rmax-dashboard",
+	"Stock Manager": "rmax-dashboard",
 }
 
 boot_session = "rmax_custom.boot.boot_session"

@@ -1,12 +1,13 @@
 /**
- * RMAX: Branch User Access Restriction
+ * RMAX: Branch User / Stock User Access Restriction
  *
- * Branch Users can ONLY access:
+ * Restricted users (Branch User, Stock User) can ONLY access:
  * - rmax-dashboard (home page)
  * - Sales Invoice, Quotation, Customer, Payment Entry
  * - Purchase Receipt, Purchase Invoice
  * - Material Request, Stock Transfer, Damage Transfer
- * - Item, Item Price
+ * - Item, Item Price, Item Group
+ * - Stock Entry
  * - Reports: Stock Sales Report, Collection Report, Stock Balance, Stock Ledger, General Ledger
  * - Their own User profile
  *
@@ -28,6 +29,7 @@
 		"Item",
 		"Item Price",
 		"Item Group",
+		"Stock Entry",
 		"Address",
 		"Contact",
 		"File",
@@ -52,21 +54,31 @@
 		"printview",
 	];
 
-	function is_branch_user() {
+	/**
+	 * Returns true if user is a restricted user (Branch User or Stock User)
+	 * but NOT an admin/manager who should have full access.
+	 */
+	function is_restricted_user() {
+		var roles = _get_roles();
+		if (!roles) return false;
+		// Admins/managers bypass all restrictions
+		if (roles.indexOf("System Manager") !== -1) return false;
+		if (roles.indexOf("Administrator") !== -1) return false;
+		if (roles.indexOf("Stock Manager") !== -1) return false;
+		// Branch User or Stock User = restricted
+		if (roles.indexOf("Branch User") !== -1) return true;
+		if (roles.indexOf("Stock User") !== -1) return true;
+		return false;
+	}
+
+	function _get_roles() {
 		if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
-			var roles = frappe.boot.user.roles;
-			if (roles.indexOf("System Manager") !== -1) return false;
-			if (roles.indexOf("Administrator") !== -1) return false;
-			if (roles.indexOf("Stock Manager") !== -1) return false;
-			if (roles.indexOf("Branch User") !== -1) return true;
+			return frappe.boot.user.roles;
 		}
 		if (frappe.user_roles && frappe.user_roles.length) {
-			if (frappe.user_roles.indexOf("System Manager") !== -1) return false;
-			if (frappe.user_roles.indexOf("Administrator") !== -1) return false;
-			if (frappe.user_roles.indexOf("Stock Manager") !== -1) return false;
-			if (frappe.user_roles.indexOf("Branch User") !== -1) return true;
+			return frappe.user_roles;
 		}
-		return false;
+		return null;
 	}
 
 	function is_route_allowed(route) {
@@ -115,7 +127,7 @@
 	}
 
 	function enforce_route() {
-		if (!is_branch_user()) return;
+		if (!is_restricted_user()) return;
 		var route = frappe.get_route();
 
 		// Redirect home-like routes to dashboard
@@ -123,7 +135,8 @@
 		if (!route.length || first === "" || first === "workspaces" ||
 			first === "home" || first === "workspace" ||
 			(first === "workspace" && (route[1] || "").toLowerCase() === "home") ||
-			(first === "workspace" && (route[1] || "").toLowerCase() === "branch user")) {
+			(first === "workspace" && (route[1] || "").toLowerCase() === "branch user") ||
+			(first === "workspace" && (route[1] || "").toLowerCase() === "welcome workspace")) {
 			frappe.set_route("rmax-dashboard");
 			return;
 		}
@@ -134,7 +147,7 @@
 	}
 
 	function hide_sidebar() {
-		if (!is_branch_user()) return;
+		if (!is_restricted_user()) return;
 
 		var $sidebar = $(".desk-sidebar");
 		if (!$sidebar.length) return;
@@ -161,19 +174,17 @@
 
 	// === FIX LOGO HREF ===
 	function fix_logo_href() {
-		if (!is_branch_user()) return;
+		if (!is_restricted_user()) return;
 
 		$(".navbar-brand, .navbar-home").each(function () {
 			var $el = $(this);
-			// Change href so Frappe's router reads correct pathname on click
 			if ($el.attr("href") !== "/app/rmax-dashboard") {
 				$el.attr("href", "/app/rmax-dashboard");
 			}
-			// Also bind a direct click handler as fallback
 			if (!$el.data("rmax-bound")) {
 				$el.data("rmax-bound", true);
 				$el.on("click", function (e) {
-					if (!is_branch_user()) return;
+					if (!is_restricted_user()) return;
 					e.preventDefault();
 					e.stopPropagation();
 					frappe.set_route("rmax-dashboard");
@@ -185,7 +196,7 @@
 
 	// === ADD DASHBOARD BUTTON ===
 	function add_dashboard_nav() {
-		if (!is_branch_user()) return;
+		if (!is_restricted_user()) return;
 		if ($("#rmax-dash-nav-btn").length) return;
 
 		var $btn = $('<a id="rmax-dash-nav-btn" href="/app/rmax-dashboard" style="' +
@@ -218,7 +229,7 @@
 
 	// === APPLY ALL RESTRICTIONS ===
 	function apply_all() {
-		if (!is_branch_user()) return;
+		if (!is_restricted_user()) return;
 		enforce_route();
 		hide_sidebar();
 		fix_logo_href();
@@ -241,14 +252,15 @@
 			}
 			if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
 				clearInterval(check_interval);
-				if (is_branch_user()) {
+				if (is_restricted_user()) {
 					apply_all();
 
 					// Redirect if on home/workspace
 					var r = frappe.get_route();
 					if (!r.length || r[0] === "" || r[0] === "Workspaces" ||
 						r[0] === "workspaces" || r[0] === "Home" ||
-						(r[0] === "Workspace" && r[1] === "Home")) {
+						(r[0] === "Workspace" && r[1] === "Home") ||
+						(r[0] === "Workspace" && r[1] === "Welcome Workspace")) {
 						frappe.set_route("rmax-dashboard");
 					}
 				}
@@ -259,7 +271,7 @@
 	// Keep polling to fix the logo and add button
 	// Navbar is rendered async by Frappe, so we need to keep checking
 	setInterval(function () {
-		if (is_branch_user()) {
+		if (is_restricted_user()) {
 			fix_logo_href();
 			add_dashboard_nav();
 		}

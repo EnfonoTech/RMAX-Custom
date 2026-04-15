@@ -100,7 +100,11 @@ function render_dashboard(page, data) {
 
 	page.main.find('.pending-link').on('click', function() {
 		var name = $(this).data('name');
-		frappe.set_route('Form', 'Stock Transfer', name);
+		if ($(this).hasClass('mr-link')) {
+			frappe.set_route('Form', 'Material Request', name);
+		} else {
+			frappe.set_route('Form', 'Stock Transfer', name);
+		}
 	});
 }
 
@@ -186,14 +190,39 @@ function render_stock_dashboard(data) {
 	html += '<h3 class="section-title">Stock Actions</h3>';
 	html += '<div class="action-grid">';
 	html += action_card('shuffle', 'Stock Transfer', 'Create new transfer', 'new', 'Stock Transfer');
-	html += action_card('truck', 'Material Request', 'View requests', 'list', 'Material Request');
+	html += action_card('truck', 'New Material Request', 'Create request', 'new', 'Material Request');
+	html += action_card('list', 'Material Requests', 'View all requests', 'list', 'Material Request');
 	html += action_card('package', 'Purchase Receipt', 'Receive goods', 'list', 'Purchase Receipt');
 	html += action_card('list', 'Item', 'Manage items', 'list', 'Item');
 	html += action_card('layers', 'Stock Balance', 'Current stock levels', 'report', 'Stock Balance');
 	html += action_card('book-open', 'Stock Ledger', 'Stock transactions', 'report', 'Stock Ledger');
 	html += action_card('tag', 'Item Groups', 'Browse item groups', 'list', 'Item Group');
-	html += action_card('activity', 'Stock Movement', 'Movement report', 'report', 'Stock Ledger');
 	html += '</div>';
+
+	// Pending Material Requests
+	if (data.pending_mr_list && data.pending_mr_list.length > 0) {
+		html += '<h3 class="section-title">Pending Material Requests</h3>';
+		html += '<div class="pending-list">';
+		data.pending_mr_list.forEach(function(mr) {
+			var urgent_badge = mr.custom_is_urgent ? '<span class="mr-urgent-badge">URGENT</span>' : '';
+			html += '<div class="pending-item' + (mr.custom_is_urgent ? ' mr-urgent' : '') + '">';
+			html += '<div class="pending-info">';
+			html += '<a class="pending-link mr-link" data-name="' + frappe.utils.escape_html(mr.name) + '">';
+			html += frappe.utils.escape_html(mr.name) + '</a> ' + urgent_badge;
+			html += '<div class="pending-route">';
+			html += '<span class="wh-from">' + frappe.utils.escape_html(mr.set_from_warehouse || 'Any') + '</span>';
+			html += '<span class="route-arrow">→</span>';
+			html += '<span class="wh-to">' + frappe.utils.escape_html(mr.set_warehouse || 'Any') + '</span>';
+			html += '</div>';
+			html += '</div>';
+			html += '<div class="pending-meta">';
+			html += '<div class="pending-date">' + frappe.datetime.str_to_user(mr.transaction_date) + '</div>';
+			html += '<div class="pending-status">' + frappe.utils.escape_html(mr.status) + '</div>';
+			html += '</div>';
+			html += '</div>';
+		});
+		html += '</div>';
+	}
 
 	return html;
 }
@@ -559,6 +588,24 @@ function get_dashboard_css() {
 			margin-top: 3px;
 			text-transform: uppercase;
 			letter-spacing: 0.5px;
+		}
+
+		/* ─── Urgent MR Badge ──────────────────────── */
+		.rmax-dash .mr-urgent {
+			border-left: 3px solid #e94560;
+			background-color: #fff5f5;
+		}
+		.rmax-dash .mr-urgent-badge {
+			display: inline-block;
+			font-size: 9px;
+			font-weight: 700;
+			color: #fff;
+			background: #e94560;
+			padding: 1px 6px;
+			border-radius: 3px;
+			letter-spacing: 0.5px;
+			vertical-align: middle;
+			margin-left: 6px;
 		}
 
 		/* ─── Responsive ───────────────────────────── */

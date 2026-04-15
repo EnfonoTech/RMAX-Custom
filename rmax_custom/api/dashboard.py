@@ -142,6 +142,31 @@ def get_dashboard_data():
         )
         data["total_items"] = frappe.db.count("Item", {"disabled": 0})
 
+        # Pending Material Requests list (submitted, not fully fulfilled)
+        mr_filter = ""
+        mr_params = []
+        if warehouses and not is_admin:
+            placeholders = ", ".join(["%s"] * len(warehouses))
+            mr_filter = f"AND (mr.set_warehouse IN ({placeholders}) OR mr.set_from_warehouse IN ({placeholders}))"
+            mr_params = list(warehouses) + list(warehouses)
+
+        data["pending_mr_list"] = frappe.db.sql(
+            f"""
+            SELECT mr.name, mr.set_warehouse, mr.set_from_warehouse,
+                   mr.transaction_date, mr.owner, mr.custom_is_urgent,
+                   mr.material_request_type, mr.status
+            FROM `tabMaterial Request` mr
+            WHERE mr.docstatus = 1
+            AND mr.status IN ('Pending', 'Partially Ordered')
+            AND mr.material_request_type = 'Material Transfer'
+            {mr_filter}
+            ORDER BY mr.custom_is_urgent DESC, mr.transaction_date DESC
+            LIMIT 15
+        """,
+            tuple(mr_params) if mr_params else None,
+            as_dict=True,
+        )
+
     data["currency"] = (
         frappe.db.get_value("Company", company, "default_currency") or "SAR"
     )

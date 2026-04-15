@@ -52,6 +52,10 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     {"parent": "UOM", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Item Group", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Brand", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    # Page DocType — needed for rmax-dashboard custom page
+    {"parent": "Page", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    # Material Request — Stock Users need to create MRs
+    {"parent": "Material Request", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
 ]
 
 # Reports that Branch User / Stock User need access to
@@ -292,6 +296,7 @@ def restrict_core_workspaces():
 # Role home pages — Frappe uses Role.home_page to determine redirect after login
 ROLE_HOME_PAGES = {
     "Branch User": "rmax-dashboard",
+    "Stock User": "rmax-dashboard",
 }
 
 
