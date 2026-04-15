@@ -49,6 +49,7 @@ def after_migrate():
     """Set up Branch User role permissions after migration."""
     setup_branch_user_permissions()
     setup_branch_user_module_profile()
+    restrict_core_workspaces()
 
 
 def setup_branch_user_permissions():
@@ -97,10 +98,16 @@ def setup_branch_user_permissions():
 
 
 def setup_branch_user_module_profile():
-    """Create/update 'Branch User' Module Profile blocking all non-allowed modules."""
+    """Create/update 'Branch User' Module Profile and sync block_modules on all users.
+
+    This is the SINGLE SOURCE OF TRUTH for Branch User module restrictions.
+    On a fresh site, `bench migrate` calls this and everything is configured
+    automatically — no manual steps needed.
+    """
     all_modules = frappe.get_all("Module Def", pluck="name")
     blocked_modules = [m for m in all_modules if m not in BRANCH_USER_ALLOWED_MODULES]
 
+    # 1. Create/update the Module Profile
     if frappe.db.exists("Module Profile", "Branch User"):
         mp = frappe.get_doc("Module Profile", "Branch User")
         mp.block_modules = []
@@ -113,16 +120,71 @@ def setup_branch_user_module_profile():
 
     mp.save(ignore_permissions=True)
 
-    # Apply to all Branch Configuration users
+    # 2. Apply profile + sync block_modules on every Branch User
+    #    Uses direct DB to avoid user.save() failures (password validation etc.)
     branch_users = frappe.get_all(
-        "Branch Configuration User", pluck="user", distinct=True
+        "Branch Configuration User",
+        fields=["user", "role"],
+        distinct=True,
     )
-    for user_email in branch_users:
+    for row in branch_users:
+        user_email = row.user
+        user_role = row.get("role") or BRANCH_USER_ROLE
+
+        if user_role != BRANCH_USER_ROLE:
+            continue
         if not frappe.db.exists("User", user_email):
             continue
-        user_doc = frappe.get_doc("User", user_email)
-        if user_doc.module_profile != "Branch User":
-            user_doc.module_profile = "Branch User"
-            user_doc.save(ignore_permissions=True)
+
+        # Set module_profile on user (direct DB — no validation)
+        frappe.db.set_value("User", user_email, "module_profile", "Branch User")
+
+        # Sync block_modules child table
+        # Clear existing
+        frappe.db.delete("Block Module", {"parent": user_email, "parenttype": "User"})
+        # Insert blocked modules
+        for mod in blocked_modules:
+            frappe.get_doc({
+                "doctype": "Block Module",
+                "parent": user_email,
+                "parenttype": "User",
+                "parentfield": "block_modules",
+                "module": mod,
+            }).insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+# Frappe core workspaces that should be restricted to System Manager
+RESTRICTED_WORKSPACES = {
+    "Users": ["System Manager"],
+}
+
+
+def restrict_core_workspaces():
+    """Set roles on Frappe core workspaces so they don't show for Branch Users.
+
+    The 'Users' workspace is under Core module (which we allow for basic
+    desk functionality) but should only be visible to System Manager.
+    """
+    for ws_name, allowed_roles in RESTRICTED_WORKSPACES.items():
+        if not frappe.db.exists("Workspace", ws_name):
+            continue
+
+        # Clear existing roles for this workspace
+        frappe.db.delete(
+            "Has Role",
+            {"parent": ws_name, "parenttype": "Workspace"},
+        )
+
+        # Insert allowed roles
+        for role in allowed_roles:
+            frappe.get_doc({
+                "doctype": "Has Role",
+                "parent": ws_name,
+                "parenttype": "Workspace",
+                "parentfield": "roles",
+                "role": role,
+            }).insert(ignore_permissions=True)
 
     frappe.db.commit()
