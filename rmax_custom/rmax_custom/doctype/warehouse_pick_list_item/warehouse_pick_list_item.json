@@ -1,0 +1,102 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-15 17:30:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "item_name",
+  "qty_to_pick",
+  "available_qty",
+  "is_urgent",
+  "column_break_01",
+  "uom",
+  "source_documents"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1,
+   "columns": 2
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name",
+   "read_only": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "qty_to_pick",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty to Pick",
+   "reqd": 1,
+   "bold": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "available_qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Available Qty",
+   "read_only": 1,
+   "bold": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "is_urgent",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Urgent",
+   "read_only": 1,
+   "bold": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "column_break_01",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fetch_from": "item_code.stock_uom",
+   "fieldname": "uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "reqd": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "source_documents",
+   "fieldtype": "Small Text",
+   "label": "Source Documents",
+   "read_only": 1,
+   "description": "MR/ST references and quantities"
+  }
+ ],
+ "grid_page_length": 50,
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-15 17:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "Warehouse Pick List Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

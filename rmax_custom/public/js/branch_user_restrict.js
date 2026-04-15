@@ -30,6 +30,7 @@
 		"Item Price",
 		"Item Group",
 		"Stock Entry",
+		"Warehouse Pick List",
 		"Address",
 		"Contact",
 		"File",

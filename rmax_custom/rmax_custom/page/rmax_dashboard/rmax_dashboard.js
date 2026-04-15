@@ -168,6 +168,8 @@ function render_stock_dashboard(data) {
 	// Quick Actions
 	html += '<h3 class="section-title">Stock Actions</h3>';
 	html += '<div class="action-grid">';
+	html += action_card('clipboard', 'New Pick List', 'Create pick list', 'new', 'Warehouse Pick List');
+	html += action_card('clipboard', 'Pick Lists', 'View all pick lists', 'list', 'Warehouse Pick List');
 	html += action_card('shuffle', 'Stock Transfer', 'Create new transfer', 'new', 'Stock Transfer');
 	html += action_card('truck', 'New Material Request', 'Create request', 'new', 'Material Request');
 	html += action_card('list', 'Material Requests', 'View all requests', 'list', 'Material Request');
@@ -283,7 +285,8 @@ var ICONS = {
 	'user': '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
 	'list': '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
 	'tag': '<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
-	'activity': '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>'
+	'activity': '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+	'clipboard': '<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>'
 };
 
 function get_icon_svg(name) {
