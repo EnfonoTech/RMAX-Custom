@@ -61,7 +61,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.posting_date = %s AND si.docstatus = 1 {wh_filter}
             """,
-                [today] + wh_params,
+                tuple([today] + wh_params),
             )[0][0]
             or 0
         )
@@ -75,7 +75,7 @@ def get_dashboard_data():
                 WHERE si.posting_date >= %s AND si.posting_date <= %s
                 AND si.docstatus = 1 {wh_filter}
             """,
-                [first_of_month, today] + wh_params,
+                tuple([first_of_month, today] + wh_params),
             )[0][0]
             or 0
         )
@@ -88,7 +88,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.posting_date >= %s AND si.docstatus = 1 {wh_filter}
             """,
-                [first_of_month] + wh_params,
+                tuple([first_of_month] + wh_params),
             )[0][0]
             or 0
         )
@@ -106,7 +106,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.docstatus = 1 AND si.outstanding_amount > 0 {wh_filter}
             """,
-                wh_params or None,
+                tuple(wh_params) if wh_params else None,
             )[0][0]
             or 0
         )
@@ -128,7 +128,7 @@ def get_dashboard_data():
             ORDER BY transaction_date DESC
             LIMIT 10
         """,
-            st_params or None,
+            tuple(st_params) if st_params else None,
             as_dict=True,
         )
 
