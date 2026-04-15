@@ -50,6 +50,7 @@ def after_migrate():
     setup_branch_user_permissions()
     setup_branch_user_module_profile()
     restrict_core_workspaces()
+    setup_role_home_pages()
 
 
 def setup_branch_user_permissions():
@@ -194,5 +195,24 @@ def restrict_core_workspaces():
                 "parentfield": "roles",
                 "role": role,
             }).insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+# Role home pages — Frappe uses Role.home_page to determine redirect after login
+ROLE_HOME_PAGES = {
+    "Branch User": "rmax-dashboard",
+}
+
+
+def setup_role_home_pages():
+    """Set home_page on roles so users land on the correct page after login.
+
+    Frappe checks Role.home_page during get_home_page() and redirects
+    accordingly. This is the proper Frappe mechanism — no JS hacks needed.
+    """
+    for role_name, home_page in ROLE_HOME_PAGES.items():
+        if frappe.db.exists("Role", role_name):
+            frappe.db.set_value("Role", role_name, "home_page", home_page)
 
     frappe.db.commit()
