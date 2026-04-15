@@ -34,11 +34,13 @@ BRANCH_USER_PERMISSIONS = [
     {"parent": "Warehouse", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     {"parent": "Company", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Supplier", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    # Page DocType — needed for rmax-dashboard custom page
+    {"parent": "Page", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
 ]
 
 
 BRANCH_USER_ALLOWED_MODULES = [
-    "Selling", "Buying", "Stock", "Accounts", "Rmax Custom",
+    "Rmax Custom",
     "Desk", "Core", "Workflow", "Printing", "Contacts", "Communication",
 ]
 
