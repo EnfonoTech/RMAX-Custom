@@ -49,7 +49,7 @@ def get_pending_material_requests(warehouse):
 		AND mr.status IN ('Pending', 'Partially Ordered')
 		AND mr.material_request_type = 'Material Transfer'
 		AND (mr.set_from_warehouse = %s OR mri.from_warehouse = %s)
-		ORDER BY has_urgent DESC, mr.transaction_date ASC
+		ORDER BY has_urgent DESC, mr.name DESC
 		""",
 		(warehouse, warehouse),
 		as_dict=True,
@@ -88,7 +88,7 @@ def get_pending_stock_transfers(warehouse):
 		WHERE st.docstatus = 0
 		AND st.workflow_state = 'Waiting for Approval'
 		AND st.set_source_warehouse = %s
-		ORDER BY st.transaction_date ASC
+		ORDER BY st.name DESC
 		""",
 		(warehouse,),
 		as_dict=True,

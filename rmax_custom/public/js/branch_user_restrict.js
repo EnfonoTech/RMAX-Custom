@@ -232,6 +232,80 @@
 		}
 	}
 
+	// === HIDE COST COLUMNS IN STOCK BALANCE REPORT ===
+	var COST_COLUMNS_TO_HIDE = [
+		"opening_value", "val_rate", "in_val", "out_val", "bal_val",
+		"valuation_rate", "stock_value", "stock_value_difference",
+		"opening_qty_value"  // cover various naming conventions
+	];
+
+	function hide_cost_columns_in_reports() {
+		if (!is_restricted_user()) return;
+		var route = frappe.get_route();
+		if (!route || route[0] !== "query-report") return;
+
+		var report_name = route[1] || "";
+		// Apply to Stock Balance and Stock Ledger reports
+		if (report_name !== "Stock Balance" && report_name !== "Stock Ledger") return;
+
+		// Wait for report to render, then hide columns
+		var attempts = 0;
+		var interval = setInterval(function () {
+			attempts++;
+			if (attempts > 30) { clearInterval(interval); return; }
+
+			var report = frappe.query_report;
+			if (!report || !report.columns || !report.columns.length) return;
+
+			clearInterval(interval);
+
+			// Hide cost-related columns
+			var changed = false;
+			report.columns.forEach(function (col) {
+				var id = (col.fieldname || col.id || "").toLowerCase();
+				var label = (col.label || col.name || "").toLowerCase();
+				var is_cost = false;
+
+				for (var i = 0; i < COST_COLUMNS_TO_HIDE.length; i++) {
+					if (id === COST_COLUMNS_TO_HIDE[i]) { is_cost = true; break; }
+				}
+				// Also match by label keywords
+				if (!is_cost && (
+					label.indexOf("value") !== -1 ||
+					label.indexOf("valuation") !== -1 ||
+					label.indexOf("rate") !== -1
+				)) {
+					// Only hide value/rate columns, not qty-related
+					if (label.indexOf("qty") === -1 && label.indexOf("quantity") === -1) {
+						is_cost = true;
+					}
+				}
+
+				if (is_cost && !col.hidden) {
+					col.hidden = 1;
+					changed = true;
+				}
+			});
+
+			if (changed) {
+				report.render_datatable();
+			}
+		}, 300);
+	}
+
+	// === FIX COMPANY DEFAULT FOR RESTRICTED USERS ===
+	function fix_company_default() {
+		if (!is_restricted_user()) return;
+		// If global default is a company user doesn't have access to,
+		// override with user's permitted company from boot defaults
+		var user_company = (frappe.boot.user_default_company
+			|| (frappe.defaults && frappe.defaults.get_user_default("Company"))
+			|| "");
+		if (user_company) {
+			frappe.sys_defaults.company = user_company;
+		}
+	}
+
 	// === APPLY ALL RESTRICTIONS ===
 	function apply_all() {
 		if (!is_restricted_user()) return;
@@ -239,6 +313,7 @@
 		hide_sidebar();
 		fix_logo_href();
 		add_dashboard_nav();
+		hide_cost_columns_in_reports();
 	}
 
 	// === ENFORCE ON EVERY PAGE CHANGE ===
@@ -258,6 +333,7 @@
 			if (frappe.boot && frappe.boot.user && frappe.boot.user.roles) {
 				clearInterval(check_interval);
 				if (is_restricted_user()) {
+					fix_company_default();
 					apply_all();
 
 					// Redirect if on home/workspace
