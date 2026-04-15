@@ -138,6 +138,7 @@
 		var first = (route[0] || "").toLowerCase();
 		if (!route.length || first === "" || first === "workspaces" ||
 			first === "home" || first === "workspace" ||
+			first === "welcome-workspace" ||
 			(first === "workspace" && (route[1] || "").toLowerCase() === "home") ||
 			(first === "workspace" && (route[1] || "").toLowerCase() === "branch user") ||
 			(first === "workspace" && (route[1] || "").toLowerCase() === "welcome workspace")) {
@@ -263,6 +264,7 @@
 					var r = frappe.get_route();
 					if (!r.length || r[0] === "" || r[0] === "Workspaces" ||
 						r[0] === "workspaces" || r[0] === "Home" ||
+						r[0] === "welcome-workspace" ||
 						(r[0] === "Workspace" && r[1] === "Home") ||
 						(r[0] === "Workspace" && r[1] === "Welcome Workspace")) {
 						frappe.set_route("rmax-dashboard");
