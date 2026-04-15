@@ -118,6 +118,7 @@ def setup_branch_user_module_profile():
     for mod in blocked_modules:
         mp.append("block_modules", {"module": mod})
 
+    mp.flags.ignore_document_lock = True
     mp.save(ignore_permissions=True)
 
     # 2. Apply profile + sync block_modules on every Branch User
