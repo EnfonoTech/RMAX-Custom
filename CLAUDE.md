@@ -62,6 +62,8 @@ curl -s -X POST \
 | `stock_transfer.py` | Workflow validation: branch-based approval, self-approval prevention |
 | `material_request.py` | APIs: can_create_stock_transfer, create_stock_transfer_from_mr |
 | `material_request_doctype.js` | doctype_js: hide standard buttons, add Stock Transfer button |
+| `warehouse_pick_list.py` | Warehouse Pick List: get_pending_items API, mark_completed |
+| `warehouse_pick_list.js` | Get Items button, available qty color-coding, urgent highlights |
 
 ### Permission System (5 Layers)
 
