@@ -163,12 +163,22 @@
 	function fix_logo_href() {
 		if (!is_branch_user()) return;
 
-		// Change the actual href attribute on the logo link
 		$(".navbar-brand, .navbar-home").each(function () {
 			var $el = $(this);
-			var href = $el.attr("href") || "";
-			if (href !== "/app/rmax-dashboard") {
+			// Change href so Frappe's router reads correct pathname on click
+			if ($el.attr("href") !== "/app/rmax-dashboard") {
 				$el.attr("href", "/app/rmax-dashboard");
+			}
+			// Also bind a direct click handler as fallback
+			if (!$el.data("rmax-bound")) {
+				$el.data("rmax-bound", true);
+				$el.on("click", function (e) {
+					if (!is_branch_user()) return;
+					e.preventDefault();
+					e.stopPropagation();
+					frappe.set_route("rmax-dashboard");
+					return false;
+				});
 			}
 		});
 	}
@@ -187,6 +197,12 @@
 			'transition:all 0.15s ease;' +
 			'">← Dashboard</a>');
 
+		$btn.on("click", function (e) {
+			e.preventDefault();
+			e.stopPropagation();
+			frappe.set_route("rmax-dashboard");
+			return false;
+		});
 		$btn.on("mouseenter", function () {
 			$(this).css({ "background": "#e94560", "color": "#fff" });
 		});
