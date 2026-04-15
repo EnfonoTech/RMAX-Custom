@@ -1,11 +1,8 @@
 /**
  * RMAX Custom: Sales Invoice List View
  *
- * Standard filters (Grand Total, Total Qty, Mobile No) are added via
- * Property Setters (in_standard_filter=1) — no JS needed for those.
- *
- * When is_return=1 filter is active, the "+ Add" button becomes "+ New Credit Note"
- * and creates a Sales Invoice with is_return=1 pre-set.
+ * When is_return=1 filter is active, the "+ Add" button becomes "New Credit Note"
+ * and prompts for the original invoice to create a proper return.
  */
 frappe.listview_settings["Sales Invoice"] = frappe.listview_settings["Sales Invoice"] || {};
 
@@ -43,53 +40,74 @@ frappe.listview_settings["Sales Invoice"].onload = function (listview) {
     }
 };
 
-// refresh fires AFTER every list render — this is where we override the primary action
-// so Frappe's own set_primary_action doesn't stomp our button
 frappe.listview_settings["Sales Invoice"].refresh = function (listview) {
     if (_orig_si_refresh) _orig_si_refresh(listview);
 
-    // Check if is_return filter is active
-    if (_is_return_filter_active(listview)) {
+    if (_si_is_return_filter_active(listview)) {
         listview.page.set_primary_action(
             __("New Credit Note"),
             function () {
-                frappe.new_doc("Sales Invoice");
-                _wait_and_set_return("Sales Invoice");
+                _show_return_dialog("Sales Invoice", "Credit Note");
             }
         );
     }
 };
 
-function _is_return_filter_active(listview) {
-    // Check applied filters
+function _si_is_return_filter_active(listview) {
     var filters = listview.filter_area ? listview.filter_area.get() : [];
     for (var i = 0; i < filters.length; i++) {
-        if (filters[i][1] === "is_return" && filters[i][3] == 1) {
-            return true;
-        }
+        if (filters[i][1] === "is_return" && filters[i][3] == 1) return true;
     }
-    // Also check URL route
     var route = frappe.get_route();
     if (route && route.length > 2) {
         for (var j = 2; j < route.length; j++) {
-            if ((route[j] || "").indexOf("is_return=1") !== -1) {
-                return true;
-            }
+            if ((route[j] || "").indexOf("is_return=1") !== -1) return true;
         }
     }
     return false;
 }
 
-function _wait_and_set_return(doctype) {
-    // Wait for the new form to fully load, then tick is_return
-    var attempts = 0;
-    var check = setInterval(function () {
-        attempts++;
-        if (attempts > 50) { clearInterval(check); return; }
-        if (cur_frm && cur_frm.doc.doctype === doctype && cur_frm.doc.__islocal) {
-            clearInterval(check);
-            cur_frm.set_value("is_return", 1);
-            cur_frm.dirty();
+function _show_return_dialog(doctype, label) {
+    var d = new frappe.ui.Dialog({
+        title: __("Create {0}", [__(label)]),
+        fields: [
+            {
+                fieldname: "source_invoice",
+                fieldtype: "Link",
+                label: __("Original {0}", [__(doctype)]),
+                options: doctype,
+                reqd: 1,
+                get_query: function () {
+                    return {
+                        filters: {
+                            docstatus: 1,
+                            is_return: 0,
+                            company: frappe.defaults.get_default("company"),
+                        }
+                    };
+                },
+                description: __("Select the original invoice to create a return against")
+            }
+        ],
+        primary_action_label: __("Create"),
+        primary_action: function (values) {
+            d.hide();
+            frappe.call({
+                method: "erpnext.accounts.doctype."
+                    + frappe.model.scrub(doctype) + "."
+                    + frappe.model.scrub(doctype)
+                    + ".make_sales_return",
+                args: { source_name: values.source_invoice },
+                freeze: true,
+                freeze_message: __("Creating {0}...", [__(label)]),
+                callback: function (r) {
+                    if (r.message) {
+                        var doc = frappe.model.sync(r.message)[0];
+                        frappe.set_route("Form", doc.doctype, doc.name);
+                    }
+                }
+            });
         }
-    }, 100);
+    });
+    d.show();
 }
