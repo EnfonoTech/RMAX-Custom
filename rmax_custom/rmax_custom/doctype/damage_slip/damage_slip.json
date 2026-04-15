@@ -49,6 +49,7 @@
   {
    "fieldname": "company",
    "fieldtype": "Link",
+   "ignore_user_permissions": 1,
    "label": "Company",
    "options": "Company",
    "reqd": 1
@@ -62,6 +63,7 @@
    "description": "Warehouse where damage occurred",
    "fieldname": "branch_warehouse",
    "fieldtype": "Link",
+   "ignore_user_permissions": 1,
    "in_list_view": 1,
    "label": "Branch Warehouse",
    "options": "Warehouse",
