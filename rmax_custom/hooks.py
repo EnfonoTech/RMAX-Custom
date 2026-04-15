@@ -289,10 +289,7 @@ fixtures = [
     "Workflow State",
     "Workflow Action Master",
     "Number Card",
-    {
-        "dt": "Module Profile",
-        "filters": [["name", "in", ["Branch User"]]]
-    },
+    # Module Profile managed by setup.py after_migrate (direct DB to avoid DocumentLockedError)
     {
         "dt": "Role",
         "filters": [["name", "in", ["Branch User"]]]
