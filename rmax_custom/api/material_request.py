@@ -1,6 +1,27 @@
+import json
+
 import frappe
 from frappe.utils import nowdate, flt, add_days
 from frappe import _
+
+
+@frappe.whitelist()
+def get_available_qty_for_items(items, source_warehouse, target_warehouse):
+    """Get available qty at source and target warehouses for a list of item codes.
+    Returns dict: {item_code: {source: qty, target: qty}}
+    """
+    item_codes = json.loads(items) if isinstance(items, str) else items
+    result = {}
+    for item_code in item_codes:
+        src_qty = 0.0
+        tgt_qty = 0.0
+        if source_warehouse:
+            src_qty = flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": source_warehouse}, "actual_qty"))
+        if target_warehouse:
+            tgt_qty = flt(frappe.db.get_value("Bin", {"item_code": item_code, "warehouse": target_warehouse}, "actual_qty"))
+        result[item_code] = {"source": src_qty, "target": tgt_qty}
+    return result
+
 
 @frappe.whitelist()
 def create_material_request(item_code, from_warehouse, to_warehouse, qty, schedule_date, material_request_type, company):

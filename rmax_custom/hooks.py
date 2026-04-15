@@ -325,6 +325,8 @@ fixtures = [
                     # Material Request
                     "Material Request-custom_is_urgent",
                     "Material Request Item-custom_is_urgent",
+                    "Material Request Item-custom_source_available_qty",
+                    "Material Request Item-custom_target_available_qty",
                 ]
             ]
         ]
