@@ -102,6 +102,10 @@ class BranchConfiguration(Document):
 			selected_role = u.get("role") or BRANCH_USER_ROLE
 			_assign_role(u.user, selected_role)
 
+			# Auto-set Module Profile to restrict sidebar modules
+			if selected_role == BRANCH_USER_ROLE:
+				_set_module_profile(u.user, "Branch User")
+
 
 def create_permission(user, allow, value, is_default=0):
 	if not value:
@@ -180,6 +184,15 @@ def _assign_role(user, role):
 		"parentfield": "roles",
 		"role": role,
 	}).insert(ignore_permissions=True)
+
+
+def _set_module_profile(user, profile_name):
+	"""Set the Module Profile on a user if not already set."""
+	if not frappe.db.exists("Module Profile", profile_name):
+		return
+	current = frappe.db.get_value("User", user, "module_profile")
+	if current != profile_name:
+		frappe.db.set_value("User", user, "module_profile", profile_name)
 
 
 def _maybe_remove_role(user, role, exclude_branch=None):

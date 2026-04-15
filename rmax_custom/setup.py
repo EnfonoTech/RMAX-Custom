@@ -37,9 +37,16 @@ BRANCH_USER_PERMISSIONS = [
 ]
 
 
+BRANCH_USER_ALLOWED_MODULES = [
+    "Selling", "Buying", "Stock", "Accounts", "Rmax Custom",
+    "Desk", "Core", "Workflow", "Printing", "Contacts", "Communication",
+]
+
+
 def after_migrate():
     """Set up Branch User role permissions after migration."""
     setup_branch_user_permissions()
+    setup_branch_user_module_profile()
 
 
 def setup_branch_user_permissions():
@@ -83,5 +90,37 @@ def setup_branch_user_permissions():
                 **{k: v for k, v in perm.items() if k != "parent"},
             })
             doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def setup_branch_user_module_profile():
+    """Create/update 'Branch User' Module Profile blocking all non-allowed modules."""
+    all_modules = frappe.get_all("Module Def", pluck="name")
+    blocked_modules = [m for m in all_modules if m not in BRANCH_USER_ALLOWED_MODULES]
+
+    if frappe.db.exists("Module Profile", "Branch User"):
+        mp = frappe.get_doc("Module Profile", "Branch User")
+        mp.block_modules = []
+    else:
+        mp = frappe.new_doc("Module Profile")
+        mp.module_profile_name = "Branch User"
+
+    for mod in blocked_modules:
+        mp.append("block_modules", {"module": mod})
+
+    mp.save(ignore_permissions=True)
+
+    # Apply to all Branch Configuration users
+    branch_users = frappe.get_all(
+        "Branch Configuration User", pluck="user", distinct=True
+    )
+    for user_email in branch_users:
+        if not frappe.db.exists("User", user_email):
+            continue
+        user_doc = frappe.get_doc("User", user_email)
+        if user_doc.module_profile != "Branch User":
+            user_doc.module_profile = "Branch User"
+            user_doc.save(ignore_permissions=True)
 
     frappe.db.commit()
