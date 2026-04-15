@@ -6,5 +6,14 @@
     "desk_access": 1,
     "is_custom": 1,
     "disabled": 0
+  },
+  {
+    "doctype": "Role",
+    "name": "Damage User",
+    "role_name": "Damage User",
+    "desk_access": 1,
+    "is_custom": 1,
+    "disabled": 0,
+    "home_page": "rmax-dashboard"
   }
 ]

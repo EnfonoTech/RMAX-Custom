@@ -43,6 +43,10 @@ BRANCH_USER_PERMISSIONS = [
     {"parent": "Item Group", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Brand", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Item Price", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    # Damage workflow DocTypes
+    {"parent": "Damage Slip", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
 ]
 
 
@@ -62,6 +66,34 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     {"parent": "Stock Transfer", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
     # Warehouse Pick List — picking operations
     {"parent": "Warehouse Pick List", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
+    # Damage workflow DocTypes
+    {"parent": "Damage Slip", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 0, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+]
+
+
+DAMAGE_USER_ROLE = "Damage User"
+
+# DocType permissions for Damage User
+DAMAGE_USER_PERMISSIONS = [
+    {"parent": "Damage Slip", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 0, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "Item", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Warehouse", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "Company", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Stock Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Page", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "UOM", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Item Group", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Brand", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Account", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+]
+
+# Purchase Manager permissions for Supplier Code master
+PURCHASE_MANAGER_SUPPLIER_CODE_PERM = [
+    {"parent": "Supplier Code", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 1, "print": 1, "email": 0, "report": 1, "export": 1, "share": 1},
 ]
 
 # Reports that Branch User / Stock User need access to
@@ -81,8 +113,11 @@ def after_migrate():
     """Set up Branch User role permissions after migration."""
     setup_branch_user_permissions()
     setup_stock_user_extra_permissions()
+    setup_damage_user_permissions()
+    setup_purchase_manager_supplier_code()
     setup_report_role_grants()
     setup_branch_user_module_profile()
+    setup_damage_user_module_profile()
     restrict_core_workspaces()
     setup_role_home_pages()
 
@@ -303,6 +338,7 @@ def restrict_core_workspaces():
 ROLE_HOME_PAGES = {
     "Branch User": "rmax-dashboard",
     "Stock User": "rmax-dashboard",
+    "Damage User": "rmax-dashboard",
 }
 
 
@@ -315,5 +351,99 @@ def setup_role_home_pages():
     for role_name, home_page in ROLE_HOME_PAGES.items():
         if frappe.db.exists("Role", role_name):
             frappe.db.set_value("Role", role_name, "home_page", home_page)
+
+    frappe.db.commit()
+
+
+def setup_damage_user_permissions():
+    """Create Custom DocPerm records for Damage User role."""
+    if not frappe.db.exists("Role", DAMAGE_USER_ROLE):
+        return
+
+    for perm in DAMAGE_USER_PERMISSIONS:
+        doctype = perm["parent"]
+        existing = frappe.db.exists("Custom DocPerm", {
+            "parent": doctype,
+            "role": DAMAGE_USER_ROLE,
+            "permlevel": 0,
+        })
+        if existing:
+            frappe.db.set_value("Custom DocPerm", existing, {
+                k: v for k, v in perm.items() if k != "parent"
+            })
+        else:
+            doc = frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": DAMAGE_USER_ROLE,
+                "permlevel": 0,
+                **{k: v for k, v in perm.items() if k != "parent"},
+            })
+            doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def setup_purchase_manager_supplier_code():
+    """Give Purchase Manager full control over Supplier Code."""
+    role = "Purchase Manager"
+    if not frappe.db.exists("Role", role):
+        return
+
+    for perm in PURCHASE_MANAGER_SUPPLIER_CODE_PERM:
+        doctype = perm["parent"]
+        existing = frappe.db.exists("Custom DocPerm", {
+            "parent": doctype,
+            "role": role,
+            "permlevel": 0,
+        })
+        if existing:
+            frappe.db.set_value("Custom DocPerm", existing, {
+                k: v for k, v in perm.items() if k != "parent"
+            })
+        else:
+            doc = frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 0,
+                **{k: v for k, v in perm.items() if k != "parent"},
+            })
+            doc.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+DAMAGE_USER_ALLOWED_MODULES = [
+    "Rmax Custom",
+    "Desk", "Core", "Workflow", "Printing",
+]
+
+
+def setup_damage_user_module_profile():
+    """Create/update 'Damage User' Module Profile."""
+    all_modules = frappe.get_all("Module Def", pluck="name")
+    blocked_modules = [m for m in all_modules if m not in DAMAGE_USER_ALLOWED_MODULES]
+
+    if not frappe.db.exists("Module Profile", "Damage User"):
+        frappe.db.sql(
+            "INSERT INTO `tabModule Profile` (name, module_profile_name, owner, creation, modified, modified_by, docstatus)"
+            " VALUES ('Damage User', 'Damage User', 'Administrator', NOW(), NOW(), 'Administrator', 0)"
+        )
+
+    frappe.db.delete("Block Module", {"parent": "Damage User", "parenttype": "Module Profile"})
+
+    for mod in blocked_modules:
+        frappe.get_doc({
+            "doctype": "Block Module",
+            "parent": "Damage User",
+            "parenttype": "Module Profile",
+            "parentfield": "block_modules",
+            "module": mod,
+        }).db_insert()
 
     frappe.db.commit()

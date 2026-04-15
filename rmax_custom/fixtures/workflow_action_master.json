@@ -40,5 +40,19 @@
   "modified": "2026-04-14 20:00:00.000000",
   "name": "Check & Approve",
   "workflow_action_name": "Check & Approve"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2026-04-15 20:00:00.000000",
+  "name": "Send for Inspection",
+  "workflow_action_name": "Send for Inspection"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow Action Master",
+  "modified": "2026-04-15 20:00:00.000000",
+  "name": "Resubmit",
+  "workflow_action_name": "Resubmit"
  }
 ]

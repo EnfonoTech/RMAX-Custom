@@ -87,6 +87,7 @@ role_home_page = {
 	"Branch User": "rmax-dashboard",
 	"Stock User": "rmax-dashboard",
 	"Stock Manager": "rmax-dashboard",
+	"Damage User": "rmax-dashboard",
 }
 
 boot_session = "rmax_custom.boot.boot_session"
@@ -155,6 +156,8 @@ permission_query_conditions = {
 	"Quotation": "rmax_custom.branch_filters.quotation_permission_query",
 	"Stock Transfer": "rmax_custom.branch_filters.stock_transfer_permission_query",
 	"Material Request": "rmax_custom.branch_filters.material_request_permission_query",
+	"Damage Slip": "rmax_custom.branch_filters.damage_slip_permission_query",
+	"Damage Transfer": "rmax_custom.branch_filters.damage_transfer_permission_query",
 }
 
 # DocType Class
@@ -293,7 +296,7 @@ fixtures = [
     # Module Profile managed by setup.py after_migrate (direct DB to avoid DocumentLockedError)
     {
         "dt": "Role",
-        "filters": [["name", "in", ["Branch User"]]]
+        "filters": [["name", "in", ["Branch User", "Damage User"]]]
     },
     {
         "dt": "Custom Field",
@@ -327,6 +330,10 @@ fixtures = [
                     "Material Request Item-custom_is_urgent",
                     "Material Request Item-custom_source_available_qty",
                     "Material Request Item-custom_target_available_qty",
+
+                    # Company — Damage workflow config
+                    "Company-custom_damage_warehouse",
+                    "Company-custom_damage_loss_account",
                 ]
             ]
         ]

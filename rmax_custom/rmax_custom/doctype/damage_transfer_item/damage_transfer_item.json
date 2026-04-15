@@ -1,0 +1,137 @@
+{
+ "actions": [],
+ "creation": "2026-04-15 19:30:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_code",
+  "item_name",
+  "qty",
+  "stock_uom",
+  "column_break_1",
+  "damage_category",
+  "supplier_code",
+  "column_break_2",
+  "images",
+  "image_2",
+  "image_3",
+  "remarks",
+  "section_break_ref",
+  "damage_slip",
+  "damage_slip_item"
+ ],
+ "fields": [
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Item Code",
+   "options": "Item",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item_code.item_name",
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qty",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Qty",
+   "reqd": 1
+  },
+  {
+   "fetch_from": "item_code.stock_uom",
+   "fieldname": "stock_uom",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "UOM",
+   "options": "UOM",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Can be updated during inspection",
+   "fieldname": "damage_category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Damage Category",
+   "options": "\nGlass or Body Broken\nFlickering\nDriver Damage\nSensor Damage\nLED Damage\nOther",
+   "reqd": 1
+  },
+  {
+   "description": "Set during warehouse inspection",
+   "fieldname": "supplier_code",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Supplier Code",
+   "options": "Supplier Code"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "description": "Upload damage photos",
+   "fieldname": "images",
+   "fieldtype": "Attach Image",
+   "label": "Image 1"
+  },
+  {
+   "fieldname": "image_2",
+   "fieldtype": "Attach Image",
+   "label": "Image 2"
+  },
+  {
+   "fieldname": "image_3",
+   "fieldtype": "Attach Image",
+   "label": "Image 3"
+  },
+  {
+   "fieldname": "remarks",
+   "fieldtype": "Small Text",
+   "label": "Remarks"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "section_break_ref",
+   "fieldtype": "Section Break",
+   "label": "Reference"
+  },
+  {
+   "description": "Source Damage Slip (if any)",
+   "fieldname": "damage_slip",
+   "fieldtype": "Link",
+   "label": "Damage Slip",
+   "no_copy": 1,
+   "options": "Damage Slip",
+   "read_only": 1
+  },
+  {
+   "fieldname": "damage_slip_item",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Damage Slip Item",
+   "no_copy": 1,
+   "read_only": 1
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-15 19:30:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "Damage Transfer Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

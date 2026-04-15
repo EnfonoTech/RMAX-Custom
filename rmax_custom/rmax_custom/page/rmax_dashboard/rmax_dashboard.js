@@ -38,6 +38,9 @@ function render_dashboard(page, data) {
 		var branch = data.branch_name || 'Branch';
 		html += '<h2 class="dash-title">' + frappe.utils.escape_html(branch) + ' <span class="dash-title-suffix">Branch</span></h2>';
 		html += '<span class="dash-subtitle">Sales Dashboard</span>';
+	} else if (data.is_damage_user && !data.is_branch_user && !data.is_stock_user && !data.is_admin) {
+		html += '<h2 class="dash-title">Damage Inspection</h2>';
+		html += '<span class="dash-subtitle">Damage Workflow</span>';
 	} else if (data.is_stock_user && !data.is_branch_user && !data.is_admin) {
 		html += '<h2 class="dash-title">Warehouse</h2>';
 		html += '<span class="dash-subtitle">Stock Operations</span>';
@@ -54,6 +57,10 @@ function render_dashboard(page, data) {
 	// Branch User: sales dashboard ONLY — no stock section
 	if (data.is_branch_user && !data.is_admin) {
 		html += render_branch_dashboard(data);
+	}
+	// Damage User (standalone): damage inspection dashboard
+	else if (data.is_damage_user && !data.is_branch_user && !data.is_stock_user && !data.is_admin) {
+		html += render_damage_dashboard(data);
 	}
 	// Stock User (not branch user): stock dashboard only
 	else if (data.is_stock_user && !data.is_branch_user && !data.is_admin) {
@@ -102,6 +109,8 @@ function render_dashboard(page, data) {
 		var name = $(this).data('name');
 		if ($(this).hasClass('mr-link')) {
 			frappe.set_route('Form', 'Material Request', name);
+		} else if ($(this).hasClass('dt-link')) {
+			frappe.set_route('Form', 'Damage Transfer', name);
 		} else {
 			frappe.set_route('Form', 'Stock Transfer', name);
 		}
@@ -134,6 +143,8 @@ function render_branch_dashboard(data) {
 	html += action_card('shuffle', 'Stock Transfer', 'Transfer stock', 'list', 'Stock Transfer');
 	html += action_card('corner-down-left', 'Sales Return', 'Process returns', 'list', 'Sales Invoice', 'is_return=1');
 	html += action_card('corner-down-right', 'Purchase Return', 'Process returns', 'list', 'Purchase Invoice', 'is_return=1');
+	html += action_card('alert-triangle', 'Report Damage', 'Create damage slip', 'new', 'Damage Slip');
+	html += action_card('truck', 'Damage Transfer', 'Transfer damaged items', 'list', 'Damage Transfer');
 	html += '</div>';
 
 	// Reports
@@ -182,6 +193,49 @@ function render_stock_dashboard(data) {
 
 	// Pending section — split MR + ST
 	html += render_pending_split(data);
+
+	return html;
+}
+
+function render_damage_dashboard(data) {
+	var html = '';
+
+	// KPI Row
+	html += '<div class="kpi-row">';
+	html += kpi_card(format_number_short(data.pending_inspections || 0), 'Pending Inspections', 'pending', '🔍');
+	html += kpi_card(format_number_short(data.approved_pending_writeoff || 0), 'Awaiting Write-Off', 'outstanding', '📝');
+	html += '</div>';
+
+	// Quick Actions
+	html += '<h3 class="section-title">Damage Actions</h3>';
+	html += '<div class="action-grid">';
+	html += action_card('search', 'Pending Inspections', 'Inspect transfers', 'list', 'Damage Transfer', 'workflow_state=Pending Inspection');
+	html += action_card('check-circle', 'Approved Transfers', 'View approved', 'list', 'Damage Transfer', 'workflow_state=Approved');
+	html += action_card('x-circle', 'Written Off', 'View written off', 'list', 'Damage Transfer', 'workflow_state=Written Off');
+	html += action_card('file-text', 'Damage Slips', 'View all slips', 'list', 'Damage Slip');
+	html += '</div>';
+
+	// Pending list
+	if (data.pending_damage_transfers && data.pending_damage_transfers.length) {
+		html += '<h3 class="section-title">Pending Inspections</h3>';
+		html += '<div class="pending-list">';
+		data.pending_damage_transfers.forEach(function(dt) {
+			html += '<div class="pending-item">';
+			html += '<div class="pending-info">';
+			html += '<a class="pending-link dt-link" data-name="' + frappe.utils.escape_html(dt.name) + '">';
+			html += frappe.utils.escape_html(dt.name) + '</a>';
+			html += '<div class="pending-route">';
+			html += '<span class="wh-from">' + frappe.utils.escape_html(dt.branch_warehouse || '') + '</span>';
+			html += '</div>';
+			html += '</div>';
+			html += '<div class="pending-meta">';
+			html += '<div class="pending-date">' + frappe.datetime.str_to_user(dt.transaction_date) + '</div>';
+			html += '<div class="pending-status">Pending</div>';
+			html += '</div>';
+			html += '</div>';
+		});
+		html += '</div>';
+	}
 
 	return html;
 }

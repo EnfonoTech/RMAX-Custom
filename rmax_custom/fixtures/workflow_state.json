@@ -52,5 +52,23 @@
   "name": "Waiting for Approval",
   "style": "Warning",
   "workflow_state_name": "Waiting for Approval"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "time",
+  "modified": "2026-04-15 20:00:00.000000",
+  "name": "Pending Inspection",
+  "style": "Warning",
+  "workflow_state_name": "Pending Inspection"
+ },
+ {
+  "docstatus": 0,
+  "doctype": "Workflow State",
+  "icon": "remove",
+  "modified": "2026-04-15 20:00:00.000000",
+  "name": "Written Off",
+  "style": "Danger",
+  "workflow_state_name": "Written Off"
  }
 ]

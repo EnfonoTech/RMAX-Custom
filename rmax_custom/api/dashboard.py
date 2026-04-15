@@ -31,10 +31,13 @@ def get_dashboard_data():
     if branch_configs:
         branch_name = branch_configs[0]
 
+    is_damage_user = "Damage User" in roles
+
     data = {
         "company": company,
         "is_branch_user": is_branch_user,
         "is_stock_user": is_stock_user,
+        "is_damage_user": is_damage_user,
         "is_admin": is_admin,
         "user": user,
         "warehouses": warehouses,
@@ -169,6 +172,45 @@ def get_dashboard_data():
             tuple(mr_params) if mr_params else None,
             as_dict=True,
         )
+
+    # Damage KPIs -- for Branch Users
+    if is_branch_user or is_admin:
+        ds_filter = {"status": "Open"}
+        if warehouses and not is_admin:
+            ds_filter["branch_warehouse"] = ["in", warehouses]
+        try:
+            data["open_damage_slips"] = frappe.db.count("Damage Slip", ds_filter)
+        except Exception:
+            data["open_damage_slips"] = 0
+
+    # Damage KPIs -- for Damage Users
+    if is_damage_user or is_admin:
+        try:
+            data["pending_inspections"] = frappe.db.count(
+                "Damage Transfer", {"workflow_state": "Pending Inspection"}
+            )
+            data["approved_pending_writeoff"] = frappe.db.count(
+                "Damage Transfer", {
+                    "workflow_state": "Approved",
+                    "writeoff_entry_created": 0,
+                }
+            )
+        except Exception:
+            data["pending_inspections"] = 0
+            data["approved_pending_writeoff"] = 0
+
+    # Pending Damage Transfers list (for damage user)
+    if is_damage_user or is_admin:
+        try:
+            data["pending_damage_transfers"] = frappe.db.sql("""
+                SELECT name, branch_warehouse, transaction_date, owner
+                FROM `tabDamage Transfer`
+                WHERE workflow_state = 'Pending Inspection'
+                ORDER BY transaction_date DESC
+                LIMIT 10
+            """, as_dict=True)
+        except Exception:
+            data["pending_damage_transfers"] = []
 
     data["currency"] = (
         frappe.db.get_value("Company", company, "default_currency") or "SAR"

@@ -186,3 +186,43 @@ def material_request_permission_query(user):
         OR `tabMaterial Request`.`set_from_warehouse` IN ({wh_list})
         OR `tabMaterial Request`.`owner` = {frappe.db.escape(user)}
     )"""
+
+
+def damage_slip_permission_query(user):
+    """Filter Damage Slips by branch warehouse."""
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabDamage Slip`.`branch_warehouse` IN ({wh_list})
+        OR `tabDamage Slip`.`owner` = {frappe.db.escape(user)}
+    )"""
+
+
+def damage_transfer_permission_query(user):
+    """Filter Damage Transfers by branch warehouse.
+    Damage Users should see all transfers (they work at warehouse level)."""
+    if not user or user == "Administrator":
+        return ""
+
+    roles = frappe.get_roles(user)
+    if "System Manager" in roles or "Stock Manager" in roles:
+        return ""
+
+    # Damage Users see all (they inspect transfers from any branch)
+    if "Damage User" in roles:
+        return ""
+
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabDamage Transfer`.`branch_warehouse` IN ({wh_list})
+        OR `tabDamage Transfer`.`owner` = {frappe.db.escape(user)}
+    )"""
