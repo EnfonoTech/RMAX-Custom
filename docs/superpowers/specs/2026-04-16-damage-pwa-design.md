@@ -241,23 +241,31 @@ All endpoints require Damage User role. Each validates via `_assert_damage_user(
 - **Validation:** Fails if locked by another user within last 30 min
 - **Returns:** `{ locked: true, expires_at }`
 
-**`damage_pwa.api.inspect.save_inspection`**
-- **Args:** `name` (DT name), `items` (list of `{ row_name, supplier_code, damage_category, images, image_2, image_3, remarks }`) — `row_name` is the child table row's `name` field (e.g., "abc123"), NOT the item_name
-- **Validation:** Validates lock ownership. All items must belong to the DT.
-- **Action:** Bulk updates all items in a single transaction with savepoint. Rolls back entirely on any failure.
-- **Returns:** `{ success: true, updated_count }`
-- **Photo contract:** `images`, `image_2`, `image_3` are file URLs (already uploaded via `upload_file`). The PWA uploads photos first, then calls this with URLs.
+**`damage_pwa.api.inspect.save_item_inspection`**
+- **Args:** `transfer_name` (DT name), `row_name` (child table row name), `supplier_code`, `damage_category`, `images`, `image_2`, `image_3`, `remarks`, `status` ("complete"/"flagged"), `client_modified` (ISO datetime)
+- **Validation:** Validates lock ownership. Row must belong to the DT. Rejects if `client_modified < server doc.modified` (optimistic concurrency).
+- **Action:** Updates single item row. Sets `_inspected_by` = current user, `_inspected_at` = now.
+- **Returns:** `{ success: true, modified }` — returns new `modified` timestamp for next call
+- **Photo contract:** `images`, `image_2`, `image_3` are file URLs (already uploaded via `upload_file`). PWA uploads photos first, then calls this with URLs.
+- **Notes:** Offline queue stores one entry per item (not per transfer), so partial failures don't lose other items' work.
+
+**`damage_pwa.api.inspect.save_inspection`** (bulk convenience)
+- **Args:** `name` (DT name), `items` (list of `{ row_name, supplier_code, damage_category, images, image_2, image_3, remarks, status }`) — `row_name` is the child table row's `name` field (e.g., "abc123"), NOT the item_name. `client_modified` (ISO datetime).
+- **Validation:** Validates lock + `client_modified` concurrency check.
+- **Action:** Iterates items, updates each individually. On per-item failure, logs error but continues remaining items. Returns partial results.
+- **Returns:** `{ success: true, updated: ["row1", "row2"], failed: [{ row_name: "row3", error: "..." }] }`
 
 **`damage_pwa.api.inspect.approve_transfer`**
-- **Args:** `name` (DT name)
-- **Validation:** All items must have supplier_code + damage_category + at least 1 image. Lock must be held by current user.
-- **Action:** `apply_workflow(doc, "Approve")` → triggers existing `on_submit` → Stock Entry creation
-- **Returns:** `{ success: true, stock_entry }`
+- **Args:** `name` (DT name), `client_modified` (ISO datetime)
+- **Validation:** Concurrency check. Lock must be held by current user. All items must be "complete" or "flagged" — only "incomplete" items (no supplier_code OR no photo) block approval. If any "flagged" items exist, approval proceeds with a warning logged.
+- **Action:** `apply_workflow(doc, "Approve")` → triggers existing `on_submit` → Stock Entry creation (idempotent: skips if `transfer_entry_created` already set)
+- **Returns:** `{ success: true, stock_entry, warnings: ["2 items flagged"] }`
 
 **`damage_pwa.api.inspect.reject_transfer`**
-- **Args:** `name` (DT name), `reason` (optional string)
-- **Action:** `apply_workflow(doc, "Reject")`
+- **Args:** `name` (DT name), `reason` (required string), `client_modified` (ISO datetime)
+- **Action:** `apply_workflow(doc, "Reject")`. Stores reason in `_rejection_reason` comment.
 - **Returns:** `{ success: true }`
+- **Notes:** Also serves as "Request Rework" — rejected transfers go back to Branch User who can fix and resubmit to Pending Inspection via existing workflow.
 
 **`damage_pwa.api.inspect.get_history`**
 - **Args:** `limit` (default 20), `start` (default 0), `status_filter` (optional: "Approved"/"Rejected"/"Written Off")
@@ -270,8 +278,8 @@ All endpoints require Damage User role. Each validates via `_assert_damage_user(
 ### 5.3 Master Data
 
 **`damage_pwa.api.master.get_supplier_codes`**
-- **Returns:** `{ data: [{ name, supplier_code_name, supplier, enabled }], last_modified }` — all enabled Supplier Codes
-- **Cache:** PWA stores `last_modified` and sends it as `if_modified_since` on next fetch. API returns 304 if unchanged.
+- **Returns:** `{ data: [{ name, supplier_code_name, supplier, enabled }], last_modified, deleted: ["SC-001"] }` — all Supplier Codes (including `enabled=0` so PWA can remove disabled ones from cache)
+- **Cache:** PWA stores `last_modified` and sends it as `if_modified_since` on next fetch. API returns 304 if unchanged. `deleted` field lists names removed since `if_modified_since` (tracks via Deleted Document log or modification timestamp).
 
 ---
 
@@ -285,8 +293,8 @@ All endpoints require Damage User role. Each validates via `_assert_damage_user(
 | `transfers` | DT name | Full transfer data + items | Refreshed on each sync |
 | `supplier_codes` | SC name | Supplier Code records | Refreshed when last_modified changes |
 | `photos` | UUID | Compressed image blob + metadata (transfer, item, slot) | Until uploaded + confirmed |
-| `inspection_queue` | Auto-increment | `{ transfer, items: [...], timestamp }` | Until synced |
-| `action_queue` | Auto-increment | `{ transfer, action: "approve"/"reject", reason?, timestamp }` | Until synced |
+| `inspection_queue` | Auto-increment | `{ transfer, row_name, supplier_code, category, images, remarks, status, timestamp }` | Until synced |
+| `action_queue` | Auto-increment | `{ transfer, action: "approve"/"reject", reason?, client_modified, timestamp }` | Until synced |
 
 ### 6.2 Sync Engine
 
@@ -295,17 +303,23 @@ All endpoints require Damage User role. Each validates via `_assert_damage_user(
 **Process order (sequential, not parallel):**
 1. Validate session — if expired, prompt re-auth, halt sync
 2. Upload photos from `photos` store → get file URLs → update `inspection_queue` entries with URLs
-3. Process `inspection_queue` → call `save_inspection` per transfer → on success, delete from queue
+3. Process `inspection_queue` → call `save_item_inspection` per item → on success, delete entry; on failure, keep for retry with error logged
 4. Process `action_queue` → call `approve_transfer`/`reject_transfer` → on success, delete from queue
 5. Fetch fresh data → `get_pending_transfers`, `get_supplier_codes` (conditional) → update IndexedDB
 6. Update dashboard KPIs
 
-**Conflict resolution:** Server wins.
-- If `save_inspection` returns 409 (transfer already approved/rejected by someone else): discard queued inspection, show notification
+**Background Sync:** Register for Background Sync API where supported (`navigator.serviceWorker.ready.then(sw => sw.sync.register('sync-inspections'))`). Fallback: sync on app foreground via `visibilitychange` event.
+
+**Conflict resolution:** Server wins + `modified` timestamp check.
+- If `save_item_inspection` returns 409 (modified mismatch): re-fetch latest, show diff to user, let them re-apply
 - If `approve_transfer` returns error (already transitioned): discard queued action, show notification
 - If `claim_transfer` returns locked by another: show "Locked by {user}" in UI, prevent editing
 
-**Retry:** Failed syncs retry with exponential backoff (5s, 15s, 45s, max 5 min). Network errors queue indefinitely until connectivity returns.
+**Retry:** Failed syncs retry with exponential backoff (5s, 15s, 45s, max 5 min). Per-item granularity means one item's failure doesn't block others.
+
+**Error UX:** Persistent error banner at top of Dashboard showing count of failed items. Each failed transfer card shows red indicator with "Retry" button. Tap shows detailed error per item. Banner dismisses only when all errors resolved or manually dismissed.
+
+**Storage Management:** Monitor IndexedDB usage via `navigator.storage.estimate()`. Warning notification at 20MB. Hard cap at 30MB — auto-cleanup of oldest successfully-synced photo blobs. Never delete unsynced photos.
 
 ### 6.3 Service Worker
 
@@ -396,7 +410,45 @@ The keystore is `.gitignored`. Store it securely — losing it means you can't u
 
 ---
 
-## 8. Security
+## 8. Item Inspection Status Model
+
+Each Damage Transfer Item has an `_inspection_status` field:
+
+| Status | Meaning | Blocks Approval? |
+|--------|---------|-----------------|
+| `incomplete` | Missing supplier_code OR no photo | Yes |
+| `complete` | All required fields filled | No |
+| `flagged` | Inspected but with concerns (e.g., unknown supplier, uncertain category) | No (warning shown) |
+
+**Approval logic:** Transfer can be approved if zero items are `incomplete`. `flagged` items generate a warning but don't block. This avoids the entire transfer getting stuck because one item has an edge case.
+
+**Completion percentage:** Dashboard and Transfer Detail show `6/8 complete` progress indicator.
+
+---
+
+## 9. Audit Trail
+
+Custom fields added to Damage Transfer Item (via the `damage_pwa` app's fixtures):
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `_inspected_by` | Link (User) | Set by `save_item_inspection` |
+| `_inspected_at` | Datetime | Set by `save_item_inspection` |
+| `_inspection_status` | Select | complete / incomplete / flagged |
+
+Custom fields added to Damage Transfer:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `_damage_pwa_locked_by` | Data | User who claimed the transfer |
+| `_damage_pwa_locked_at` | Datetime | When lock was acquired |
+| `_rejection_reason` | Small Text | Set on reject, stored as comment too |
+
+All changes also logged via Frappe's built-in Version (document change history) — provides full who/when/what audit trail automatically.
+
+---
+
+## 10. Security (unchanged)
 
 - All API endpoints validate `"Damage User" in frappe.get_roles()` as first line
 - PIN hash: bcrypt with salt, stored server-side in Damage PWA Pin DocType and client-side in IndexedDB
@@ -409,7 +461,7 @@ The keystore is `.gitignored`. Store it securely — losing it means you can't u
 
 ---
 
-## 9. Dependencies
+## 11. Dependencies
 
 ### Frontend (package.json)
 ```
@@ -435,7 +487,7 @@ Gradle 8.x, JDK 17, SDK 34
 
 ---
 
-## 10. Deployment
+## 12. Deployment
 
 ### First-time setup on server
 ```bash
