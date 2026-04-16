@@ -61,7 +61,9 @@ doctype_js = {
     "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
     "Purchase Receipt": "public/js/purchase receipt.js",
     "Landed Cost Voucher": "public/js/landed_cost_voucher.js",
-    "Material Request": "public/js/material_request_doctype.js"
+    "Material Request": "public/js/material_request_doctype.js",
+    "Sales Invoice": "public/js/sales_invoice_doctype.js",
+    "Purchase Invoice": "public/js/purchase_invoice_doctype.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
