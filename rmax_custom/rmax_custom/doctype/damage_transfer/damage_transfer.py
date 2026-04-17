@@ -14,6 +14,7 @@ class DamageTransfer(Document):
 		self._validate_no_duplicate_slips()
 		if self.workflow_state == "Approved":
 			self._validate_inspection_complete()
+			self._validate_stock_availability()
 
 	def _validate_items(self):
 		"""Ensure items exist and have valid qty."""
@@ -71,6 +72,86 @@ class DamageTransfer(Document):
 				)
 			msg += "</tbody></table>"
 			frappe.throw(msg, title=_("Inspection Incomplete"))
+
+	def _validate_stock_availability(self):
+		"""Before approval, ensure the branch warehouse has enough stock for every
+		item. Catches the shortage here with a clear tabular message rather than
+		letting the Stock Entry submit later raise ERPNext's HTML-laden negative
+		stock error.
+		"""
+		if not self.branch_warehouse:
+			frappe.throw(_("Please select a Branch Warehouse before approving."))
+
+		# Aggregate required qty per item (same item can span multiple rows)
+		required = {}
+		for item in self.items:
+			required[item.item_code] = required.get(item.item_code, 0) + flt(item.qty)
+
+		if not required:
+			return
+
+		# Fetch actual_qty from Bin in one query
+		item_codes = list(required.keys())
+		bins = frappe.get_all(
+			"Bin",
+			filters={"warehouse": self.branch_warehouse, "item_code": ["in", item_codes]},
+			fields=["item_code", "actual_qty"],
+		)
+		available = {b.item_code: flt(b.actual_qty) for b in bins}
+
+		shortages = []
+		for code, needed in required.items():
+			have = available.get(code, 0.0)
+			if have < needed:
+				shortages.append({
+					"item_code": code,
+					"available": have,
+					"needed": needed,
+					"short": needed - have,
+				})
+
+		if not shortages:
+			return
+
+		item_names = {
+			r["name"]: r["item_name"]
+			for r in frappe.get_all(
+				"Item",
+				filters={"name": ["in", [s["item_code"] for s in shortages]]},
+				fields=["name", "item_name"],
+			)
+		}
+
+		msg = _("Cannot approve. Insufficient stock in {0} for the following items:").format(
+			frappe.bold(self.branch_warehouse)
+		)
+		msg += "<br><br><table class='table table-bordered table-sm'>"
+		msg += ("<thead><tr><th>Item</th><th>Item Name</th>"
+		        "<th style='text-align:right'>Available</th>"
+		        "<th style='text-align:right'>Needed</th>"
+		        "<th style='text-align:right;color:red'>Short</th></tr></thead><tbody>")
+		for s in shortages:
+			msg += (
+				"<tr>"
+				"<td>{code}</td>"
+				"<td>{name}</td>"
+				"<td style='text-align:right'>{have}</td>"
+				"<td style='text-align:right'>{need}</td>"
+				"<td style='text-align:right;color:red'><b>{short}</b></td>"
+				"</tr>"
+			).format(
+				code=s["item_code"],
+				name=item_names.get(s["item_code"], ""),
+				have=s["available"],
+				need=s["needed"],
+				short=s["short"],
+			)
+		msg += "</tbody></table>"
+		msg += "<br>" + _(
+			"Add opening stock or reconcile inventory for the above items in {0}, "
+			"then approve again."
+		).format(frappe.bold(self.branch_warehouse))
+		frappe.throw(msg, title=_("Insufficient Stock"))
 
 	def on_submit(self):
 		"""On approval (submit), create Stock Entry: Material Transfer from branch WH to damage WH."""
