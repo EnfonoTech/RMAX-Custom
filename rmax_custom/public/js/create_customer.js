@@ -151,26 +151,22 @@ function open_create_customer_dialog(frm) {
                     frappe.msgprint("Pincode must be exactly 5 digits.");
                     return;
                 }
-                if (vat && ["Company", "Branch"].includes(type)) {
-
+                if (vat && type !== "Branch") {
                     frappe.db.get_value("Customer", {
                         custom_vat_registration_number: vat
                     }, "name").then(r => {
-
                         if (r.message && r.message.name) {
                             frappe.msgprint(
                                 `VAT already exists for Customer: ${r.message.name}`
                             );
                             return;
                         }
-
                         create_customer();
                     });
 
-                } else {
-                    create_customer();
+                    return;
                 }
-
+                create_customer();
                 function create_customer() {
                     frappe.call({
                         method: "rmax_custom.api.customer.create_customer_with_address",
