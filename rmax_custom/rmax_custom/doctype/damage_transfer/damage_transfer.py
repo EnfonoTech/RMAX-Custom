@@ -12,9 +12,13 @@ class DamageTransfer(Document):
 	def validate(self):
 		self._validate_items()
 		self._validate_no_duplicate_slips()
+		# Stock availability fires on every save while still a draft so branch
+		# users see shortages immediately — before wasting the inspector's time.
+		# Skip once submitted (docstatus==1) to avoid blocking cancel/amend flows.
+		if self.docstatus == 0:
+			self._validate_stock_availability()
 		if self.workflow_state == "Approved":
 			self._validate_inspection_complete()
-			self._validate_stock_availability()
 
 	def _validate_items(self):
 		"""Ensure items exist and have valid qty."""
