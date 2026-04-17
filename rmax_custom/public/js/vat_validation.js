@@ -83,7 +83,5 @@ function set_customer_type_filter(frm) {
 
         field.df.options = options.join("\n");
         frm.refresh_field("customer_type");
-
-        console.log("Branch removedss from Customer Type");
     }
 }

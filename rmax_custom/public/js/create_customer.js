@@ -1,9 +1,7 @@
-
 frappe.ui.form.on("Sales Invoice", {
     refresh: function (frm) {
         add_create_customer_button(frm); 
-        console.log("Sales Invoice Custom Script Loaded");
-	}
+    }
 });
 
 function add_create_customer_button(frm) {
@@ -44,7 +42,7 @@ function open_create_customer_dialog(frm) {
 
         let d = new frappe.ui.Dialog({
             title: "Create New Customer",
-            size: "large",   // important when many fields
+            size: "large",
 
             fields: [
                 {
@@ -64,25 +62,34 @@ function open_create_customer_dialog(frm) {
                     fieldtype: "Data",
                     label: "Email ID"
                 },
+                {
+                    fieldname: "customer_type",
+                    fieldtype: "Select",
+                    label: "Customer Type",
+                    options: "Company\nIndividual\nPartnership\nBranch",
+                    default: "Company"
+                },
                 { 
                     fieldname: "custom_vat_registration_number",
                     fieldtype: "Data",
                     label: "VAT Registration Number"
                 },
+
                 { fieldtype: "Section Break", label: "Address Details" },
+
                 {
                     fieldname: "address_type",
                     fieldtype: "Select",
                     label: "Address Type",
                     options: "Billing\nShipping",
                     default: "Billing",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "address_line1",
                     fieldtype: "Data",
                     label: "Address Line 1",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "address_line2",
@@ -93,19 +100,19 @@ function open_create_customer_dialog(frm) {
                     fieldname: "custom_building_number",
                     fieldtype: "Data",
                     label: "Building Number",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "custom_area",
                     fieldtype: "Data",
                     label: "Area/District",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number ",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "city",
                     fieldtype: "Data",
                     label: "City/Town",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "country",
@@ -113,59 +120,107 @@ function open_create_customer_dialog(frm) {
                     options: "Country",
                     label: "Country",
                     default: country,
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 },
                 {
                     fieldname: "pincode",
                     fieldtype: "Data",
                     label: "Postal Code",
-                    mandatory_depends_on: "eval:doc.custom_vat_registration_number",
-                },
-
-            ],
-            primary_action_label: "Create Customer",
-            primary_action(values) {
-                const digits = (values.mobile_no || "").replace(/\D/g, "").length;
-                if (digits < 10) {
-                    frappe.throw("Mobile number must have at least 10 digits.");
-                    return; 
+                    mandatory_depends_on: "eval:doc.custom_vat_registration_number"
                 }
-                return frappe.call({
-                    method: "rmax_custom.api.customer.create_customer_with_address",
-                    args: {
-                        customer_name: values.customer_name,
-                        mobile_no: values.mobile_no,
-                        email_id: values.email_id || null,
-                        address_type: values.address_type, 
-                        address_line1: values.address_line1,
-                        address_line2: values.address_line2 || null,
-                        custom_vat_registration_number: values.custom_vat_registration_number || null,
-                        custom_building_number: values.custom_building_number,
-                        custom_area: values.custom_area,
-                        pincode: values.pincode,
-                        city: values.city,  
-                        country: values.country,
-                        default_currency: default_currency
-                    },
-                    callback: function(r) {
-                        if (r.message) {
+            ],
 
-                            frm.set_value("customer", r.message.customer);
-                            frm.refresh_field("customer");
+            primary_action_label: "Create Customer",
 
-                            frappe.show_alert({
-                                message: r.message.message,
-                                indicator: "green"
-                            });
+            primary_action(values) {
 
-                            d.hide();
+                let mobile = values.mobile_no || "";
+
+                if (mobile.length < 10) {
+                    frappe.msgprint("Mobile number must have at least 10 digits.");
+                    return;
+                }
+                let vat = values.custom_vat_registration_number;
+                let type = values.customer_type;
+                if (vat && vat.length !== 15) {
+                    frappe.msgprint("VAT must be exactly 15 digits.");
+                    return;
+                }
+                let pincode = values.pincode || "";
+                if (pincode && pincode.length !== 5) {
+                    frappe.msgprint("Pincode must be exactly 5 digits.");
+                    return;
+                }
+                if (vat && ["Company", "Branch"].includes(type)) {
+
+                    frappe.db.get_value("Customer", {
+                        custom_vat_registration_number: vat
+                    }, "name").then(r => {
+
+                        if (r.message && r.message.name) {
+                            frappe.msgprint(
+                                `VAT already exists for Customer: ${r.message.name}`
+                            );
+                            return;
                         }
-                    }
-                });
+
+                        create_customer();
+                    });
+
+                } else {
+                    create_customer();
+                }
+
+                function create_customer() {
+                    frappe.call({
+                        method: "rmax_custom.api.customer.create_customer_with_address",
+                        args: {
+                            customer_name: values.customer_name,
+                            mobile_no: values.mobile_no,
+                            email_id: values.email_id || null,
+                            customer_type: values.customer_type,
+                            address_type: values.address_type,
+                            address_line1: values.address_line1,
+                            address_line2: values.address_line2 || null,
+                            custom_vat_registration_number: vat || null,
+                            custom_building_number: values.custom_building_number,
+                            custom_area: values.custom_area,
+                            pincode: values.pincode,
+                            city: values.city,
+                            country: values.country,
+                            default_currency: default_currency
+                        },
+                        callback: function(r) {
+                            if (r.message) {
+
+                                frm.set_value("customer", r.message.customer);
+                                frm.refresh_field("customer");
+
+                                frappe.show_alert({
+                                    message: r.message.message,
+                                    indicator: "green"
+                                });
+
+                                d.hide();
+                            }
+                        }
+                    });
+                }
             }
         });
 
         d.show();
+        d.fields_dict.mobile_no.$input.on("input", function () {
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+
+        d.fields_dict.custom_vat_registration_number.$input.on("input", function () {
+            let value = this.value.replace(/[^0-9]/g, '');
+            if (value.length > 15) {
+                value = value.slice(0, 15);
+            }
+            this.value = value;
+        });
+
     });
 }
-

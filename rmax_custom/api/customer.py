@@ -45,6 +45,9 @@ def create_customer_with_address(
     if not mobile_no:
         frappe.throw(_("Mobile No is required"))
 
+    if count_digits(mobile_no) < 10:
+        frappe.throw("Mobile number must have at least 10 digits.")
+        
     # Prevent duplicate
     if frappe.db.exists("Customer", {"customer_name": customer_name}):
         frappe.throw(_("Customer already exists"))
