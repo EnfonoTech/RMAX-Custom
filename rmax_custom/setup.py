@@ -148,6 +148,7 @@ BRANCH_USER_ALLOWED_MODULES = [
 
 def after_migrate():
     """Set up Branch User role permissions after migration."""
+    preserve_standard_docperms_on_touched_doctypes()
     setup_branch_user_permissions()
     setup_stock_user_extra_permissions()
     setup_damage_user_permissions()
@@ -157,6 +158,73 @@ def after_migrate():
     setup_damage_user_module_profile()
     restrict_core_workspaces()
     setup_role_home_pages()
+
+
+# DocPerm fields that need to be mirrored from standard DocPerm into Custom DocPerm.
+# permlevel is set separately to normalize None → 0.
+_DOCPERM_FLAGS = (
+    "read", "write", "create", "submit", "cancel", "delete",
+    "print", "email", "report", "export", "share",
+    "if_owner", "amend", "select", "import",
+)
+
+
+def preserve_standard_docperms_on_touched_doctypes():
+    """Copy every standard DocPerm row into Custom DocPerm for doctypes we customize.
+
+    Frappe replaces standard DocPerm with Custom DocPerm as soon as any Custom
+    DocPerm row exists for a doctype. Without this backfill, adding Stock/Branch/
+    Damage User perms wipes access for existing standard roles (e.g. Accounts
+    Manager, Purchase User, Sales User on Accounts Settings).
+    """
+    rmax_roles = {BRANCH_USER_ROLE, STOCK_USER_ROLE, DAMAGE_USER_ROLE, "Stock Manager"}
+    touched_doctypes = {p["parent"] for p in BRANCH_USER_PERMISSIONS}
+    touched_doctypes |= {p["parent"] for p in STOCK_USER_EXTRA_PERMISSIONS}
+    touched_doctypes |= {p["parent"] for p in DAMAGE_USER_PERMISSIONS}
+    touched_doctypes |= {p["parent"] for p in PURCHASE_MANAGER_SUPPLIER_CODE_PERM}
+
+    for doctype in touched_doctypes:
+        if not frappe.db.exists("DocType", doctype):
+            continue
+
+        standard_rows = frappe.get_all(
+            "DocPerm",
+            filters={"parent": doctype, "parenttype": "DocType"},
+            fields=["name", "role", "permlevel"] + list(_DOCPERM_FLAGS),
+        )
+
+        for row in standard_rows:
+            role = row.get("role")
+            if not role or role in rmax_roles:
+                continue
+
+            permlevel = row.get("permlevel") or 0
+
+            existing = frappe.db.exists("Custom DocPerm", {
+                "parent": doctype,
+                "role": role,
+                "permlevel": permlevel,
+            })
+            if existing:
+                continue
+
+            payload = {
+                "doctype": "Custom DocPerm",
+                "parent": doctype,
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": permlevel,
+            }
+            for flag in _DOCPERM_FLAGS:
+                val = row.get(flag)
+                if val is None:
+                    continue
+                payload[flag] = val
+
+            frappe.get_doc(payload).insert(ignore_permissions=True)
+
+    frappe.db.commit()
 
 
 def setup_branch_user_permissions():
