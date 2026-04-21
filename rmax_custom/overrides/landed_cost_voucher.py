@@ -76,7 +76,16 @@ class LandedCostVoucher(ERPNextLandedCostVoucher):
 			self.get("items")[item_count - 1].applicable_charges += diff
 
 	def validate_applicable_charges_for_item(self):
-		if self.distribute_charges_based_on == "Distribute Manually" and len(self.taxes) > 1:
+		is_cbm = (
+			self.distribute_charges_based_on == "Distribute Manually"
+			and self.get("custom_distribute_by_cbm")
+		)
+
+		if (
+			self.distribute_charges_based_on == "Distribute Manually"
+			and not is_cbm
+			and len(self.taxes) > 1
+		):
 			frappe.throw(
 				_(
 					"Please keep one Applicable Charges, when 'Distribute Charges Based On' is 'Distribute Manually'. For more charges, please create another Landed Cost Voucher."
@@ -85,7 +94,9 @@ class LandedCostVoucher(ERPNextLandedCostVoucher):
 
 		based_on_field = get_based_on_field(self.distribute_charges_based_on)
 
-		if self.distribute_charges_based_on != "Distribute Manually":
+		if is_cbm:
+			total = sum(flt(d.get("custom_cbm")) for d in self.get("items"))
+		elif self.distribute_charges_based_on != "Distribute Manually":
 			total = sum(flt(d.get(based_on_field)) for d in self.get("items"))
 		else:
 			total = sum(flt(d.get("applicable_charges")) for d in self.get("items"))
