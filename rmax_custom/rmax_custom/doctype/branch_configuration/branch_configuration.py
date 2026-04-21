@@ -168,10 +168,21 @@ def delete_permission(user, allow, value):
 		frappe.delete_doc("User Permission", p, ignore_permissions=True)
 
 
+def _ensure_system_user(user):
+	"""Website Users cannot hold desk roles. Upgrade to System User so role takes effect."""
+	current_type = frappe.db.get_value("User", user, "user_type")
+	if current_type and current_type != "System User":
+		frappe.db.set_value("User", user, "user_type", "System User")
+
+
 def _assign_role(user, role):
 	"""Assign the specified role if not already assigned. Uses direct DB for reliability."""
 	if not role or not frappe.db.exists("Role", role):
 		return
+
+	# Desk roles (Branch User / Stock User / Damage User / Stock Manager) require
+	# System User user_type; Website Users silently lose role assignments.
+	_ensure_system_user(user)
 
 	# Check if role already assigned
 	if frappe.db.exists("Has Role", {"parent": user, "role": role}):
