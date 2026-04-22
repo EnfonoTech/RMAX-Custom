@@ -63,7 +63,8 @@ doctype_js = {
     "Landed Cost Voucher": "public/js/landed_cost_voucher.js",
     "Material Request": "public/js/material_request_doctype.js",
     "Sales Invoice": "public/js/sales_invoice_doctype.js",
-    "Purchase Invoice": "public/js/purchase_invoice_doctype.js"
+    "Purchase Invoice": "public/js/purchase_invoice_doctype.js",
+    "Delivery Note": "public/js/delivery_note_doctype.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
@@ -347,6 +348,7 @@ fixtures = [
                     "Purchase Receipt-custom_lcv_checklist",
 
                     # Delivery Note — Inter-Company consolidation
+                    "Delivery Note-custom_is_inter_company",
                     "Delivery Note-custom_inter_company_branch",
                     "Delivery Note-custom_inter_company_pi",
                     "Delivery Note-custom_inter_company_status",

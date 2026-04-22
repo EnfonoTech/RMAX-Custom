@@ -33,6 +33,29 @@ from frappe.utils import cint, flt
 STATUS_NOT_CONSOLIDATED = "Not Consolidated"
 STATUS_CONSOLIDATED = "Consolidated"
 
+INTER_COMPANY_PRICE_LIST = "Inter Company Price"
+
+
+def setup_inter_company_price_list():
+	"""Create the 'Inter Company Price' Price List if missing. Idempotent."""
+	if frappe.db.exists("Price List", INTER_COMPANY_PRICE_LIST):
+		return
+	try:
+		frappe.get_doc({
+			"doctype": "Price List",
+			"price_list_name": INTER_COMPANY_PRICE_LIST,
+			"currency": frappe.db.get_single_value("Global Defaults", "default_currency") or "SAR",
+			"enabled": 1,
+			"buying": 1,
+			"selling": 1,
+		}).insert(ignore_permissions=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(
+			frappe.get_traceback(),
+			"rmax_custom: failed to create Inter Company Price list",
+		)
+
 
 # ---------------------------------------------------------------------------
 # Whitelisted API — called from Delivery Note list action
@@ -163,10 +186,14 @@ def _validate_batch(dns):
 
 	head = dns[0]
 
-	# Each DN must be submitted, inter-company, and un-consolidated
+	# Each DN must be submitted, flagged as inter-company, and un-consolidated
 	for dn in dns:
 		if dn.docstatus != 1:
 			frappe.throw(_("Delivery Note {0} is not submitted.").format(dn.name))
+		if not dn.get("custom_is_inter_company"):
+			frappe.throw(
+				_("Delivery Note {0} is not marked as Inter Company.").format(dn.name)
+			)
 		if not dn.get("is_internal_customer"):
 			frappe.throw(
 				_("Delivery Note {0} is not an internal-customer DN.").format(dn.name)

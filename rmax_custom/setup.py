@@ -176,6 +176,17 @@ def after_migrate():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "rmax_custom: lcv_template setup failed")
 
+    # Inter Company Price list (for DN inter-company mode)
+    try:
+        from rmax_custom.inter_company_dn import setup_inter_company_price_list
+
+        setup_inter_company_price_list()
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "rmax_custom: inter company price list setup failed",
+        )
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
