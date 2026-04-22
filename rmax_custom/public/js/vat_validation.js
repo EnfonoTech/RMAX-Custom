@@ -27,7 +27,8 @@ frappe.ui.form.on('Customer', {
                 args: {
                     vat: vat,
                     customer_type: frm.doc.customer_type,
-                    name: frm.doc.name || null
+                    name: frm.doc.name || null,
+                    allow_duplicate_vat: frm.doc.custom_allow_duplicate_vat ? 1 : 0
                 }
             });
         }

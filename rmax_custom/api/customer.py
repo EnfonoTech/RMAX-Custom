@@ -5,6 +5,61 @@ from frappe.core.doctype.user_permission.user_permission import get_permitted_do
 import re
 
 
+# Roles allowed to override the VAT duplicate check on Customer
+VAT_DUPLICATE_OVERRIDE_ROLES = {
+	"Sales Manager",
+	"Sales Master Manager",
+	"System Manager",
+}
+
+
+def _can_override_vat_duplicate(user=None):
+	user = user or frappe.session.user
+	if user == "Administrator":
+		return True
+	return bool(set(frappe.get_roles(user)) & VAT_DUPLICATE_OVERRIDE_ROLES)
+
+
+def enforce_vat_duplicate_rule(doc, method=None):
+	"""Customer.validate hook. Server-side enforcement of VAT duplicate rule.
+
+	Ensures override flag is only honoured for permitted roles and that
+	direct API writes cannot silently bypass the duplicate check.
+	"""
+	vat = (doc.get("custom_vat_registration_number") or "").strip()
+	if not vat:
+		return
+
+	if doc.get("customer_type") == "Branch":
+		return
+
+	if len(vat) != 15:
+		frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
+
+	if doc.get("custom_allow_duplicate_vat"):
+		if not _can_override_vat_duplicate():
+			frappe.throw(
+				_("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
+			)
+		if not (doc.get("custom_duplicate_vat_reason") or "").strip():
+			frappe.throw(_("Duplicate VAT Reason is required when 'Allow Duplicate VAT' is ticked."))
+		return
+
+	clash = frappe.get_all(
+		"Customer",
+		filters={
+			"custom_vat_registration_number": vat,
+			"name": ["!=", doc.name or ""],
+		},
+		fields=["name"],
+		limit=1,
+	)
+	if clash:
+		frappe.throw(
+			_("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' to override.").format(clash[0].name)
+		)
+
+
 
 def _get_default_customer_group():
 	permitted = get_permitted_documents("Customer Group")
@@ -35,8 +90,8 @@ def create_customer_with_address(
     state=None,
     pincode=None,
     custom_area=None,
-
-
+    allow_duplicate_vat=0,
+    duplicate_vat_reason=None,
 ):
 
     if not customer_name:
@@ -47,8 +102,32 @@ def create_customer_with_address(
 
     if count_digits(mobile_no) < 10:
         frappe.throw("Mobile number must have at least 10 digits.")
-        
-    # Prevent duplicate
+
+    allow_duplicate_vat = int(allow_duplicate_vat or 0)
+
+    # VAT duplicate handling
+    if custom_vat_registration_number and customer_type != "Branch":
+        if len(str(custom_vat_registration_number)) != 15:
+            frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
+
+        if allow_duplicate_vat:
+            if not _can_override_vat_duplicate():
+                frappe.throw(
+                    _("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
+                )
+            if not (duplicate_vat_reason and duplicate_vat_reason.strip()):
+                frappe.throw(_("Duplicate VAT Reason is required when overriding the VAT duplicate check."))
+        else:
+            clash = frappe.db.exists(
+                "Customer",
+                {"custom_vat_registration_number": custom_vat_registration_number},
+            )
+            if clash:
+                frappe.throw(
+                    _("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override.").format(clash)
+                )
+
+    # Prevent duplicate by name
     if frappe.db.exists("Customer", {"customer_name": customer_name}):
         frappe.throw(_("Customer already exists"))
 
@@ -78,6 +157,8 @@ def create_customer_with_address(
         "mobile_no": mobile_no,
         "email_id": email_id,
         "custom_vat_registration_number": custom_vat_registration_number,
+        "custom_allow_duplicate_vat": 1 if allow_duplicate_vat else 0,
+        "custom_duplicate_vat_reason": duplicate_vat_reason if allow_duplicate_vat else None,
     })
 
     customer.insert(ignore_permissions=True)
@@ -118,10 +199,19 @@ def create_customer_with_address(
 
 
 @frappe.whitelist()
-def validate_vat_customer(vat, customer_type, name=None):
+def validate_vat_customer(vat, customer_type, name=None, allow_duplicate_vat=0):
     if not vat:
         return
     if customer_type == "Branch":
+        return
+
+    allow_duplicate_vat = int(allow_duplicate_vat or 0)
+
+    if allow_duplicate_vat:
+        if not _can_override_vat_duplicate():
+            frappe.throw(
+                _("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
+            )
         return
 
     existing = frappe.get_all(
@@ -135,7 +225,7 @@ def validate_vat_customer(vat, customer_type, name=None):
 
     if existing:
         frappe.throw(
-            f" VAT Registration Number  already used by Customer: {existing[0].name}"
+            _("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override.").format(existing[0].name)
         )
 
     return

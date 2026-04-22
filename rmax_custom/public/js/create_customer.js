@@ -34,6 +34,9 @@ function open_create_customer_dialog(frm) {
 
     let company = frm.doc.company || frappe.defaults.get_default("company");
 
+    const OVERRIDE_ROLES = ["Sales Manager", "Sales Master Manager", "System Manager"];
+    let can_override_vat = (frappe.user_roles || []).some(r => OVERRIDE_ROLES.includes(r));
+
     frappe.db.get_value("Company", company,
         ["country", "default_currency"], function(r) {
 
@@ -69,10 +72,26 @@ function open_create_customer_dialog(frm) {
                     options: "Company\nIndividual\nPartnership\nBranch",
                     default: "Company"
                 },
-                { 
+                {
                     fieldname: "custom_vat_registration_number",
                     fieldtype: "Data",
                     label: "VAT Registration Number"
+                },
+                {
+                    fieldname: "allow_duplicate_vat",
+                    fieldtype: "Check",
+                    label: "Allow Duplicate VAT (Manager Override)",
+                    default: 0,
+                    hidden: can_override_vat ? 0 : 1,
+                    depends_on: "eval:doc.custom_vat_registration_number"
+                },
+                {
+                    fieldname: "duplicate_vat_reason",
+                    fieldtype: "Small Text",
+                    label: "Duplicate VAT Reason",
+                    hidden: can_override_vat ? 0 : 1,
+                    depends_on: "eval:doc.allow_duplicate_vat",
+                    mandatory_depends_on: "eval:doc.allow_duplicate_vat"
                 },
 
                 { fieldtype: "Section Break", label: "Address Details" },
@@ -151,13 +170,25 @@ function open_create_customer_dialog(frm) {
                     frappe.msgprint("Pincode must be exactly 5 digits.");
                     return;
                 }
-                if (vat && type !== "Branch") {
+                let allow_dup = values.allow_duplicate_vat ? 1 : 0;
+                let dup_reason = (values.duplicate_vat_reason || "").trim();
+
+                if (allow_dup && !can_override_vat) {
+                    frappe.msgprint("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.");
+                    return;
+                }
+                if (allow_dup && !dup_reason) {
+                    frappe.msgprint("Please provide the Duplicate VAT Reason.");
+                    return;
+                }
+
+                if (vat && type !== "Branch" && !allow_dup) {
                     frappe.db.get_value("Customer", {
                         custom_vat_registration_number: vat
                     }, "name").then(r => {
                         if (r.message && r.message.name) {
                             frappe.msgprint(
-                                `VAT already exists for Customer: ${r.message.name}`
+                                `VAT already exists for Customer: ${r.message.name}. A Sales Manager can tick 'Allow Duplicate VAT' to override.`
                             );
                             return;
                         }
@@ -184,7 +215,9 @@ function open_create_customer_dialog(frm) {
                             pincode: values.pincode,
                             city: values.city,
                             country: values.country,
-                            default_currency: default_currency
+                            default_currency: default_currency,
+                            allow_duplicate_vat: allow_dup,
+                            duplicate_vat_reason: allow_dup ? dup_reason : null
                         },
                         callback: function(r) {
                             if (r.message) {

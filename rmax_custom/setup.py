@@ -153,11 +153,51 @@ def after_migrate():
     setup_stock_user_extra_permissions()
     setup_damage_user_permissions()
     setup_purchase_manager_supplier_code()
+    setup_vat_duplicate_override_perms()
     setup_report_role_grants()
     setup_branch_user_module_profile()
     setup_damage_user_module_profile()
     restrict_core_workspaces()
     setup_role_home_pages()
+
+
+# Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
+VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
+
+
+def setup_vat_duplicate_override_perms():
+    """Grant permlevel=1 write on Customer to roles allowed to override VAT duplicate check."""
+    if not frappe.db.exists("DocType", "Customer"):
+        return
+
+    for role in VAT_DUPLICATE_OVERRIDE_ROLES:
+        if not frappe.db.exists("Role", role):
+            continue
+
+        existing = frappe.db.exists("Custom DocPerm", {
+            "parent": "Customer",
+            "role": role,
+            "permlevel": 1,
+        })
+
+        if existing:
+            frappe.db.set_value("Custom DocPerm", existing, {
+                "read": 1,
+                "write": 1,
+            })
+        else:
+            frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": "Customer",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 1,
+                "read": 1,
+                "write": 1,
+            }).insert(ignore_permissions=True)
+
+    frappe.db.commit()
 
 
 # DocPerm fields that need to be mirrored from standard DocPerm into Custom DocPerm.

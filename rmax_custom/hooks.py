@@ -192,6 +192,9 @@ doc_events = {
 	"Purchase Receipt": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
+	"Customer": {
+		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
+	},
 }
 
 # Scheduled Tasks
@@ -327,6 +330,8 @@ fixtures = [
                     # Landed Cost Item (CBM per item)
                     "Landed Cost Item-custom_cbm",
                     "Customer-custom_vat_registration_number",
+                    "Customer-custom_allow_duplicate_vat",
+                    "Customer-custom_duplicate_vat_reason",
 
                     # Material Request
                     "Material Request-custom_is_urgent",
