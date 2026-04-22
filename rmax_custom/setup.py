@@ -160,6 +160,14 @@ def after_migrate():
     restrict_core_workspaces()
     setup_role_home_pages()
 
+    # HR defaults (no-op if hrms not installed)
+    try:
+        from rmax_custom.hr_defaults import setup_hr_defaults
+
+        setup_hr_defaults()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "rmax_custom: hr_defaults setup failed")
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")

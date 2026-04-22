@@ -1,47 +1,50 @@
 /**
  * RMAX Custom: Sales Invoice Form
  *
- * 1. Auto-negate qty for Credit Notes (is_return = 1).
- * 2. Restrict the 'Update Stock' flag: default off, editable only by
- *    Sales Manager / Sales Master Manager / System Manager / Administrator.
+ * 1. New SI defaults: update_stock = 1 and set_warehouse picked from the
+ *    user's default Warehouse User Permission so stock movement posts
+ *    against the correct warehouse automatically.
+ * 2. Auto-negate qty on save for Credit Notes (is_return = 1).
  */
 
-const RMAX_UPDATE_STOCK_ROLES = [
-    "Sales Manager",
-    "Sales Master Manager",
-    "System Manager",
-];
-
-function _rmax_can_toggle_update_stock() {
-    if (frappe.session.user === "Administrator") return true;
-    const roles = frappe.user_roles || [];
-    return RMAX_UPDATE_STOCK_ROLES.some((r) => roles.includes(r));
+function _rmax_fetch_default_warehouse(callback) {
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "User Permission",
+            filters: {
+                user: frappe.session.user,
+                allow: "Warehouse",
+                is_default: 1,
+            },
+            fields: ["for_value"],
+            limit_page_length: 1,
+        },
+        callback: function (r) {
+            const wh =
+                (r.message && r.message.length && r.message[0].for_value) || null;
+            callback(wh);
+        },
+    });
 }
 
 frappe.ui.form.on("Sales Invoice", {
     onload: function (frm) {
-        if (frm.is_new() && !_rmax_can_toggle_update_stock()) {
-            // Default off for Branch / Stock / Sales User
-            frm.set_value("update_stock", 0);
+        if (!frm.is_new()) return;
+
+        if (!frm.doc.update_stock) {
+            frm.set_value("update_stock", 1);
         }
-    },
-    refresh: function (frm) {
-        const allowed = _rmax_can_toggle_update_stock();
-        frm.set_df_property("update_stock", "read_only", allowed ? 0 : 1);
-        if (!allowed) {
-            frm.set_df_property(
-                "update_stock",
-                "description",
-                "Only Sales Manager or above can enable Update Stock."
-            );
+
+        if (!frm.doc.set_warehouse) {
+            _rmax_fetch_default_warehouse(function (wh) {
+                if (wh && frm.is_new() && !frm.doc.set_warehouse) {
+                    frm.set_value("set_warehouse", wh);
+                }
+            });
         }
     },
     before_save: function (frm) {
-        if (!_rmax_can_toggle_update_stock() && frm.doc.update_stock) {
-            // Force-off for unauthorised users before server validation runs
-            frm.doc.update_stock = 0;
-        }
-
         if (!frm.doc.is_return) return;
         (frm.doc.items || []).forEach(function (row) {
             if (row.qty > 0) {
