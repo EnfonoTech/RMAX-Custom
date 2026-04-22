@@ -4,8 +4,25 @@
  * 1. New SI defaults: update_stock = 1 and set_warehouse picked from the
  *    user's default Warehouse User Permission so stock movement posts
  *    against the correct warehouse automatically.
- * 2. Auto-negate qty on save for Credit Notes (is_return = 1).
+ * 2. Branch Users cannot toggle update_stock (read-only). Elevated roles
+ *    (Sales Manager, Sales Master Manager, Stock Manager, System Manager)
+ *    keep full control.
+ * 3. Auto-negate qty on save for Credit Notes (is_return = 1).
  */
+
+const RMAX_UPDATE_STOCK_ELEVATED_ROLES = [
+    "Sales Manager",
+    "Sales Master Manager",
+    "Stock Manager",
+    "System Manager",
+];
+
+function _rmax_is_locked_branch_user() {
+    if (frappe.session.user === "Administrator") return false;
+    const roles = frappe.user_roles || [];
+    if (!roles.includes("Branch User")) return false;
+    return !RMAX_UPDATE_STOCK_ELEVATED_ROLES.some((r) => roles.includes(r));
+}
 
 function _rmax_fetch_default_warehouse(callback) {
     frappe.call({
@@ -42,6 +59,16 @@ frappe.ui.form.on("Sales Invoice", {
                     frm.set_value("set_warehouse", wh);
                 }
             });
+        }
+    },
+    refresh: function (frm) {
+        if (_rmax_is_locked_branch_user()) {
+            frm.set_df_property("update_stock", "read_only", 1);
+            frm.set_df_property(
+                "update_stock",
+                "description",
+                "Locked for Branch Users. Contact a Sales Manager to change."
+            );
         }
     },
     before_save: function (frm) {
