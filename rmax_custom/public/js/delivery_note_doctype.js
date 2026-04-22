@@ -49,4 +49,21 @@ function _rmax_apply_inter_company_mode(frm) {
     if (on && frm.is_new() && !frm.doc.selling_price_list) {
         frm.set_value("selling_price_list", RMAX_INTER_COMPANY_PRICE_LIST);
     }
+
+    // Hide the "+ Create new Customer" button next to the Link field in
+    // inter-company mode — operators must pick an existing internal
+    // Customer, never create a fresh one here.
+    const $wrapper = frm.fields_dict.customer && frm.fields_dict.customer.$wrapper;
+    if ($wrapper) {
+        const $btn = $wrapper.find(".btn-new, .link-btn");
+        if (on) {
+            $btn.hide();
+        } else {
+            $btn.show();
+        }
+    }
+    if (frm.fields_dict.customer) {
+        // Newer Frappe versions respect only_select on the dataframe
+        frm.fields_dict.customer.df.only_select = on ? 1 : 0;
+    }
 }

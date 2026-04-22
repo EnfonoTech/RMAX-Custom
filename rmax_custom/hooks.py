@@ -181,10 +181,10 @@ doc_events = {
 	"Sales Invoice": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+		"on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 	},
 	"Purchase Invoice": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
-		"on_cancel": "rmax_custom.inter_company_dn.purchase_invoice_on_cancel",
 	},
 	"Payment Entry": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
@@ -350,7 +350,7 @@ fixtures = [
                     # Delivery Note — Inter-Company consolidation
                     "Delivery Note-custom_is_inter_company",
                     "Delivery Note-custom_inter_company_branch",
-                    "Delivery Note-custom_inter_company_pi",
+                    "Delivery Note-custom_inter_company_si",
                     "Delivery Note-custom_inter_company_status",
 
                     # Material Request

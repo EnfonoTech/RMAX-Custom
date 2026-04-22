@@ -1,24 +1,27 @@
 # Copyright (c) 2025, Rmax Custom and contributors
 # For license information, please see license.txt
 
-"""Inter-Company Delivery Note → consolidated Purchase Invoice.
+"""Inter-Company Delivery Note → consolidated Sales Invoice.
 
 Operators pick multiple submitted inter-company Delivery Notes and roll
-them up into a single Draft Purchase Invoice in the receiving Company.
+them up into a single Draft Sales Invoice issued by the SELLING company
+(Head Office). The existing `inter_company.py::sales_invoice_on_submit`
+hook then creates the matching Purchase Invoice on the receiving side
+once an accountant submits the SI.
 
 Design:
 * No auto-create on DN submit — consolidation is always explicit via
   the list action (per client requirement).
-* Validation: every selected DN must be submitted, flagged
-  is_internal_customer, share represents_company, share supplier, share
-  currency, share custom_inter_company_branch, and not already be
-  linked to another Draft/Submitted PI.
-* Output PI inherits taxes from the first selected DN; cost center and
-  warehouse come from the Inter Company Branch master entry that matches
-  the buying Company.
-* Each source DN is stamped with custom_inter_company_pi and
-  custom_inter_company_status = "Consolidated". Cancelling the PI clears
-  those stamps so the DNs can be rolled into a different PI.
+* Validation: every selected DN must be submitted, flagged inter
+  company (custom_is_inter_company=1), share customer, represents_
+  company, currency, custom_inter_company_branch, and not already be
+  linked to another non-cancelled SI.
+* Output SI inherits taxes from the first selected DN; cost center and
+  warehouse come from the Inter Company Branch master entry that
+  matches the selling Company.
+* Each source DN is stamped with custom_inter_company_si and
+  custom_inter_company_status = "Consolidated". Cancelling the SI
+  clears those stamps so the DNs can be rolled into a different SI.
 """
 
 from __future__ import annotations
@@ -38,6 +41,7 @@ INTER_COMPANY_PRICE_LIST = "Inter Company Price"
 
 def setup_inter_company_price_list():
 	"""Create the 'Inter Company Price' Price List if missing. Idempotent."""
+	_cleanup_legacy_pi_field()
 	if frappe.db.exists("Price List", INTER_COMPANY_PRICE_LIST):
 		return
 	try:
@@ -57,14 +61,34 @@ def setup_inter_company_price_list():
 		)
 
 
+def _cleanup_legacy_pi_field():
+	"""Drop the obsolete custom_inter_company_pi Custom Field on Delivery Note.
+
+	That field was introduced for a Purchase-Invoice-based flow which
+	has since been replaced by custom_inter_company_si. Removal is
+	idempotent and safe — no migrations reference the old name.
+	"""
+	legacy = "Delivery Note-custom_inter_company_pi"
+	if not frappe.db.exists("Custom Field", legacy):
+		return
+	try:
+		frappe.delete_doc("Custom Field", legacy, ignore_permissions=True, force=True)
+		frappe.db.commit()
+	except Exception:
+		frappe.log_error(
+			frappe.get_traceback(),
+			"rmax_custom: failed to delete legacy custom_inter_company_pi field",
+		)
+
+
 # ---------------------------------------------------------------------------
 # Whitelisted API — called from Delivery Note list action
 # ---------------------------------------------------------------------------
 
 
 @frappe.whitelist()
-def create_pi_from_multiple_dns(delivery_note_names):
-	"""Create one Draft Purchase Invoice from multiple inter-company DNs."""
+def create_si_from_multiple_dns(delivery_note_names):
+	"""Create one Draft Sales Invoice from multiple inter-company DNs."""
 	names = _normalise_names(delivery_note_names)
 	if not names:
 		frappe.throw(_("Select at least one Delivery Note."))
@@ -73,24 +97,24 @@ def create_pi_from_multiple_dns(delivery_note_names):
 	_validate_batch(dns)
 
 	head = dns[0]
-	buying_company = head.represents_company
-	supplier = _resolve_internal_supplier(head.customer, buying_company)
+	selling_company = head.company
 
-	pi = frappe.new_doc("Purchase Invoice")
-	pi.company = buying_company
-	pi.supplier = supplier
-	pi.posting_date = frappe.utils.today()
-	pi.due_date = frappe.utils.today()
-	pi.currency = head.currency
-	pi.is_internal_supplier = 1
-	pi.represents_company = head.company
-	pi.bill_no = ", ".join(dn.name for dn in dns)[:140]
-	pi.bill_date = head.posting_date
+	si = frappe.new_doc("Sales Invoice")
+	si.company = selling_company
+	si.customer = head.customer
+	si.is_internal_customer = 1
+	si.represents_company = head.represents_company
+	si.posting_date = frappe.utils.today()
+	si.due_date = frappe.utils.today()
+	si.currency = head.currency
+	si.selling_price_list = head.selling_price_list or INTER_COMPANY_PRICE_LIST
+	if head.get("custom_inter_company_branch"):
+		si.custom_inter_company_branch = head.custom_inter_company_branch
 
-	# Items — one PI row per DN item, preserving source reference
+	# Items — one SI row per DN item, preserving source reference
 	for dn in dns:
 		for item in dn.items:
-			pi.append("items", {
+			si.append("items", {
 				"item_code": item.item_code,
 				"item_name": item.item_name,
 				"description": item.description,
@@ -100,38 +124,31 @@ def create_pi_from_multiple_dns(delivery_note_names):
 				"uom": item.uom,
 				"stock_uom": item.stock_uom,
 				"conversion_factor": item.conversion_factor or 1,
+				"warehouse": item.warehouse,
 				"delivery_note": dn.name,
 				"dn_detail": item.name,
 			})
 
 	# Taxes — inherit from the first DN
 	for tax in (head.taxes or []):
-		pi.append("taxes", {
+		si.append("taxes", {
 			"charge_type": tax.charge_type,
 			"account_head": tax.account_head,
 			"description": tax.description,
 			"rate": tax.rate,
 			"tax_amount": tax.tax_amount,
 			"cost_center": tax.cost_center,
-			"category": tax.category,
-			"add_deduct_tax": tax.add_deduct_tax,
 			"included_in_print_rate": tax.included_in_print_rate,
 		})
 
-	# Inter Company Branch master lookup → cost center + warehouse
-	branch_data = _get_branch_data(head.get("custom_inter_company_branch"), buying_company)
+	# Inter Company Branch master lookup → cost center for the selling side
+	branch_data = _get_branch_data(head.get("custom_inter_company_branch"), selling_company)
 	if branch_data.get("cost_center"):
-		pi.cost_center = branch_data["cost_center"]
-		for item in pi.items:
+		si.cost_center = branch_data["cost_center"]
+		for item in si.items:
 			item.cost_center = branch_data["cost_center"]
 
-	if cint(pi.update_stock) and branch_data.get("warehouse"):
-		if _warehouse_belongs_to_company(branch_data["warehouse"], buying_company):
-			pi.set_warehouse = branch_data["warehouse"]
-			for item in pi.items:
-				item.warehouse = branch_data["warehouse"]
-
-	pi.insert(ignore_permissions=False)
+	si.insert(ignore_permissions=False)
 
 	# Stamp each source DN
 	for dn in dns:
@@ -139,14 +156,14 @@ def create_pi_from_multiple_dns(delivery_note_names):
 			"Delivery Note",
 			dn.name,
 			{
-				"custom_inter_company_pi": pi.name,
+				"custom_inter_company_si": si.name,
 				"custom_inter_company_status": STATUS_CONSOLIDATED,
 			},
 			update_modified=False,
 		)
 
 	frappe.db.commit()
-	return pi.name
+	return si.name
 
 
 # ---------------------------------------------------------------------------
@@ -154,11 +171,11 @@ def create_pi_from_multiple_dns(delivery_note_names):
 # ---------------------------------------------------------------------------
 
 
-def purchase_invoice_on_cancel(doc, method=None):
-	"""When a consolidated PI is cancelled, free up the source DNs."""
+def sales_invoice_on_cancel(doc, method=None):
+	"""When a consolidated SI is cancelled, free up the source DNs."""
 	linked = frappe.get_all(
 		"Delivery Note",
-		filters={"custom_inter_company_pi": doc.name},
+		filters={"custom_inter_company_si": doc.name},
 		pluck="name",
 	)
 	for name in linked:
@@ -166,7 +183,7 @@ def purchase_invoice_on_cancel(doc, method=None):
 			"Delivery Note",
 			name,
 			{
-				"custom_inter_company_pi": None,
+				"custom_inter_company_si": None,
 				"custom_inter_company_status": STATUS_NOT_CONSOLIDATED,
 			},
 			update_modified=False,
@@ -202,14 +219,14 @@ def _validate_batch(dns):
 			frappe.throw(
 				_("Delivery Note {0} has no represents_company set.").format(dn.name)
 			)
-		if dn.get("custom_inter_company_pi"):
+		if dn.get("custom_inter_company_si"):
 			existing_status = frappe.db.get_value(
-				"Purchase Invoice", dn.custom_inter_company_pi, "docstatus"
+				"Sales Invoice", dn.custom_inter_company_si, "docstatus"
 			)
 			if existing_status in (0, 1):
 				frappe.throw(
-					_("Delivery Note {0} is already linked to Purchase Invoice {1}.").format(
-						dn.name, dn.custom_inter_company_pi
+					_("Delivery Note {0} is already linked to Sales Invoice {1}.").format(
+						dn.name, dn.custom_inter_company_si
 					)
 				)
 
@@ -249,50 +266,6 @@ def _normalise_names(delivery_note_names) -> List[str]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _resolve_internal_supplier(customer: str, buying_company: str) -> str:
-	"""Find the internal Supplier record linked to the selling Company."""
-	# Pattern: Customer represents a Company; the matching Supplier in the
-	# other Company is flagged is_internal_supplier and has
-	# represents_company = selling Company.
-	selling_company = frappe.db.get_value("Customer", customer, "represents_company")
-	if not selling_company:
-		frappe.throw(
-			_("Customer {0} has no represents_company — cannot resolve supplier.").format(customer)
-		)
-
-	supplier = frappe.db.get_value(
-		"Supplier",
-		{
-			"is_internal_supplier": 1,
-			"represents_company": selling_company,
-		},
-		"name",
-	)
-	if not supplier:
-		# Try by linked Companies list (multi-company supplier)
-		supplier = frappe.db.sql(
-			"""
-			SELECT s.name
-			FROM `tabSupplier` s
-			JOIN `tabAllowed To Transact With` a ON a.parent = s.name
-			WHERE s.is_internal_supplier = 1
-			  AND s.represents_company = %s
-			  AND a.company = %s
-			LIMIT 1
-			""",
-			(selling_company, buying_company),
-		)
-		supplier = supplier[0][0] if supplier else None
-
-	if not supplier:
-		frappe.throw(
-			_("No internal Supplier found for selling Company {0} under buying Company {1}.").format(
-				selling_company, buying_company
-			)
-		)
-	return supplier
 
 
 def _get_branch_data(inter_company_branch: str | None, buying_company: str) -> dict:
