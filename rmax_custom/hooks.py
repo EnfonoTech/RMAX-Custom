@@ -69,7 +69,8 @@ doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
     "Material Request": "public/js/material_request_list.js",
     "Sales Invoice": "public/js/sales_invoice_list.js",
-    "Purchase Invoice": "public/js/purchase_invoice_list.js"
+    "Purchase Invoice": "public/js/purchase_invoice_list.js",
+    "Delivery Note": "public/js/delivery_note_list.js"
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -182,6 +183,7 @@ doc_events = {
 	},
 	"Purchase Invoice": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"on_cancel": "rmax_custom.inter_company_dn.purchase_invoice_on_cancel",
 	},
 	"Payment Entry": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
@@ -343,6 +345,11 @@ fixtures = [
                     "Purchase Receipt-custom_lcv_template",
                     "Purchase Receipt-custom_lcv_status",
                     "Purchase Receipt-custom_lcv_checklist",
+
+                    # Delivery Note — Inter-Company consolidation
+                    "Delivery Note-custom_inter_company_branch",
+                    "Delivery Note-custom_inter_company_pi",
+                    "Delivery Note-custom_inter_company_status",
 
                     # Material Request
                     "Material Request-custom_is_urgent",
