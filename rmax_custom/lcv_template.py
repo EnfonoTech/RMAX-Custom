@@ -78,18 +78,20 @@ def _ensure_allow_on_submit_flags():
 def _upgrade_default_template():
 	"""Ensure every shipped charge row is present in the default template.
 
-	Adds missing rows (e.g. Duty introduced later) without touching any
-	user customisations. default_amount on shipped rows is cleared only
-	if it still matches a prior shipped example value of 0; non-zero
-	client-edited amounts are preserved.
+	Adds missing rows (e.g. Duty introduced later), clears the old sample
+	default_amount values (they were image examples, not real defaults),
+	and never touches rows a user has manually added.
 	"""
 	if not frappe.db.exists("LCV Charge Template", DEFAULT_TEMPLATE_NAME):
 		return
 
 	tmpl = frappe.get_doc("LCV Charge Template", DEFAULT_TEMPLATE_NAME)
 	existing_names = {row.charge_name for row in tmpl.charges}
+	shipped_names = {c["charge_name"] for c in DEFAULT_CHARGES}
 
 	dirty = False
+
+	# Add missing shipped charges
 	for charge in DEFAULT_CHARGES:
 		if charge["charge_name"] in existing_names:
 			continue
@@ -100,6 +102,25 @@ def _upgrade_default_template():
 			"is_mandatory": 0,
 		})
 		dirty = True
+
+	# Clear legacy sample default_amount on shipped rows
+	for row in tmpl.charges:
+		if row.charge_name in shipped_names and row.default_amount:
+			row.default_amount = 0
+			dirty = True
+
+	# Also keep currency/distribute_by aligned with the shipped definition
+	shipped_meta = {c["charge_name"]: c for c in DEFAULT_CHARGES}
+	for row in tmpl.charges:
+		meta = shipped_meta.get(row.charge_name)
+		if not meta:
+			continue
+		if row.currency != meta["currency"]:
+			row.currency = meta["currency"]
+			dirty = True
+		if row.distribute_by != meta["distribute_by"]:
+			row.distribute_by = meta["distribute_by"]
+			dirty = True
 
 	if dirty:
 		tmpl.save(ignore_permissions=True)
@@ -122,9 +143,10 @@ def _ensure_accounts_per_company():
 		for charge in DEFAULT_CHARGES:
 			account_name = f"{charge['charge_name']} - {company.abbr}"
 			if frappe.db.exists("Account", account_name):
+				_align_account_currency(account_name, charge.get("currency"))
 				continue
 			try:
-				frappe.get_doc({
+				payload = {
 					"doctype": "Account",
 					"account_name": charge["charge_name"],
 					"parent_account": parent,
@@ -132,7 +154,13 @@ def _ensure_accounts_per_company():
 					"account_type": "Expense Account",
 					"root_type": "Expense",
 					"is_group": 0,
-				}).insert(ignore_permissions=True)
+				}
+				# USD freight needs the account booked in USD so LCV tax row
+				# offers exchange_rate to SAR company base.
+				if charge.get("currency"):
+					payload["account_currency"] = charge["currency"]
+
+				frappe.get_doc(payload).insert(ignore_permissions=True)
 			except Exception:
 				# Don't let one bad account block the rest; log and move on.
 				frappe.log_error(
@@ -141,6 +169,32 @@ def _ensure_accounts_per_company():
 				)
 
 	frappe.db.commit()
+
+
+def _align_account_currency(account_name: str, desired_currency: Optional[str]):
+	"""If an existing RMAX-shipped account has the wrong currency, fix it.
+
+	Only runs when the account has never been used (no GL entry).
+	"""
+	if not desired_currency:
+		return
+
+	current = frappe.db.get_value("Account", account_name, "account_currency")
+	if current == desired_currency:
+		return
+
+	# Safety: only change currency if the account has never been posted to
+	has_gl = frappe.db.exists("GL Entry", {"account": account_name})
+	if has_gl:
+		return
+
+	frappe.db.set_value(
+		"Account",
+		account_name,
+		"account_currency",
+		desired_currency,
+		update_modified=False,
+	)
 
 
 def _ensure_parent_group(company: str, abbr: str) -> Optional[str]:
