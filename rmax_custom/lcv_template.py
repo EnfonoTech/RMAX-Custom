@@ -52,7 +52,14 @@ def setup_lcv_defaults():
 
 
 def _ensure_accounts_per_company():
-	for company in frappe.get_all("Company", fields=["name", "abbr"]):
+	# Only root companies — ERPNext syncs to child companies automatically.
+	root_companies = frappe.get_all(
+		"Company",
+		filters=[["parent_company", "in", ["", None]]],
+		fields=["name", "abbr"],
+	)
+
+	for company in root_companies:
 		parent = _ensure_parent_group(company.name, company.abbr)
 		if not parent:
 			continue
@@ -61,15 +68,22 @@ def _ensure_accounts_per_company():
 			account_name = f"{charge['charge_name']} - {company.abbr}"
 			if frappe.db.exists("Account", account_name):
 				continue
-			frappe.get_doc({
-				"doctype": "Account",
-				"account_name": charge["charge_name"],
-				"parent_account": parent,
-				"company": company.name,
-				"account_type": "Expense Account",
-				"root_type": "Expense",
-				"is_group": 0,
-			}).insert(ignore_permissions=True)
+			try:
+				frappe.get_doc({
+					"doctype": "Account",
+					"account_name": charge["charge_name"],
+					"parent_account": parent,
+					"company": company.name,
+					"account_type": "Expense Account",
+					"root_type": "Expense",
+					"is_group": 0,
+				}).insert(ignore_permissions=True)
+			except Exception:
+				# Don't let one bad account block the rest; log and move on.
+				frappe.log_error(
+					frappe.get_traceback(),
+					f"rmax_custom lcv_template: failed to create {account_name}",
+				)
 
 	frappe.db.commit()
 
@@ -93,14 +107,21 @@ def _ensure_parent_group(company: str, abbr: str) -> Optional[str]:
 	if not indirect_expenses:
 		return None
 
-	frappe.get_doc({
-		"doctype": "Account",
-		"account_name": LCV_PARENT_GROUP,
-		"parent_account": indirect_expenses,
-		"company": company,
-		"is_group": 1,
-		"root_type": "Expense",
-	}).insert(ignore_permissions=True)
+	try:
+		frappe.get_doc({
+			"doctype": "Account",
+			"account_name": LCV_PARENT_GROUP,
+			"parent_account": indirect_expenses,
+			"company": company,
+			"is_group": 1,
+			"root_type": "Expense",
+		}).insert(ignore_permissions=True)
+	except Exception:
+		frappe.log_error(
+			frappe.get_traceback(),
+			f"rmax_custom lcv_template: failed to create parent group for {company}",
+		)
+		return None
 	return parent_name
 
 
