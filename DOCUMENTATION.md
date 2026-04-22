@@ -4,7 +4,8 @@
 > **Publisher:** Enfono  
 > **License:** MIT  
 > **Framework:** Frappe v15 + ERPNext  
-> **Site:** rmax_dev2 on RMAX Server (5.189.131.148)
+> **Dev site:** rmax_dev2 on RMAX Server (5.189.131.148)  
+> **UAT site:** rmax-uat2.enfonoerp.com on AQRAR Server (185.193.19.184)
 
 ---
 
@@ -20,6 +21,7 @@
 8. [Hooks Configuration](#8-hooks-configuration)
 9. [Fixtures](#9-fixtures)
 10. [Architecture Diagram](#10-architecture-diagram)
+11. [Session 2026-04-22 Additions](#11-session-2026-04-22-additions)
 
 ---
 
@@ -32,11 +34,15 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 - **Branch-based access control** with automatic user permission management
 - **Stock Transfer workflow** with approval states
 - **Landed Cost Voucher enhancement** with CBM-based distribution
-- **Customer creation directly from Sales Invoice**
+- **LCV Charge Template + Purchase Receipt checklist** — reusable charge list, auto-ticked after LCV submission, with dashboard status indicator
+- **Customer creation directly from Sales Invoice** including a Sales-Manager-gated VAT duplicate override
 - **Bulk Purchase Invoice creation** from multiple Purchase Receipts
 - **Final GRN (Goods Received Note)** replacement flow
 - **VAT and contact validation** rules (Saudi Arabia compliance)
 - **Warehouse stock visibility** popup on item selection
+- **Damage workflow** (Damage Slip → Damage Transfer → Stock Entry / Write-off) with role-gated access
+- **HR defaults** — Sponsorship / Non-Sponsorship Employee Grades, KSA salary components, shipped Sponsorship salary structure per company
+- **Dashboard restrictions** — branch / stock / damage users land on `rmax-dashboard` with a restricted module profile
 
 ---
 
@@ -556,3 +562,108 @@ rmax_custom/
 ├── license.txt
 └── README.md
 ```
+
+---
+
+## 11. Session 2026-04-22 Additions
+
+### 11.1 Customer VAT Duplicate Override
+
+**Custom Fields (permlevel = 1)**
+- `custom_allow_duplicate_vat` (Check) — manager override flag.
+- `custom_duplicate_vat_reason` (Small Text) — mandatory when override is on.
+
+**Roles allowed to tick the override**: `Sales Manager`, `Sales Master Manager`, `System Manager`. Granted via `Custom DocPerm` permlevel 1 by `setup_vat_duplicate_override_perms()` in `after_migrate`.
+
+**Enforcement layers**
+1. `Customer.validate` → `rmax_custom.api.customer.enforce_vat_duplicate_rule`
+2. Whitelisted APIs `validate_vat_customer` and `create_customer_with_address` re-check the role and reason.
+3. `vat_validation.js` and `create_customer.js` hide the override fields for unauthorised users and forward the flag to the server.
+
+`customer_type = "Branch"` is always exempt. VAT Registration Number must be exactly 15 digits.
+
+### 11.2 Sales Invoice: `update_stock` Default + Branch Lock
+
+File: `public/js/sales_invoice_doctype.js` (doctype_js).
+
+- New Sales Invoice → `update_stock = 1` and `set_warehouse` prefilled from the user's default `Warehouse` `User Permission`.
+- For users with the `Branch User` role **and none** of `Sales Manager`, `Sales Master Manager`, `Stock Manager`, `System Manager`, the `update_stock` field is marked `read_only` with a description `"Locked for Branch Users. Contact a Sales Manager to change."`.
+- Credit Note handling stays — `is_return = 1` flips positive quantities to negative in `before_save`.
+
+### 11.3 HR Defaults (`rmax_custom.hr_defaults`)
+
+Runs in `after_migrate`. No-op if `hrms` app is absent.
+
+| Artifact | Details |
+|---------|---------|
+| Employee Grades | `Sponsorship`, `Non-Sponsorship` (global) |
+| Salary Components | `Basic`, `Housing Allowance`, `Transportation Allowance`, `Food Allowance`, `Other Allowance`, `GOSI Employee` (Deduction) |
+| Salary Structure | `RMAX Sponsorship KSA - <CompanyAbbr>` per Company, Draft state. Earnings = `base × 0.60 / 0.25 / 0.10 / 0.05`. No default structure for Non-Sponsorship. |
+
+Idempotent — existing rows are never touched again. Reset helper (admin only):
+```
+bench --site <site> execute rmax_custom.hr_defaults.reset_sponsorship_salary_structures --kwargs '{"force": 1}'
+```
+Refuses to delete submitted structures or those already assigned to an employee.
+
+### 11.4 LCV Charge Template + Purchase Receipt Checklist
+
+**DocTypes introduced** (module `Rmax Custom`):
+- `LCV Charge Template` — top-level reusable list, unique by `template_name`, one default allowed at a time.
+- `LCV Charge Template Item` (child) — fields: `charge_name`, `currency` (SAR/USD), `distribute_by` (CBM/Value), `default_amount`, `is_mandatory`.
+- `Purchase Receipt LCV Checklist` (child on Purchase Receipt) — fields: `charge_name`, `expense_account`, `distribute_by`, `is_mandatory`, `done`, `lcv_reference`, `amount`.
+
+**Shipped template** `Standard Import KSA` (is_default = 1) ships 11 rows with blank amounts:
+Freight Sea/Air (USD, CBM), Duty (SAR, Value), DO Charges, Port Charges, Mawani, Fasah Appointment Fees, Custom Clearance Charges, Transportation to Warehouse, Doc Charges, Local Unloading Expense, Overtime (Kafeel) — all CBM SAR.
+
+**Chart of Accounts setup** (`_ensure_accounts_per_company`)
+- Group `Landed Cost Charges - <abbr>` under `Indirect Expenses` per root Company.
+- 11 leaf Expense accounts, one per charge. `Freight Sea/Air` is booked in `account_currency = USD`.
+- Child companies inherit via the ERPNext sync pattern.
+- `_align_account_currency` re-stamps currency on an existing shipped account only when no `GL Entry` exists for it.
+
+**Purchase Receipt custom fields** (all `allow_on_submit = 1`)
+- `custom_lcv_template` (Link LCV Charge Template)
+- `custom_lcv_status` (Select: Not Started / Pending / Partial / Complete; in list view + standard filter)
+- `custom_lcv_checklist` (Table Purchase Receipt LCV Checklist)
+
+**Server hooks**
+| Hook | Purpose |
+|------|---------|
+| `Purchase Receipt.validate` → `purchase_receipt_validate` | Auto-populate checklist from the selected template when empty; recompute status |
+| `Landed Cost Voucher.on_submit` → `landed_cost_voucher_on_submit` | Match LCV taxes against every linked PR's checklist by expense account, tick `done`, store `lcv_reference` + `amount`, refresh PR status |
+| `Landed Cost Voucher.on_cancel` → `landed_cost_voucher_on_cancel` | Reverse only rows whose `lcv_reference` equals the cancelled LCV |
+
+**Status rollup**
+- 0 done → `Not Started`
+- All done → `Complete`
+- Mandatory all done with optional still pending → `Partial`
+- Otherwise → `Pending`
+
+**Whitelisted APIs**
+- `rmax_custom.lcv_template.load_template_into_pr(purchase_receipt, template)`
+- `rmax_custom.lcv_template.create_lcv_from_template(purchase_receipt)` — creates a Draft LCV containing only rows still pending; when every pending row is CBM, the LCV ships with `Distribute Manually + custom_distribute_by_cbm = 1` so the CBM override distributes automatically.
+
+**Client (PR form)**
+- Dashboard indicator coloured by status, showing `LCV <status> (done/total)`.
+- `LCV Checklist > Load LCV Template` dialog.
+- `LCV Checklist > Create LCV from Template` button (opens the created Draft LCV).
+
+### 11.5 Permission Hygiene
+
+- `setup.preserve_standard_docperms_on_touched_doctypes()` runs first in `after_migrate`, mirroring every standard DocPerm into Custom DocPerm on doctypes we extend. This avoids Frappe's "Custom DocPerm replaces standard" wipe and restores Accounts Manager / Sales User / Purchase User access on doctypes like Accounts Settings and Sales Invoice.
+- Branch Configuration now force-upgrades any non-System user to `user_type = System User` before inserting `Has Role` so Branch/Stock/Stock Manager/Damage User roles actually stick.
+- Stock User has been granted read access on `User Permission` and `Accounts Settings` via Custom DocPerm, matching what the Branch/Damage User roles already had.
+
+### 11.6 LCV GL Distribution Patch
+
+`rmax_custom.overrides.landed_cost_gl.apply_patch()` runs at import time (from `rmax_custom/__init__.py`) and replaces `erpnext.stock.doctype.purchase_receipt.purchase_receipt.get_item_account_wise_additional_cost`. The patched version uses `custom_cbm` as the distribution basis whenever an LCV has `distribute_charges_based_on = "Distribute Manually"` **and** `custom_distribute_by_cbm = 1`. Without the patch, multiple tax rows under Manual mode produced duplicate Cr entries and a GL imbalance equal to the extra tax rows' amounts.
+
+### 11.7 Deployment Map
+
+| Site | Server | Server ID |
+|------|--------|-----------|
+| rmax_dev2 | RMAX (5.189.131.148) | `41ef79dc-a2fd-418a-bd88-b5f5173aeaf7` |
+| rmax-uat2.enfonoerp.com | AQRAR (185.193.19.184) | `3beb2d91-86d1-4d2d-ba0b-30955992455c` |
+
+Always deploy to both. UAT `bench migrate` is currently blocked by missing ERPNext patch `v11_1.rename_depends_on_lwp`; use `bench execute rmax_custom.setup.after_migrate` for non-schema changes and `bench execute frappe.reload_doc` + `frappe.custom.doctype.custom_field.custom_field.create_custom_fields` for new DocTypes / Custom Fields.
