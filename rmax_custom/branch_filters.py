@@ -242,3 +242,24 @@ def damage_transfer_permission_query(user):
         `tabDamage Transfer`.`branch_warehouse` IN ({wh_list})
         OR `tabDamage Transfer`.`owner` = {frappe.db.escape(user)}
     )"""
+
+
+def no_vat_sale_permission_query(user):
+    """Filter No VAT Sales by the user's branch warehouses."""
+    if not user or user == "Administrator":
+        return ""
+
+    roles = frappe.get_roles(user)
+    if "System Manager" in roles or "Accounts Manager" in roles:
+        return ""
+
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabNo VAT Sale`.`warehouse` IN ({wh_list})
+        OR `tabNo VAT Sale`.`owner` = {frappe.db.escape(user)}
+    )"""

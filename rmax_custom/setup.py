@@ -187,6 +187,17 @@ def after_migrate():
             "rmax_custom: inter company price list setup failed",
         )
 
+    # No VAT Sale price list
+    try:
+        from rmax_custom.no_vat_sale import setup_no_vat_sale
+
+        setup_no_vat_sale()
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "rmax_custom: no vat sale setup failed",
+        )
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")

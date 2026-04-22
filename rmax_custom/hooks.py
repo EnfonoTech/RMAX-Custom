@@ -157,6 +157,7 @@ permission_query_conditions = {
 	"Purchase Invoice": "rmax_custom.branch_filters.pi_permission_query",
 	"Delivery Note": "rmax_custom.branch_filters.dn_permission_query",
 	"Purchase Receipt": "rmax_custom.branch_filters.pr_permission_query",
+	"No VAT Sale": "rmax_custom.branch_filters.no_vat_sale_permission_query",
 	"Payment Entry": "rmax_custom.branch_filters.pe_permission_query",
 	"Quotation": "rmax_custom.branch_filters.quotation_permission_query",
 	"Stock Transfer": "rmax_custom.branch_filters.stock_transfer_permission_query",
@@ -352,6 +353,10 @@ fixtures = [
                     "Delivery Note-custom_inter_company_branch",
                     "Delivery Note-custom_inter_company_si",
                     "Delivery Note-custom_inter_company_status",
+
+                    # Company — NO VAT Sale accounts
+                    "Company-custom_novat_naseef_account",
+                    "Company-custom_novat_cogs_account",
 
                     # Material Request
                     "Material Request-custom_is_urgent",
