@@ -178,6 +178,7 @@ override_doctype_class = {
 doc_events = {
 	"Sales Invoice": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"validate": "rmax_custom.sales_invoice.enforce_update_stock_permission",
 		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
 	},
 	"Purchase Invoice": {
