@@ -191,6 +191,11 @@ doc_events = {
 	},
 	"Purchase Receipt": {
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"validate": "rmax_custom.lcv_template.purchase_receipt_validate",
+	},
+	"Landed Cost Voucher": {
+		"on_submit": "rmax_custom.lcv_template.landed_cost_voucher_on_submit",
+		"on_cancel": "rmax_custom.lcv_template.landed_cost_voucher_on_cancel",
 	},
 	"Customer": {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
@@ -332,6 +337,12 @@ fixtures = [
                     "Customer-custom_vat_registration_number",
                     "Customer-custom_allow_duplicate_vat",
                     "Customer-custom_duplicate_vat_reason",
+
+                    # Purchase Receipt LCV Checklist
+                    "Purchase Receipt-custom_lcv_section",
+                    "Purchase Receipt-custom_lcv_template",
+                    "Purchase Receipt-custom_lcv_status",
+                    "Purchase Receipt-custom_lcv_checklist",
 
                     # Material Request
                     "Material Request-custom_is_urgent",

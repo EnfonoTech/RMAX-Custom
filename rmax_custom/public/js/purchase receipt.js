@@ -219,3 +219,120 @@ function populate_new_form(source, source_name, source_docstatus) {
         indicator: 'blue'
     }, 6);
 }
+
+// -----------------------------------------------------------------------------
+// LCV Charges Checklist — load template, create LCV, show status indicator
+// -----------------------------------------------------------------------------
+
+frappe.ui.form.on('Purchase Receipt', {
+    refresh: function (frm) {
+        _rmax_render_lcv_status_indicator(frm);
+        _rmax_add_lcv_buttons(frm);
+    },
+    custom_lcv_template: function (frm) {
+        if (!frm.doc.custom_lcv_template || (frm.doc.custom_lcv_checklist || []).length) return;
+        _rmax_load_template(frm);
+    }
+});
+
+function _rmax_render_lcv_status_indicator(frm) {
+    const status = frm.doc.custom_lcv_status;
+    if (!status) return;
+
+    const COLOR = {
+        "Not Started": "grey",
+        "Pending": "red",
+        "Partial": "orange",
+        "Complete": "green"
+    };
+
+    const checklist = frm.doc.custom_lcv_checklist || [];
+    const done = checklist.filter(r => r.done).length;
+    const total = checklist.length;
+    const label = total
+        ? `LCV ${status} (${done}/${total})`
+        : `LCV ${status}`;
+
+    frm.dashboard.add_indicator(label, COLOR[status] || "grey");
+}
+
+function _rmax_add_lcv_buttons(frm) {
+    if (frm.is_new()) return;
+
+    frm.add_custom_button(__('Load LCV Template'), function () {
+        _rmax_pick_template_and_load(frm);
+    }, __('LCV Checklist'));
+
+    const checklist = frm.doc.custom_lcv_checklist || [];
+    const has_pending = checklist.some(r => !r.done);
+    if (has_pending) {
+        frm.add_custom_button(__('Create LCV from Template'), function () {
+            _rmax_create_lcv(frm);
+        }, __('LCV Checklist'));
+    }
+}
+
+function _rmax_pick_template_and_load(frm) {
+    const d = new frappe.ui.Dialog({
+        title: __('Load LCV Template'),
+        fields: [
+            {
+                fieldname: 'template',
+                fieldtype: 'Link',
+                options: 'LCV Charge Template',
+                label: __('Template'),
+                reqd: 1,
+                default: frm.doc.custom_lcv_template || null
+            }
+        ],
+        primary_action_label: __('Load'),
+        primary_action: function (values) {
+            frappe.call({
+                method: 'rmax_custom.lcv_template.load_template_into_pr',
+                args: {
+                    purchase_receipt: frm.doc.name,
+                    template: values.template
+                },
+                freeze: true,
+                freeze_message: __('Loading template...'),
+                callback: function (r) {
+                    if (r.message) {
+                        frappe.show_alert({
+                            message: __('Loaded {0} charges.', [r.message.rows]),
+                            indicator: 'green'
+                        });
+                        d.hide();
+                        frm.reload_doc();
+                    }
+                }
+            });
+        }
+    });
+    d.show();
+}
+
+function _rmax_load_template(frm) {
+    // Template picked on unsaved doc — let server auto-populate on validate.
+    frm.set_value('custom_lcv_checklist', []);
+}
+
+function _rmax_create_lcv(frm) {
+    frappe.confirm(
+        __('Create a Draft Landed Cost Voucher for the pending charges?'),
+        function () {
+            frappe.call({
+                method: 'rmax_custom.lcv_template.create_lcv_from_template',
+                args: {
+                    purchase_receipt: frm.doc.name
+                },
+                freeze: true,
+                freeze_message: __('Creating LCV...'),
+                callback: function (r) {
+                    if (r.message) {
+                        frappe.set_route('Form', 'Landed Cost Voucher', r.message);
+                    }
+                }
+            });
+        }
+    );
+}

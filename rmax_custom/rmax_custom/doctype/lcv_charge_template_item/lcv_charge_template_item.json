@@ -1,0 +1,70 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "charge_name",
+  "currency",
+  "distribute_by",
+  "default_amount",
+  "is_mandatory"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Charge",
+   "reqd": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Currency",
+   "options": "SAR\nUSD",
+   "default": "SAR",
+   "columns": 1
+  },
+  {
+   "fieldname": "distribute_by",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Distribute By",
+   "options": "CBM\nValue",
+   "default": "CBM",
+   "columns": 2
+  },
+  {
+   "fieldname": "default_amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Default Amount",
+   "columns": 2
+  },
+  {
+   "fieldname": "is_mandatory",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Mandatory",
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "LCV Charge Template Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

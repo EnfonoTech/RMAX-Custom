@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-04-22 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "charge_name",
+  "expense_account",
+  "distribute_by",
+  "is_mandatory",
+  "done",
+  "lcv_reference",
+  "amount"
+ ],
+ "fields": [
+  {
+   "fieldname": "charge_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Charge",
+   "read_only": 1,
+   "columns": 2
+  },
+  {
+   "fieldname": "expense_account",
+   "fieldtype": "Link",
+   "label": "Expense Account",
+   "options": "Account",
+   "read_only": 1,
+   "columns": 3
+  },
+  {
+   "fieldname": "distribute_by",
+   "fieldtype": "Select",
+   "label": "Distribute By",
+   "options": "CBM\nValue",
+   "read_only": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "is_mandatory",
+   "fieldtype": "Check",
+   "label": "Mandatory",
+   "read_only": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "done",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Done",
+   "read_only": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "lcv_reference",
+   "fieldtype": "Link",
+   "label": "LCV",
+   "options": "Landed Cost Voucher",
+   "read_only": 1,
+   "columns": 1
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount",
+   "read_only": 1,
+   "columns": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-04-22 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Rmax Custom",
+ "name": "Purchase Receipt LCV Checklist",
+ "owner": "Administrator",
+ "permissions": [],
+ "row_format": "Dynamic",
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

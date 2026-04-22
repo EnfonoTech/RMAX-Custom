@@ -168,6 +168,14 @@ def after_migrate():
     except Exception:
         frappe.log_error(frappe.get_traceback(), "rmax_custom: hr_defaults setup failed")
 
+    # LCV Charge Template defaults (accounts + default template)
+    try:
+        from rmax_custom.lcv_template import setup_lcv_defaults
+
+        setup_lcv_defaults()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "rmax_custom: lcv_template setup failed")
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
