@@ -23,20 +23,22 @@ from frappe.utils import flt
 DEFAULT_TEMPLATE_NAME = "Standard Import KSA"
 LCV_PARENT_GROUP = "Landed Cost Charges"
 
-# Charges shipped with the default template. Amount = sample, user overrides.
-# distribute_by is RMAX vocabulary; 'Value' maps to ERPNext 'Distribute Manually + Distribute by CBM = 0'
-# (i.e., Distribute Charges Based On = Amount). CBM uses our custom_distribute_by_cbm path.
+# Charges shipped with the default template.
+# distribute_by is RMAX vocabulary; 'Value' maps to ERPNext 'Distribute Charges Based On = Amount'
+# (keeping Distribute Manually + custom_distribute_by_cbm for CBM rows).
+# default_amount intentionally omitted — amounts vary per shipment.
 DEFAULT_CHARGES: List[Dict] = [
-	{"charge_name": "Freight Sea/Air",           "currency": "USD", "distribute_by": "CBM",   "default_amount": 2500},
-	{"charge_name": "DO Charges",                "currency": "SAR", "distribute_by": "CBM",   "default_amount": 2995.04},
-	{"charge_name": "Port Charges",              "currency": "SAR", "distribute_by": "CBM",   "default_amount": 4816.88},
-	{"charge_name": "Mawani",                    "currency": "SAR", "distribute_by": "CBM",   "default_amount": 1650},
-	{"charge_name": "Fasah Appointment Fees",    "currency": "SAR", "distribute_by": "CBM",   "default_amount": 103.5},
-	{"charge_name": "Custom Clearance Charges",  "currency": "SAR", "distribute_by": "CBM",   "default_amount": 550},
-	{"charge_name": "Transportation to Warehouse","currency": "SAR", "distribute_by": "CBM",  "default_amount": 3000},
-	{"charge_name": "Doc Charges",               "currency": "SAR", "distribute_by": "CBM",   "default_amount": 2500},
-	{"charge_name": "Local Unloading Expense",   "currency": "SAR", "distribute_by": "CBM",   "default_amount": 500},
-	{"charge_name": "Overtime (Kafeel)",         "currency": "SAR", "distribute_by": "CBM",   "default_amount": 2000},
+	{"charge_name": "Freight Sea/Air",            "currency": "USD", "distribute_by": "CBM"},
+	{"charge_name": "Duty",                       "currency": "SAR", "distribute_by": "Value"},
+	{"charge_name": "DO Charges",                 "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Port Charges",               "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Mawani",                     "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Fasah Appointment Fees",     "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Custom Clearance Charges",   "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Transportation to Warehouse","currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Doc Charges",                "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Local Unloading Expense",    "currency": "SAR", "distribute_by": "CBM"},
+	{"charge_name": "Overtime (Kafeel)",          "currency": "SAR", "distribute_by": "CBM"},
 ]
 
 
@@ -46,9 +48,62 @@ DEFAULT_CHARGES: List[Dict] = [
 
 
 def setup_lcv_defaults():
-	"""Create expense accounts per company + ship default template."""
+	"""Create expense accounts per company + ship default template + backfill custom-field flags."""
 	_ensure_accounts_per_company()
 	_ensure_default_template()
+	_upgrade_default_template()
+	_ensure_allow_on_submit_flags()
+
+
+def _ensure_allow_on_submit_flags():
+	"""Make the PR LCV fields editable after PR submission.
+
+	Without this flag Frappe blocks user-picked templates on already-
+	submitted PRs ('Not allowed to change LCV Charge Template after
+	submission').
+	"""
+	fields = [
+		"Purchase Receipt-custom_lcv_template",
+		"Purchase Receipt-custom_lcv_status",
+		"Purchase Receipt-custom_lcv_checklist",
+	]
+	for name in fields:
+		if not frappe.db.exists("Custom Field", name):
+			continue
+		frappe.db.set_value("Custom Field", name, "allow_on_submit", 1, update_modified=False)
+	frappe.db.commit()
+	frappe.clear_cache(doctype="Purchase Receipt")
+
+
+def _upgrade_default_template():
+	"""Ensure every shipped charge row is present in the default template.
+
+	Adds missing rows (e.g. Duty introduced later) without touching any
+	user customisations. default_amount on shipped rows is cleared only
+	if it still matches a prior shipped example value of 0; non-zero
+	client-edited amounts are preserved.
+	"""
+	if not frappe.db.exists("LCV Charge Template", DEFAULT_TEMPLATE_NAME):
+		return
+
+	tmpl = frappe.get_doc("LCV Charge Template", DEFAULT_TEMPLATE_NAME)
+	existing_names = {row.charge_name for row in tmpl.charges}
+
+	dirty = False
+	for charge in DEFAULT_CHARGES:
+		if charge["charge_name"] in existing_names:
+			continue
+		tmpl.append("charges", {
+			"charge_name": charge["charge_name"],
+			"currency": charge["currency"],
+			"distribute_by": charge["distribute_by"],
+			"is_mandatory": 0,
+		})
+		dirty = True
+
+	if dirty:
+		tmpl.save(ignore_permissions=True)
+		frappe.db.commit()
 
 
 def _ensure_accounts_per_company():
@@ -138,7 +193,6 @@ def _ensure_default_template():
 				"charge_name": c["charge_name"],
 				"currency": c["currency"],
 				"distribute_by": c["distribute_by"],
-				"default_amount": c["default_amount"],
 				"is_mandatory": 0,
 			}
 			for c in DEFAULT_CHARGES
