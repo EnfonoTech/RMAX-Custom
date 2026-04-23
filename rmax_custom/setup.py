@@ -257,32 +257,62 @@ _DOCPERM_FLAGS = (
 
 
 def fix_stock_transfer_series():
-    """Stock Transfer's autoname 'format:{ST}-{#####}' stores the counter under
-    an empty series key. That counter occasionally falls behind the
-    actual max number in tabStock Transfer, causing
-    'Stock Transfer ST-XXXXX already exists' on new documents.
+    """Keep the Stock Transfer 'ST-' counter aligned with the highest
+    existing ST-##### document name.
 
-    Align the counter with the highest existing ST-##### name so the next
-    insert generates a fresh, unused name. Safe to re-run.
+    The DocType autoname now uses the classic form 'ST-.#####', so the
+    counter lives under name='ST-' in tabSeries. Earlier the autoname
+    was 'format:{ST}-{#####}' which stored the counter under an empty
+    name key, occasionally drifting below the real max and producing
+    'Stock Transfer ST-XXXXX already exists' errors.
+
+    This function:
+    * finds the max ST-##### in tabStock Transfer,
+    * copies the legacy empty-name counter forward (one-time migration),
+    * ensures tabSeries has an 'ST-' row with current >= max.
+
+    Safe and idempotent — only ever bumps the counter upward.
     """
     rows = frappe.db.sql(
         """SELECT name FROM `tabStock Transfer`
            WHERE name LIKE 'ST-%%' ORDER BY name DESC LIMIT 1""",
         as_dict=False,
     )
-    if not rows:
-        return
-    last_name = rows[0][0]
-    try:
-        current_max = int(last_name.split("-")[-1])
-    except Exception:
+    current_max = 0
+    if rows:
+        try:
+            current_max = int(rows[0][0].split("-")[-1])
+        except Exception:
+            current_max = 0
+
+    # Legacy empty-name counter (from the old format:{ST}-{#####} days)
+    legacy = frappe.db.sql(
+        "SELECT current FROM tabSeries WHERE name = '' OR name IS NULL LIMIT 1",
+        as_dict=False,
+    )
+    legacy_current = int(legacy[0][0]) if legacy and legacy[0][0] else 0
+
+    target = max(current_max, legacy_current)
+    if target <= 0:
         return
 
-    frappe.db.sql(
-        """UPDATE tabSeries SET current = %s
-           WHERE (name = '' OR name IS NULL) AND current < %s""",
-        (current_max, current_max),
+    existing = frappe.db.sql(
+        "SELECT current FROM tabSeries WHERE name = 'ST-'",
+        as_dict=False,
     )
+    if existing:
+        existing_current = int(existing[0][0] or 0)
+        if existing_current < target:
+            frappe.db.sql(
+                "UPDATE tabSeries SET current = %s WHERE name = 'ST-'",
+                (target,),
+            )
+    else:
+        frappe.db.sql(
+            "INSERT INTO tabSeries (name, current) VALUES ('ST-', %s)",
+            (target,),
+        )
+
     frappe.db.commit()
 
 

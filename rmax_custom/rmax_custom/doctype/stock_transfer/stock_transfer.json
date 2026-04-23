@@ -1,7 +1,7 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "format:{ST}-{#####}",
+ "autoname": "ST-.#####",
  "creation": "2026-04-07 12:00:51.568243",
  "doctype": "DocType",
  "engine": "InnoDB",
