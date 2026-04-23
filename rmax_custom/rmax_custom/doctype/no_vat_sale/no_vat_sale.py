@@ -125,14 +125,19 @@ class NoVATSale(Document):
 		self.gross_profit = total_selling - total_cost
 
 	def _validate_branch_warehouse_match(self):
-		"""Warehouse must belong to the selected branch."""
+		"""Warehouse must belong to the same Company as the selected Branch.
+
+		Core ERPNext Warehouse has no `branch` field, so we cross-check by
+		Company instead. If a site adds a custom `branch` link on
+		Warehouse later, this check still passes harmlessly.
+		"""
 		if not (self.branch and self.warehouse):
 			return
-		wh_branch = frappe.db.get_value("Warehouse", self.warehouse, "branch")
-		if wh_branch and wh_branch != self.branch:
+		wh_company = frappe.db.get_value("Warehouse", self.warehouse, "company")
+		if wh_company and wh_company != self.company:
 			frappe.throw(
-				_("Warehouse {0} belongs to branch {1}, not {2}.").format(
-					self.warehouse, wh_branch, self.branch
+				_("Warehouse {0} belongs to company {1}, not {2}.").format(
+					self.warehouse, wh_company, self.company
 				)
 			)
 
@@ -191,6 +196,8 @@ class NoVATSale(Document):
 		se.from_warehouse = self.warehouse
 		se.remarks = f"NO VAT Sale {self.name} — {self.branch}"
 
+		company_cost_center = frappe.db.get_value("Company", self.company, "cost_center")
+
 		for row in self.items:
 			se.append("items", {
 				"item_code": row.item_code,
@@ -201,8 +208,7 @@ class NoVATSale(Document):
 				"s_warehouse": self.warehouse,
 				"basic_rate": flt(row.valuation_rate),
 				"expense_account": self.cogs_account,
-				"cost_center": frappe.db.get_value("Branch", self.branch, "custom_default_cost_center")
-				or frappe.db.get_value("Company", self.company, "cost_center"),
+				"cost_center": company_cost_center,
 			})
 
 		se.flags.ignore_permissions = True
