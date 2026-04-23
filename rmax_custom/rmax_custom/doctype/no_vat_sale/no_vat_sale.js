@@ -22,28 +22,23 @@ frappe.ui.form.on("No VAT Sale", {
 function _rmax_add_ledger_buttons(frm) {
     if (frm.doc.docstatus !== 1) return;
 
-    if (frm.doc.journal_entry || frm.doc.stock_entry) {
+    if (frm.doc.stock_entry) {
         frm.add_custom_button(
             __("Accounting Ledger"),
             function () {
-                const vouchers = [
-                    frm.doc.journal_entry,
-                    frm.doc.stock_entry,
-                ].filter(Boolean);
                 frappe.route_options = {
                     company: frm.doc.company,
                     from_date: frm.doc.posting_date,
                     to_date: frm.doc.posting_date,
-                    voucher_no: vouchers.length === 1 ? vouchers[0] : ["in", vouchers],
+                    voucher_type: "Stock Entry",
+                    voucher_no: frm.doc.stock_entry,
                     group_by: "Group by Voucher (Consolidated)",
                 };
                 frappe.set_route("query-report", "General Ledger");
             },
             __("View")
         );
-    }
 
-    if (frm.doc.stock_entry) {
         frm.add_custom_button(
             __("Stock Ledger"),
             function () {
@@ -51,9 +46,28 @@ function _rmax_add_ledger_buttons(frm) {
                     company: frm.doc.company,
                     from_date: frm.doc.posting_date,
                     to_date: frm.doc.posting_date,
+                    voucher_type: "Stock Entry",
                     voucher_no: frm.doc.stock_entry,
                 };
                 frappe.set_route("query-report", "Stock Ledger");
+            },
+            __("View")
+        );
+    }
+
+    if (frm.doc.journal_entry) {
+        frm.add_custom_button(
+            __("Accounting Ledger (Cash)"),
+            function () {
+                frappe.route_options = {
+                    company: frm.doc.company,
+                    from_date: frm.doc.posting_date,
+                    to_date: frm.doc.posting_date,
+                    voucher_type: "Journal Entry",
+                    voucher_no: frm.doc.journal_entry,
+                    group_by: "Group by Voucher (Consolidated)",
+                };
+                frappe.set_route("query-report", "General Ledger");
             },
             __("View")
         );
