@@ -156,6 +156,7 @@ BRANCH_USER_ALLOWED_MODULES = [
 
 def after_migrate():
     """Set up Branch User role permissions after migration."""
+    fix_stock_transfer_series()
     preserve_standard_docperms_on_touched_doctypes()
     setup_branch_user_permissions()
     setup_stock_user_extra_permissions()
@@ -253,6 +254,36 @@ _DOCPERM_FLAGS = (
     "print", "email", "report", "export", "share",
     "if_owner", "amend", "select", "import",
 )
+
+
+def fix_stock_transfer_series():
+    """Stock Transfer's autoname 'format:{ST}-{#####}' stores the counter under
+    an empty series key. That counter occasionally falls behind the
+    actual max number in tabStock Transfer, causing
+    'Stock Transfer ST-XXXXX already exists' on new documents.
+
+    Align the counter with the highest existing ST-##### name so the next
+    insert generates a fresh, unused name. Safe to re-run.
+    """
+    rows = frappe.db.sql(
+        """SELECT name FROM `tabStock Transfer`
+           WHERE name LIKE 'ST-%%' ORDER BY name DESC LIMIT 1""",
+        as_dict=False,
+    )
+    if not rows:
+        return
+    last_name = rows[0][0]
+    try:
+        current_max = int(last_name.split("-")[-1])
+    except Exception:
+        return
+
+    frappe.db.sql(
+        """UPDATE tabSeries SET current = %s
+           WHERE (name = '' OR name IS NULL) AND current < %s""",
+        (current_max, current_max),
+    )
+    frappe.db.commit()
 
 
 def preserve_standard_docperms_on_touched_doctypes():
