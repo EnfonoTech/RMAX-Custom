@@ -1,0 +1,57 @@
+<h2>Damage PWA — Screen Map</h2>
+<p class="subtitle">Core screens for the warehouse inspection flow. Tap to select which feels right.</p>
+
+<div class="section">
+  <h3>App Flow</h3>
+  <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 24px; font-family: monospace; font-size: 14px; line-height: 2.2; color: #ccc;">
+    <div style="text-align: center;">
+      <span style="background: #7c3aed; color: white; padding: 6px 16px; border-radius: 8px;">PIN Login</span>
+      <br>
+      <span style="color: #666;">&darr;</span>
+      <br>
+      <span style="background: #2563eb; color: white; padding: 6px 16px; border-radius: 8px;">Dashboard</span>
+      <span style="color: #555; margin: 0 8px;">&mdash; KPIs + pending list</span>
+      <br>
+      <span style="color: #666;">&darr; tap a transfer</span>
+      <br>
+      <span style="background: #059669; color: white; padding: 6px 16px; border-radius: 8px;">Transfer Detail</span>
+      <span style="color: #555; margin: 0 8px;">&mdash; item list + warehouse info</span>
+      <br>
+      <span style="color: #666;">&darr; tap an item</span>
+      <br>
+      <span style="background: #d97706; color: white; padding: 6px 16px; border-radius: 8px;">Item Inspection</span>
+      <span style="color: #555; margin: 0 8px;">&mdash; supplier code, category, photos, remarks</span>
+      <br>
+      <span style="color: #666;">&darr; all items inspected</span>
+      <br>
+      <span style="background: #059669; color: white; padding: 6px 16px; border-radius: 8px;">Transfer Detail</span>
+      <span style="color: #555; margin: 0 8px;">&mdash; Approve / Reject buttons enabled</span>
+      <br>
+      <span style="color: #666;">&darr;</span>
+      <br>
+      <span style="background: #2563eb; color: white; padding: 6px 16px; border-radius: 8px;">Dashboard</span>
+      <span style="color: #555; margin: 0 8px;">&mdash; updated counts</span>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top: 32px;">
+  <h3>5 Screens Total</h3>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="screens-ok" onclick="toggleSelect(this)">
+    <div class="letter">&#10003;</div>
+    <div class="content">
+      <h3>This flow covers everything</h3>
+      <p>PIN Login &rarr; Dashboard &rarr; Transfer Detail &rarr; Item Inspection &rarr; back to Transfer &rarr; Approve/Reject</p>
+    </div>
+  </div>
+  <div class="option" data-choice="need-more" onclick="toggleSelect(this)">
+    <div class="letter">+</div>
+    <div class="content">
+      <h3>I need additional screens</h3>
+      <p>E.g., Damage Slip viewer, settings page, history/completed list, notifications</p>
+    </div>
+  </div>
+</div>

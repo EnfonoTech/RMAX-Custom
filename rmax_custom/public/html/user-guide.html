@@ -79,6 +79,62 @@
     font-weight: 600;
   }
 
+  /* ─── Search ─── */
+  .sidebar-search {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .sidebar-search input {
+    width: 100%;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 8px 12px 8px 34px;
+    color: #fff;
+    font-size: 13px;
+    outline: none;
+    transition: background 0.2s, border-color 0.2s;
+    box-sizing: border-box;
+  }
+
+  .sidebar-search input::placeholder { color: rgba(255,255,255,0.35); }
+  .sidebar-search input:focus {
+    background: rgba(255,255,255,0.13);
+    border-color: var(--accent);
+  }
+
+  .sidebar-search-wrap {
+    position: relative;
+  }
+
+  .sidebar-search-wrap::before {
+    content: "🔍";
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  .sidebar a.search-hidden { display: none !important; }
+
+  .search-highlight {
+    background: #ffe066;
+    color: #000;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
+  #search-no-results {
+    display: none;
+    color: rgba(255,255,255,0.4);
+    font-size: 12px;
+    padding: 8px 20px;
+    font-style: italic;
+  }
+
   .sidebar a {
     display: flex;
     align-items: center;
@@ -465,6 +521,13 @@
     <p>Custom App &mdash; User Guide</p>
   </div>
 
+  <div class="sidebar-search">
+    <div class="sidebar-search-wrap">
+      <input type="text" id="doc-search" placeholder="Search docs..." autocomplete="off">
+    </div>
+    <div id="search-no-results">No results found</div>
+  </div>
+
   <div class="sidebar-section">
     <div class="sidebar-section-title">Overview</div>
     <a href="#overview"><span class="icon">&#127968;</span> Home</a>
@@ -491,6 +554,8 @@
     <a href="#quotation-to-si"><span class="icon">&#128196;</span> Quotation to Invoice</a>
     <a href="#landed-cost-cbm"><span class="icon">&#128438;</span> Landed Cost (CBM)</a>
     <a href="#vat-validation"><span class="icon">&#9989;</span> VAT Validation</a>
+    <a href="#scrap-sale"><span class="icon">&#9851;</span> Scrap Sale</a>
+    <a href="#pi-nonstock"><span class="icon">&#128203;</span> PI Non-Stock Items</a>
     <a href="#enter-nav"><span class="icon">&#9000;</span> Enter Key Navigation</a>
     <a href="#list-filtering"><span class="icon">&#128269;</span> List Filtering</a>
   </div>
@@ -1368,6 +1433,114 @@
     </div>
   </section>
 
+  <section class="section" id="scrap-sale">
+    <h2>&#9851; Scrap Sale Workflow</h2>
+    <p>Use this workflow to sell damaged, written-off, or end-of-life items as scrap to an external buyer. This keeps inventory accurate and records the scrap revenue separately.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <strong>Confirm the items are written off</strong>
+          <p>Before a scrap sale, the items must already be written off (removed from active stock) via a Damage Transfer &amp; write-off Stock Entry, or a direct Stock Entry (Material Issue). Verify in <strong>Stock Balance</strong> that the qty is zero in the source warehouse.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <strong>Create a Sales Invoice for the scrap buyer</strong>
+          <p>Go to <strong>Accounting → Sales Invoice → New</strong>. Select or create the scrap buyer as Customer. Add the scrap items with the agreed scrap selling price. Set warehouse to the <strong>Damage warehouse</strong> (e.g. <em>Damage Jeddah - CNC</em>) where the items currently sit.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <strong>Set Update Stock = Yes</strong>
+          <p>In the Sales Invoice, enable <span class="field">Update Stock</span> so that submitting the invoice automatically reduces the stock from the damage warehouse. This creates a Stock Ledger Entry deducting the scrap qty.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <strong>Submit the Sales Invoice</strong>
+          <p>On submit, the system: <br>
+          &bull; Debits <strong>Accounts Receivable</strong> (or Cash) <br>
+          &bull; Credits <strong>Sales / Scrap Revenue</strong> account <br>
+          &bull; Reduces stock qty from the damage warehouse</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <strong>Record Payment</strong>
+          <p>Create a <strong>Payment Entry</strong> against the Sales Invoice to mark it as paid. Link it to the scrap buyer and the correct bank/cash account.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="info-box">
+      <strong>Note:</strong> Scrap items sold this way must <em>not</em> be in regular branch warehouses. They should have been transferred to the Damage warehouse first via the Damage Transfer workflow before the sale is recorded.
+    </div>
+  </section>
+
+  <section class="section" id="pi-nonstock">
+    <h2>&#128203; Purchase Invoice &mdash; Non-Stock Items <span class="badge">Important</span></h2>
+    <p>When purchasing items that have already been written off (e.g. returned damaged goods, scrap repurchase, or cost adjustments), create the Purchase Invoice as a <strong>non-stock item</strong> transaction. This prevents double-counting in inventory.</p>
+
+    <div class="info-box" style="border-left-color: var(--warning); background: #fff9e6;">
+      <strong>Key Rule:</strong> These items are already written off from stock — they must NOT update inventory again. Always set <span class="field">Update Stock = No</span> (or use a non-stock item) on these Purchase Invoices.
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <strong>Create a New Purchase Invoice</strong>
+          <p>Go to <strong>Buying → Purchase Invoice → New</strong>. Select the supplier. <strong>Do NOT tick "Update Stock"</strong> — leave it unchecked.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <strong>Add Items as Non-Stock or Expense</strong>
+          <p>Add the written-off items to the invoice. Since these are already written off, set the <span class="field">Expense Account</span> on each item line to an appropriate expense or loss account (e.g. <em>Cost of Goods Sold</em> or <em>Write-Off Expense</em>). Do not set a warehouse.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <strong>Set Cost Center</strong>
+          <p>The system will automatically set the Cost Center from the branch configuration. Verify it reflects the correct branch before submitting.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">4</div>
+        <div class="step-content">
+          <strong>Submit</strong>
+          <p>Submit the Purchase Invoice. This records the liability to the supplier without touching stock. The accounting entry will be: <br>
+          &bull; Debit: Expense / Loss account <br>
+          &bull; Credit: Accounts Payable (Supplier)</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-number">5</div>
+        <div class="step-content">
+          <strong>Pay the Supplier</strong>
+          <p>Create a <strong>Payment Entry</strong> against this Purchase Invoice to record the payment to the supplier.</p>
+        </div>
+      </div>
+    </div>
+
+    <table class="table">
+      <thead><tr><th>Scenario</th><th>Update Stock</th><th>Expense Account</th></tr></thead>
+      <tbody>
+        <tr><td>Regular purchase (new stock)</td><td>Yes</td><td>Stock / COGS</td></tr>
+        <tr><td>Written-off / scrap repurchase</td><td><strong>No</strong></td><td>Write-Off or COGS</td></tr>
+        <tr><td>Service / freight / expense</td><td>No</td><td>Relevant expense account</td></tr>
+      </tbody>
+    </table>
+  </section>
+
   <div class="divider"></div>
 
   <p style="text-align:center; color: var(--text-light); font-size: 13px; padding: 20px 0;">
@@ -1376,5 +1549,98 @@
 
 </main>
 
+<script>
+(function() {
+  var input = document.getElementById('doc-search');
+  var noResults = document.getElementById('search-no-results');
+  var sections = Array.from(document.querySelectorAll('.section'));
+  var sidebarLinks = Array.from(document.querySelectorAll('.sidebar a'));
+
+  // Map section id -> sidebar link
+  function getLinkForSection(id) {
+    return sidebarLinks.find(function(a) { return a.getAttribute('href') === '#' + id; });
+  }
+
+  function clearHighlights() {
+    document.querySelectorAll('.search-highlight').forEach(function(el) {
+      var parent = el.parentNode;
+      parent.replaceChild(document.createTextNode(el.textContent), el);
+      parent.normalize();
+    });
+  }
+
+  function highlightText(node, term) {
+    if (node.nodeType === 3) { // text node
+      var idx = node.textContent.toLowerCase().indexOf(term);
+      if (idx === -1) return false;
+      var before = document.createTextNode(node.textContent.slice(0, idx));
+      var mark = document.createElement('mark');
+      mark.className = 'search-highlight';
+      mark.textContent = node.textContent.slice(idx, idx + term.length);
+      var after = document.createTextNode(node.textContent.slice(idx + term.length));
+      var parent = node.parentNode;
+      parent.insertBefore(before, node);
+      parent.insertBefore(mark, node);
+      parent.insertBefore(after, node);
+      parent.removeChild(node);
+      return true;
+    }
+    return false;
+  }
+
+  function highlightSection(section, term) {
+    var walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) {
+        var tag = node.parentNode.tagName;
+        if (['SCRIPT','STYLE','CODE'].indexOf(tag) !== -1) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function(n) { highlightText(n, term); });
+  }
+
+  input.addEventListener('input', function() {
+    var term = input.value.trim().toLowerCase();
+    clearHighlights();
+
+    if (!term) {
+      // Show everything
+      sections.forEach(function(s) { s.style.display = ''; });
+      sidebarLinks.forEach(function(a) { a.classList.remove('search-hidden'); });
+      document.querySelectorAll('.sidebar-section').forEach(function(s) { s.style.display = ''; });
+      noResults.style.display = 'none';
+      return;
+    }
+
+    var anyVisible = false;
+    sections.forEach(function(section) {
+      var text = section.textContent.toLowerCase();
+      var match = text.indexOf(term) !== -1;
+      section.style.display = match ? '' : 'none';
+      var link = getLinkForSection(section.id);
+      if (link) {
+        if (match) {
+          link.classList.remove('search-hidden');
+          anyVisible = true;
+          highlightSection(section, term);
+        } else {
+          link.classList.add('search-hidden');
+        }
+      }
+    });
+
+    // Hide sidebar group headers if all their links are hidden
+    document.querySelectorAll('.sidebar-section').forEach(function(group) {
+      var links = Array.from(group.querySelectorAll('a'));
+      var allHidden = links.length > 0 && links.every(function(a) { return a.classList.contains('search-hidden'); });
+      group.style.display = allHidden ? 'none' : '';
+    });
+
+    noResults.style.display = anyVisible ? 'none' : 'block';
+  });
+})();
+</script>
 </body>
 </html>

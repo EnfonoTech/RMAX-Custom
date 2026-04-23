@@ -180,6 +180,7 @@ class NoVATSale(Document):
 			"debit_in_account_currency": 0,
 			"credit_in_account_currency": flt(self.total_selling_value),
 		})
+		je.custom_no_vat_sale = self.name
 		je.flags.ignore_permissions = True
 		je.insert()
 		je.submit()
@@ -211,6 +212,7 @@ class NoVATSale(Document):
 				"cost_center": company_cost_center,
 			})
 
+		se.custom_no_vat_sale = self.name
 		se.flags.ignore_permissions = True
 		se.insert()
 		se.submit()

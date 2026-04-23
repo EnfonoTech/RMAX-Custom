@@ -1,0 +1,94 @@
+<h2>Damage PWA — UI Direction</h2>
+<p class="subtitle">Mobile-first warehouse app. Which visual style fits best?</p>
+
+<div class="cards">
+  <!-- Option A: Industrial -->
+  <div class="card" data-choice="industrial" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px;">
+      <div style="background: #111; border-radius: 12px; padding: 20px; font-family: 'SF Mono', monospace;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span style="color: #f59e0b; font-weight: 700; font-size: 18px; letter-spacing: 2px;">DAMAGE PWA</span>
+          <span style="background: #dc2626; color: white; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600;">3 PENDING</span>
+        </div>
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px; margin-bottom: 10px;">
+          <div style="color: #f59e0b; font-size: 11px; letter-spacing: 1px; margin-bottom: 4px;">TRANSFER</div>
+          <div style="color: #fff; font-size: 15px; font-weight: 600;">DT-00045</div>
+          <div style="color: #666; font-size: 12px; margin-top: 4px;">Jeddah &rarr; Damage Jeddah &bull; 8 items</div>
+        </div>
+        <div style="background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 14px;">
+          <div style="color: #f59e0b; font-size: 11px; letter-spacing: 1px; margin-bottom: 4px;">TRANSFER</div>
+          <div style="color: #fff; font-size: 15px; font-weight: 600;">DT-00044</div>
+          <div style="color: #666; font-size: 12px; margin-top: 4px;">Riyadh &rarr; Damage Riyadh &bull; 3 items</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A) Industrial Dark</h3>
+      <p>High-contrast dark theme. Monospace type. Amber accents. Built for low-light warehouses. Feels like a ruggedized tool.</p>
+    </div>
+  </div>
+
+  <!-- Option B: Clean & Bright -->
+  <div class="card" data-choice="clean" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px;">
+      <div style="background: #f8fafc; border-radius: 12px; padding: 20px; font-family: -apple-system, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span style="color: #1e293b; font-weight: 700; font-size: 18px;">Inspections</span>
+          <span style="background: #3b82f6; color: white; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 500;">3 pending</span>
+        </div>
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #1e293b; font-size: 15px; font-weight: 600;">DT-00045</div>
+              <div style="color: #94a3b8; font-size: 13px; margin-top: 2px;">Jeddah &rarr; Damage Jeddah</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="color: #64748b; font-size: 13px;">8 items</div>
+              <div style="color: #f59e0b; font-size: 12px;">&bull; Pending</div>
+            </div>
+          </div>
+        </div>
+        <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="color: #1e293b; font-size: 15px; font-weight: 600;">DT-00044</div>
+              <div style="color: #94a3b8; font-size: 13px; margin-top: 2px;">Riyadh &rarr; Damage Riyadh</div>
+            </div>
+            <div style="text-align: right;">
+              <div style="color: #64748b; font-size: 13px;">3 items</div>
+              <div style="color: #f59e0b; font-size: 12px;">&bull; Pending</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B) Clean & Bright</h3>
+      <p>Light, airy, familiar. Rounded cards, soft shadows. Looks like a modern mobile app. Easy to read in daylight.</p>
+    </div>
+  </div>
+
+  <!-- Option C: Bold Material -->
+  <div class="card" data-choice="bold" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 20px;">
+      <div style="background: #1e293b; border-radius: 12px; padding: 20px; font-family: -apple-system, sans-serif;">
+        <div style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); border-radius: 12px; padding: 16px; margin-bottom: 14px;">
+          <div style="color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 500; margin-bottom: 2px;">PENDING INSPECTIONS</div>
+          <div style="color: #fff; font-size: 32px; font-weight: 800;">3</div>
+        </div>
+        <div style="background: #263348; border-radius: 10px; padding: 14px; margin-bottom: 8px; border-left: 3px solid #f59e0b;">
+          <div style="color: #fff; font-size: 15px; font-weight: 600;">DT-00045</div>
+          <div style="color: #94a3b8; font-size: 13px; margin-top: 2px;">Jeddah &rarr; Damage Jeddah &bull; 8 items</div>
+        </div>
+        <div style="background: #263348; border-radius: 10px; padding: 14px; border-left: 3px solid #f59e0b;">
+          <div style="color: #fff; font-size: 15px; font-weight: 600;">DT-00044</div>
+          <div style="color: #94a3b8; font-size: 13px; margin-top: 2px;">Riyadh &rarr; Damage Riyadh &bull; 3 items</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C) Bold Material Dark</h3>
+      <p>Dark blue-gray base. Gradient accent cards. Left border status indicators. Modern and professional. Works in any lighting.</p>
+    </div>
+  </div>
+</div>

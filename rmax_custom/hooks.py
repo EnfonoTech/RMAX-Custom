@@ -358,6 +358,10 @@ fixtures = [
                     "Company-custom_novat_naseef_account",
                     "Company-custom_novat_cogs_account",
 
+                    # Journal Entry / Stock Entry — back-reference to No VAT Sale
+                    "Journal Entry-custom_no_vat_sale",
+                    "Stock Entry-custom_no_vat_sale",
+
                     # Material Request
                     "Material Request-custom_is_urgent",
                     "Material Request Item-custom_is_urgent",
