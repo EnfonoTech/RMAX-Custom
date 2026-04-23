@@ -4,47 +4,42 @@
  */
 
 frappe.ui.form.on("No VAT Sale", {
-    company: function (frm) {
-        frm.trigger("_load_default_accounts");
-    },
-    mode_of_payment: function (frm) {
-        frm.trigger("_load_default_accounts");
-    },
-    _load_default_accounts: function (frm) {
-        if (!frm.doc.company) return;
-        frappe.db.get_doc("Company", frm.doc.company).then((c) => {
-            if (c.custom_novat_naseef_account) {
-                frm.set_value("naseef_account", c.custom_novat_naseef_account);
-            }
-            if (c.custom_novat_cogs_account) {
-                frm.set_value("cogs_account", c.custom_novat_cogs_account);
-            }
-        });
-
-        if (frm.doc.mode_of_payment) {
-            frappe.db
-                .get_value(
-                    "Mode of Payment Account",
-                    {
-                        parent: frm.doc.mode_of_payment,
-                        company: frm.doc.company,
-                    },
-                    "default_account"
-                )
-                .then((r) => {
-                    if (r.message && r.message.default_account) {
-                        frm.set_value("cash_account", r.message.default_account);
-                    }
-                });
-        }
-    },
     onload: function (frm) {
         _rmax_setup_warehouse_query(frm);
     },
     refresh: function (frm) {
         _rmax_setup_warehouse_query(frm);
     },
+    company: function (frm) {
+        _rmax_prefill_accounts(frm);
+    },
+    mode_of_payment: function (frm) {
+        _rmax_prefill_accounts(frm);
+    },
 });
+
+function _rmax_prefill_accounts(frm) {
+    if (!frm.doc.company) return;
+    frappe.call({
+        method: "rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.get_default_accounts",
+        args: {
+            company: frm.doc.company,
+            mode_of_payment: frm.doc.mode_of_payment || null,
+        },
+        callback: function (r) {
+            if (!r.message) return;
+            if (r.message.naseef_account) {
+                frm.set_value("naseef_account", r.message.naseef_account);
+            }
+            if (r.message.cogs_account) {
+                frm.set_value("cogs_account", r.message.cogs_account);
+            }
+            if (r.message.cash_account) {
+                frm.set_value("cash_account", r.message.cash_account);
+            }
+        },
+    });
+}
 
 function _rmax_setup_warehouse_query(frm) {
     frm.set_query("warehouse", function () {

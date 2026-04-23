@@ -235,6 +235,33 @@ def get_item_rate(item_code: str, price_list: str | None = None) -> float:
 
 
 @frappe.whitelist()
+def get_default_accounts(company: str, mode_of_payment: str | None = None) -> dict:
+	"""Return naseef, cogs and cash_account for the form to prefill.
+
+	Uses db.get_value internally so non-admin roles aren't blocked by
+	doc-level read permissions on Company / Mode of Payment.
+	"""
+	if not company:
+		return {}
+
+	result = {
+		"naseef_account": frappe.db.get_value(
+			"Company", company, "custom_novat_naseef_account"
+		),
+		"cogs_account": frappe.db.get_value(
+			"Company", company, "custom_novat_cogs_account"
+		),
+	}
+	if mode_of_payment:
+		result["cash_account"] = frappe.db.get_value(
+			"Mode of Payment Account",
+			{"parent": mode_of_payment, "company": company},
+			"default_account",
+		)
+	return result
+
+
+@frappe.whitelist()
 def get_item_valuation(item_code: str, warehouse: str) -> float:
 	rate = frappe.db.get_value(
 		"Bin",
