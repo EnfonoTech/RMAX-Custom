@@ -38,12 +38,21 @@ frappe.ui.form.on("No VAT Sale", {
                 });
         }
     },
-    branch: function (frm) {
-        frm.set_query("warehouse", function () {
-            return { filters: { branch: frm.doc.branch, is_group: 0 } };
-        });
+    onload: function (frm) {
+        _rmax_setup_warehouse_query(frm);
+    },
+    refresh: function (frm) {
+        _rmax_setup_warehouse_query(frm);
     },
 });
+
+function _rmax_setup_warehouse_query(frm) {
+    frm.set_query("warehouse", function () {
+        const filters = { is_group: 0 };
+        if (frm.doc.company) filters.company = frm.doc.company;
+        return { filters: filters };
+    });
+}
 
 frappe.ui.form.on("No VAT Sale Item", {
     item_code: function (frm, cdt, cdn) {
