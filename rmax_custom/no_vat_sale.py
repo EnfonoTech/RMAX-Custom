@@ -75,17 +75,19 @@ def _ensure_price_list():
 
 
 def _ensure_accounts_per_company():
-	"""Create Naseef + COGS accounts on every root Company and link them
-	to the Company's NO VAT custom fields. Safe + idempotent."""
+	"""Create Naseef + COGS accounts for root Companies (ERPNext syncs
+	them down to child companies automatically) and link the matching
+	accounts on every Company's custom fields. Safe + idempotent."""
 	root_companies = frappe.get_all(
 		"Company",
 		filters=[["parent_company", "in", ["", None]]],
 		fields=["name", "abbr"],
 	)
 
+	# Step 1 — create leaf accounts on root companies.
 	for company in root_companies:
 		try:
-			naseef = _ensure_account(
+			_ensure_account(
 				company=company.name,
 				abbr=company.abbr,
 				account_name=NASEEF_ACCOUNT_NAME,
@@ -93,7 +95,7 @@ def _ensure_accounts_per_company():
 				root_type="Liability",
 				account_type="",
 			)
-			cogs = _ensure_account(
+			_ensure_account(
 				company=company.name,
 				abbr=company.abbr,
 				account_name=COGS_ACCOUNT_NAME,
@@ -101,32 +103,45 @@ def _ensure_accounts_per_company():
 				root_type="Expense",
 				account_type="Expense Account",
 			)
+		except Exception:
+			frappe.log_error(
+				frappe.get_traceback(),
+				f"rmax_custom: No VAT account create failed for {company.name}",
+			)
 
-			# Link on Company if the Company custom fields are still blank
-			if naseef and not frappe.db.get_value(
+	frappe.db.commit()
+
+	# Step 2 — link the per-company account on EVERY company (root + child).
+	for company in frappe.get_all("Company", fields=["name", "abbr"]):
+		try:
+			naseef_name = f"{NASEEF_ACCOUNT_NAME} - {company.abbr}"
+			cogs_name = f"{COGS_ACCOUNT_NAME} - {company.abbr}"
+
+			if frappe.db.exists("Account", naseef_name) and not frappe.db.get_value(
 				"Company", company.name, "custom_novat_naseef_account"
 			):
 				frappe.db.set_value(
 					"Company",
 					company.name,
 					"custom_novat_naseef_account",
-					naseef,
+					naseef_name,
 					update_modified=False,
 				)
-			if cogs and not frappe.db.get_value(
+
+			if frappe.db.exists("Account", cogs_name) and not frappe.db.get_value(
 				"Company", company.name, "custom_novat_cogs_account"
 			):
 				frappe.db.set_value(
 					"Company",
 					company.name,
 					"custom_novat_cogs_account",
-					cogs,
+					cogs_name,
 					update_modified=False,
 				)
 		except Exception:
 			frappe.log_error(
 				frappe.get_traceback(),
-				f"rmax_custom: No VAT account setup failed for {company.name}",
+				f"rmax_custom: No VAT account link failed for {company.name}",
 			)
 
 	frappe.db.commit()
