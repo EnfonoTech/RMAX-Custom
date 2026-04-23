@@ -63,10 +63,10 @@ class NoVATSale(Document):
 		if not self.company:
 			return
 
-		company_doc = frappe.get_cached_doc("Company", self.company)
-
-		naseef = company_doc.get("custom_novat_naseef_account")
-		cogs = company_doc.get("custom_novat_cogs_account")
+		# Use db.get_value to bypass per-doctype read checks — these
+		# account fields are configuration, not user-editable here.
+		naseef = frappe.db.get_value("Company", self.company, "custom_novat_naseef_account")
+		cogs = frappe.db.get_value("Company", self.company, "custom_novat_cogs_account")
 		if not naseef:
 			frappe.throw(
 				_("Set 'NO VAT Naseef Account' on Company {0} before creating a No VAT Sale.").format(self.company)
@@ -80,11 +80,13 @@ class NoVATSale(Document):
 
 		# Cash account from Mode of Payment default account for this company
 		if self.mode_of_payment:
-			mop = frappe.get_cached_doc("Mode of Payment", self.mode_of_payment)
-			for row in mop.accounts or []:
-				if row.company == self.company and row.default_account:
-					self.cash_account = row.default_account
-					break
+			default_account = frappe.db.get_value(
+				"Mode of Payment Account",
+				{"parent": self.mode_of_payment, "company": self.company},
+				"default_account",
+			)
+			if default_account:
+				self.cash_account = default_account
 		if not self.cash_account:
 			frappe.throw(
 				_(
