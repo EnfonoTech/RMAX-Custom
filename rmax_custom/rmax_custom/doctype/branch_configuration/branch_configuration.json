@@ -11,6 +11,10 @@
   "branch",
   "column_break_company",
   "company",
+  "section_break_accounts",
+  "cash_account",
+  "column_break_accounts",
+  "bank_account",
   "section_break_tzxx",
   "warehouse",
   "cost_center",
@@ -36,6 +40,26 @@
    "options": "Company",
    "reqd": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "section_break_accounts",
+   "fieldtype": "Section Break",
+   "label": "Default Accounts"
+  },
+  {
+   "fieldname": "cash_account",
+   "fieldtype": "Link",
+   "label": "Cash in Hand Account",
+   "options": "Account",
+   "description": "Auto-applied to Sales Invoice payment rows where Mode of Payment type = Cash."
+  },
+  {"fieldname": "column_break_accounts", "fieldtype": "Column Break"},
+  {
+   "fieldname": "bank_account",
+   "fieldtype": "Link",
+   "label": "Bank Account",
+   "options": "Account",
+   "description": "Auto-applied to Sales Invoice payment rows where Mode of Payment type = Bank. BNPL payments are not overridden."
   },
   {
    "fieldname": "section_break_tzxx",

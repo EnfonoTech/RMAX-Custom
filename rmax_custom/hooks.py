@@ -186,6 +186,7 @@ doc_events = {
 	"Sales Invoice": {
 		"before_validate": [
 			"rmax_custom.branch_defaults.override_cost_center_from_branch",
+			"rmax_custom.branch_defaults.override_payment_accounts_from_branch",
 			"rmax_custom.bnpl_uplift.apply_bnpl_uplift",
 		],
 		"validate": "rmax_custom.bnpl_uplift.validate_bnpl_uplift",

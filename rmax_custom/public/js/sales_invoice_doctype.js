@@ -72,6 +72,8 @@ frappe.ui.form.on("Sales Invoice", {
         }
     },
     before_save: function (frm) {
+        _rmax_apply_branch_payment_accounts(frm);
+
         if (!frm.doc.is_return) return;
         (frm.doc.items || []).forEach(function (row) {
             if (row.qty > 0) {
@@ -80,4 +82,73 @@ frappe.ui.form.on("Sales Invoice", {
         });
     },
 });
+
+frappe.ui.form.on("Sales Invoice Payment", {
+    mode_of_payment: function (frm, cdt, cdn) {
+        _rmax_apply_branch_payment_accounts(frm, cdt, cdn);
+    },
+});
+
+let _rmax_branch_accounts_cache = null;
+
+function _rmax_get_branch_accounts(callback) {
+    if (_rmax_branch_accounts_cache) {
+        callback(_rmax_branch_accounts_cache);
+        return;
+    }
+    frappe.call({
+        method: "rmax_custom.branch_defaults.get_user_branch_accounts",
+        args: {},
+        callback: function (r) {
+            _rmax_branch_accounts_cache = r.message || {};
+            callback(_rmax_branch_accounts_cache);
+        },
+    });
+}
+
+function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
+    // Skip elevated roles — server hook also bypasses them.
+    const roles = frappe.user_roles || [];
+    const elevated = ["System Manager", "Sales Manager", "Sales Master Manager", "Stock Manager"];
+    if (elevated.some((r) => roles.includes(r))) return;
+    if (!roles.includes("Branch User")) return;
+
+    const payments = frm.doc.payments || [];
+    if (!payments.length) return;
+
+    _rmax_get_branch_accounts(function (accts) {
+        if (!accts || (!accts.cash && !accts.bank)) return;
+
+        // Cache MoP type lookups per session.
+        const mops = [...new Set(payments.map((p) => p.mode_of_payment).filter(Boolean))];
+        if (!mops.length) return;
+
+        frappe.call({
+            method: "frappe.client.get_list",
+            args: {
+                doctype: "Mode of Payment",
+                filters: { name: ["in", mops] },
+                fields: ["name", "type"],
+                limit_page_length: 100,
+            },
+            callback: function (r) {
+                const type_map = {};
+                (r.message || []).forEach((m) => {
+                    type_map[m.name] = m.type;
+                });
+
+                payments.forEach(function (row) {
+                    if (cdn && row.name !== cdn) return;
+                    if (!row.mode_of_payment) return;
+                    const t = type_map[row.mode_of_payment];
+                    if (t === "Cash" && accts.cash) {
+                        frappe.model.set_value(row.doctype, row.name, "account", accts.cash);
+                    } else if (t === "Bank" && accts.bank) {
+                        frappe.model.set_value(row.doctype, row.name, "account", accts.bank);
+                    }
+                });
+            },
+        });
+    });
+}
 
