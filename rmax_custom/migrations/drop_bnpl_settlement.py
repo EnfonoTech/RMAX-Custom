@@ -38,7 +38,12 @@ def _drop_custom_fields():
 
 def _drop_report():
     if frappe.db.exists("Report", REPORT_TO_DROP):
-        frappe.delete_doc("Report", REPORT_TO_DROP, force=True)
+        # Frappe blocks delete on Standard reports via Report.on_trash.
+        # Flip is_standard first, then delete with ignore_permissions.
+        frappe.db.set_value("Report", REPORT_TO_DROP, "is_standard", "No")
+        frappe.delete_doc(
+            "Report", REPORT_TO_DROP, force=True, ignore_permissions=True
+        )
         print(f"  - dropped Report: {REPORT_TO_DROP}")
 
 
