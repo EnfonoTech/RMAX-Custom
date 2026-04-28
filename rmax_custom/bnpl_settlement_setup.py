@@ -159,11 +159,10 @@ def wire_bnpl_modes_of_payment(surcharge_percentage: float = 8.6957):
 		("Tabby", "Tabby Clearing"),
 		("Tamara", "Tamara Clearing"),
 	]
-	companies = frappe.get_all(
-		"Company",
-		filters=[["parent_company", "in", ["", None]]],
-		fields=["name", "abbr"],
-	)
+	# Include child companies — clearing accounts already replicate to
+	# their per-company namespace via ERPNext's standard account sync, so
+	# the MoP Account child table needs a row for every Company.
+	companies = frappe.get_all("Company", fields=["name", "abbr"])
 
 	results = []
 	for mop_name, base_clearing in targets:
