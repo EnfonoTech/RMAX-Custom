@@ -96,6 +96,48 @@ def create_pos_payments_for_invoice(sales_invoice: str, payments: str | list):
 			_("No valid payment rows found (non-zero amounts with mode of payment).")
 		)
 
+	# BNPL surcharge absorption: the popup captured pre-uplift amounts,
+	# but the BNPL hook (rmax_custom.bnpl_uplift) inflates the invoice
+	# rates by the surcharge factor on submit. The delta between the
+	# popup-captured total and the post-uplift grand_total is the
+	# embedded surcharge -- it has to land on the BNPL Mode of Payment
+	# rows so the resulting Payment Entry totals sum to grand_total
+	# (otherwise the invoice ends up "Partly Paid" by the surcharge).
+	si_grand_total = frappe.utils.flt(si.grand_total)
+	captured_total = sum(frappe.utils.flt(r["amount"]) for r in valid_rows)
+	delta = frappe.utils.flt(si_grand_total - captured_total, 2)
+
+	if delta > 0.01:
+		bnpl_indices = []
+		bnpl_total = 0.0
+		for i, r in enumerate(valid_rows):
+			pct = frappe.utils.flt(
+				frappe.db.get_value(
+					"Mode of Payment", r["mode_of_payment"], "custom_surcharge_percentage"
+				)
+			)
+			if pct > 0:
+				bnpl_indices.append(i)
+				bnpl_total += frappe.utils.flt(r["amount"])
+
+		if bnpl_indices and bnpl_total > 0:
+			# Distribute the surcharge delta proportionally across the
+			# BNPL rows. Keep the last row absorbing any rounding
+			# remainder so the row sum exactly equals grand_total.
+			running_added = 0.0
+			for idx_pos, i in enumerate(bnpl_indices):
+				row_amount = frappe.utils.flt(valid_rows[i]["amount"])
+				if idx_pos == len(bnpl_indices) - 1:
+					addition = frappe.utils.flt(delta - running_added, 2)
+				else:
+					addition = frappe.utils.flt(
+						delta * (row_amount / bnpl_total), 2
+					)
+					running_added += addition
+				valid_rows[i]["amount"] = frappe.utils.flt(
+					row_amount + addition, 2
+				)
+
 	from erpnext.accounts.doctype.payment_entry.payment_entry import get_payment_entry
 	from erpnext.accounts.doctype.sales_invoice.sales_invoice import get_bank_cash_account
 
