@@ -26,26 +26,22 @@ def enforce_vat_duplicate_rule(doc, method=None):
 	Ensures override flag is only honoured for permitted roles and that
 	direct API writes cannot silently bypass the duplicate check.
 	"""
-	vat = cstr(doc.get("custom_vat_registration_number")).strip()
+	vat = (doc.get("custom_vat_registration_number") or "").strip()
 	if not vat:
 		return
 
 	if doc.get("customer_type") == "Branch":
 		return
 
-	if count_digits(vat) != 15:
+	if len(vat) != 15:
 		frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
-
-	# Persist the trimmed value so DB always stores the clean form
-	if doc.get("custom_vat_registration_number") != vat:
-		doc.custom_vat_registration_number = vat
 
 	if doc.get("custom_allow_duplicate_vat"):
 		if not _can_override_vat_duplicate():
 			frappe.throw(
 				_("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
 			)
-		if not cstr(doc.get("custom_duplicate_vat_reason")).strip():
+		if not (doc.get("custom_duplicate_vat_reason") or "").strip():
 			frappe.throw(_("Duplicate VAT Reason is required when 'Allow Duplicate VAT' is ticked."))
 		return
 
@@ -60,10 +56,7 @@ def enforce_vat_duplicate_rule(doc, method=None):
 	)
 	if clash:
 		frappe.throw(
-			_(
-				"VAT Registration Number already used by Customer: {0}. "
-				"A Sales Manager can tick 'Allow Duplicate VAT' to override."
-			).format(clash[0].name)
+			_("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' to override.").format(clash[0].name)
 		)
 
 
@@ -88,6 +81,7 @@ def create_customer_with_address(
     default_currency=None,
     tax_id=None,
     custom_vat_registration_number=None,
+    commercial_registration_number=None,
     address_type=None,
     address_line1=None,
     address_line2=None,
@@ -99,29 +93,6 @@ def create_customer_with_address(
     allow_duplicate_vat=0,
     duplicate_vat_reason=None,
 ):
-    """Create a Customer plus its primary billing/shipping Address atomically.
-
-    All input strings are trimmed. VAT, mobile and pincode are validated
-    server-side mirroring the client dialog so direct API callers get the
-    same guardrails. If Address creation fails for any reason after the
-    Customer has been inserted, the Customer is rolled back so callers
-    never end up with an orphan record.
-    """
-
-    customer_name = cstr(customer_name).strip()
-    mobile_no = cstr(mobile_no).strip()
-    email_id = cstr(email_id).strip() or None
-    customer_type = cstr(customer_type).strip() or "Company"
-    custom_vat_registration_number = cstr(custom_vat_registration_number).strip() or None
-    duplicate_vat_reason = cstr(duplicate_vat_reason).strip() or None
-    address_type = cstr(address_type).strip() or None
-    address_line1 = cstr(address_line1).strip() or None
-    address_line2 = cstr(address_line2).strip() or None
-    custom_building_number = cstr(custom_building_number).strip() or None
-    custom_area = cstr(custom_area).strip() or None
-    city = cstr(city).strip() or None
-    state = cstr(state).strip() or None
-    pincode = cstr(pincode).strip() or None
 
     if not customer_name:
         frappe.throw(_("Customer Name is required"))
@@ -130,16 +101,13 @@ def create_customer_with_address(
         frappe.throw(_("Mobile No is required"))
 
     if count_digits(mobile_no) < 10:
-        frappe.throw(_("Mobile number must have at least 10 digits."))
-
-    if pincode and count_digits(pincode) != 5:
-        frappe.throw(_("Postal Code must be exactly 5 digits."))
+        frappe.throw("Mobile number must have at least 10 digits.")
 
     allow_duplicate_vat = int(allow_duplicate_vat or 0)
 
     # VAT duplicate handling
     if custom_vat_registration_number and customer_type != "Branch":
-        if count_digits(custom_vat_registration_number) != 15:
+        if len(str(custom_vat_registration_number)) != 15:
             frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
 
         if allow_duplicate_vat:
@@ -147,20 +115,16 @@ def create_customer_with_address(
                 frappe.throw(
                     _("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
                 )
-            if not duplicate_vat_reason:
+            if not (duplicate_vat_reason and duplicate_vat_reason.strip()):
                 frappe.throw(_("Duplicate VAT Reason is required when overriding the VAT duplicate check."))
         else:
-            clash = frappe.db.get_value(
+            clash = frappe.db.exists(
                 "Customer",
                 {"custom_vat_registration_number": custom_vat_registration_number},
-                "name",
             )
             if clash:
                 frappe.throw(
-                    _(
-                        "VAT Registration Number already used by Customer: {0}. "
-                        "A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override."
-                    ).format(clash)
+                    _("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override.").format(clash)
                 )
 
     # Prevent duplicate by name
@@ -185,7 +149,7 @@ def create_customer_with_address(
     customer = frappe.get_doc({
         "doctype": "Customer",
         "customer_name": customer_name,
-        "customer_type": customer_type,
+        "customer_type": customer_type or "Company",
         "customer_group": _get_default_customer_group(),
         "territory": _get_default_territory(),
         "default_currency": default_currency,
@@ -196,62 +160,54 @@ def create_customer_with_address(
         "custom_allow_duplicate_vat": 1 if allow_duplicate_vat else 0,
         "custom_duplicate_vat_reason": duplicate_vat_reason if allow_duplicate_vat else None,
     })
+
     customer.insert(ignore_permissions=True)
 
-    try:
-        address = frappe.get_doc({
-            "doctype": "Address",
-            "address_title": customer_name,
-            "address_type": address_type or "Billing",
-            "address_line1": address_line1,
-            "address_line2": address_line2,
-            "city": city,
-            "state": state,
-            "custom_area": custom_area,
-            "custom_building_number": custom_building_number,
-            "pincode": pincode,
-            "country": country,
-            "email_id": email_id,
-            "phone": mobile_no,
-            "is_primary_address": 1,
-            "is_shipping_address": 1,
-        })
-        address.append("links", {
-            "link_doctype": "Customer",
-            "link_name": customer.name,
-            "link_title": customer.customer_name,
-        })
-        address.insert(ignore_permissions=True)
+    address_name = None
 
-        customer.customer_primary_address = address.name
-        customer.save(ignore_permissions=True)
-    except Exception:
-        # Roll the Customer back so we don't leave an orphan when the
-        # address fails for any reason (validation, network, etc.).
-        frappe.db.rollback()
-        raise
+    address = frappe.get_doc({
+        "doctype": "Address",
+        "address_title": customer_name,
+        "address_type": address_type or "Billing",
+        "address_line1": address_line1,
+        "address_line2": address_line2,
+        "city": city,
+        "state": state,
+        "custom_area": custom_area,
+        "custom_building_number": custom_building_number,
+        "pincode": pincode,
+        "country": country,
+        "is_primary_address": 1,
+        "is_shipping_address": 1
+    })
+    address.append("links", {
+        "link_doctype": "Customer",
+        "link_name": customer.name,
+        "link_title": customer.customer_name
+    })
+
+    address.insert(ignore_permissions=True)
+    customer.customer_primary_address = address.name
+    customer.save(ignore_permissions=True)
 
     return {
         "customer": customer.name,
         "address": address.name,
-        "message": _("Customer {0} and Address created successfully").format(customer.name),
+        "message": "Customer and Address created successfully"
     }
 
 
 
 @frappe.whitelist()
 def validate_vat_customer(vat, customer_type, name=None, allow_duplicate_vat=0):
-    """Live VAT duplicate check called from Customer form + Create Customer dialog."""
-    vat = cstr(vat).strip()
     if not vat:
         return
     if customer_type == "Branch":
         return
 
-    if count_digits(vat) != 15:
-        frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
+    allow_duplicate_vat = int(allow_duplicate_vat or 0)
 
-    if int(allow_duplicate_vat or 0):
+    if allow_duplicate_vat:
         if not _can_override_vat_duplicate():
             frappe.throw(
                 _("You do not have permission to override the VAT duplicate check. Required role: Sales Manager.")
@@ -262,19 +218,17 @@ def validate_vat_customer(vat, customer_type, name=None, allow_duplicate_vat=0):
         "Customer",
         filters={
             "custom_vat_registration_number": vat,
-            "name": ["!=", cstr(name) or ""],
+            "name": ["!=", name]
         },
-        fields=["name"],
-        limit=1,
+        fields=["name"]
     )
 
     if existing:
         frappe.throw(
-            _(
-                "VAT Registration Number already used by Customer: {0}. "
-                "A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override."
-            ).format(existing[0].name)
+            _("VAT Registration Number already used by Customer: {0}. A Sales Manager can tick 'Allow Duplicate VAT' on the Customer to override.").format(existing[0].name)
         )
+
+    return
 
 
 
