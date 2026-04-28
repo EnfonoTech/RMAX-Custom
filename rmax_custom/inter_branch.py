@@ -297,6 +297,10 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
     debtor_payable = get_or_create_inter_branch_account(doc.company, creditor, side="payable")
     creditor_receivable = get_or_create_inter_branch_account(doc.company, debtor, side="receivable")
 
+    company_currency = frappe.db.get_value("Company", doc.company, "default_currency")
+    debtor_currency = frappe.db.get_value("Account", debtor_payable, "account_currency") or company_currency
+    creditor_currency = frappe.db.get_value("Account", creditor_receivable, "account_currency") or company_currency
+
     source_doctype = ""
     source_docname = ""
     for row in doc.accounts:
@@ -309,7 +313,10 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
         "accounts",
         {
             "account": debtor_payable,
+            "account_currency": debtor_currency,
+            "exchange_rate": 1,
             "credit_in_account_currency": amount,
+            "credit": amount,
             "branch": debtor,
             "custom_auto_inserted": 1,
             "custom_source_doctype": source_doctype or "Journal Entry",
@@ -321,7 +328,10 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
         "accounts",
         {
             "account": creditor_receivable,
+            "account_currency": creditor_currency,
+            "exchange_rate": 1,
             "debit_in_account_currency": amount,
+            "debit": amount,
             "branch": creditor,
             "custom_auto_inserted": 1,
             "custom_source_doctype": source_doctype or "Journal Entry",
@@ -426,6 +436,10 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
     src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
     tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
 
+    company_currency = frappe.db.get_value("Company", company, "default_currency")
+    src_currency = frappe.db.get_value("Account", src_receivable, "account_currency") or company_currency
+    tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
+
     je = frappe.new_doc("Journal Entry")
     je.posting_date = stock_transfer.posting_date
     je.company = company
@@ -437,7 +451,10 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
         "accounts",
         {
             "account": src_receivable,
+            "account_currency": src_currency,
+            "exchange_rate": 1,
             "debit_in_account_currency": amount,
+            "debit": amount,
             "branch": source_branch,
             "custom_auto_inserted": 1,
             "custom_source_doctype": "Stock Transfer",
@@ -448,7 +465,10 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
         "accounts",
         {
             "account": tgt_payable,
+            "account_currency": tgt_currency,
+            "exchange_rate": 1,
             "credit_in_account_currency": amount,
+            "credit": amount,
             "branch": target_branch,
             "custom_auto_inserted": 1,
             "custom_source_doctype": "Stock Transfer",
