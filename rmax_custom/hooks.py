@@ -180,7 +180,11 @@ override_doctype_class = {
 
 doc_events = {
 	"Sales Invoice": {
-		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"before_validate": [
+			"rmax_custom.branch_defaults.override_cost_center_from_branch",
+			"rmax_custom.bnpl_uplift.apply_bnpl_uplift",
+		],
+		"validate": "rmax_custom.bnpl_uplift.validate_bnpl_uplift",
 		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
 		"on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 	},
@@ -323,9 +327,15 @@ fixtures = [
                     # Sales Invoice
                     "Sales Invoice-custom_payment_mode",
                     "Sales Invoice-custom_inter_company_branch",
+                    "Sales Invoice-custom_bnpl_portion_ratio",
 
                     # Sales Invoice Item
                     "Sales Invoice Item-total_vat_linewise",
+                    "Sales Invoice Item-custom_original_rate",
+                    "Sales Invoice Item-custom_bnpl_uplift_amount",
+
+                    # Mode of Payment — BNPL surcharge
+                    "Mode of Payment-custom_surcharge_percentage",
 
     
                     # Quotation
