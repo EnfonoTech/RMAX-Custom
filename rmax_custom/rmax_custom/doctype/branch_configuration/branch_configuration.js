@@ -41,11 +41,7 @@ function set_child_filters(frm) {
 		};
 	});
 
-	frm.set_query("cash_mode_of_payment", function () {
-		return { filters: { type: "Cash" } };
-	});
-
-	frm.set_query("bank_mode_of_payment", function () {
-		return { filters: { type: "Bank" } };
+	frm.set_query("mode_of_payment", "mode_of_payment", function () {
+		return { filters: { type: ["in", ["Cash", "Bank"]] } };
 	});
 }

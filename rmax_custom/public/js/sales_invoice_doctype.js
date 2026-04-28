@@ -117,9 +117,17 @@ function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
     if (!payments.length) return;
 
     _rmax_get_branch_accounts(function (accts) {
-        if (!accts || (!accts.cash_mop && !accts.bank_mop)) return;
+        const cash_list = (accts && accts.cash) || [];
+        const bank_list = (accts && accts.bank) || [];
+        if (!cash_list.length && !bank_list.length) return;
 
-        // Cache MoP type lookups per session.
+        const cash_mops = cash_list.map((x) => x.mop);
+        const bank_mops = bank_list.map((x) => x.mop);
+        const account_for = {};
+        cash_list.concat(bank_list).forEach((x) => {
+            if (x.account) account_for[x.mop] = x.account;
+        });
+
         const mops = [...new Set(payments.map((p) => p.mode_of_payment).filter(Boolean))];
         if (!mops.length) return;
 
@@ -142,22 +150,18 @@ function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
                     if (!row.mode_of_payment) return;
                     const t = type_map[row.mode_of_payment];
 
-                    let target_mop = null;
-                    let target_account = null;
-                    if (t === "Cash" && accts.cash_mop) {
-                        target_mop = accts.cash_mop;
-                        target_account = accts.cash_account;
-                    } else if (t === "Bank" && accts.bank_mop) {
-                        target_mop = accts.bank_mop;
-                        target_account = accts.bank_account;
-                    }
-                    if (!target_mop) return;
+                    let allowed = null;
+                    if (t === "Cash") allowed = cash_mops;
+                    else if (t === "Bank") allowed = bank_mops;
+                    if (!allowed || !allowed.length) return;
 
-                    if (row.mode_of_payment !== target_mop) {
-                        frappe.model.set_value(row.doctype, row.name, "mode_of_payment", target_mop);
+                    if (allowed.indexOf(row.mode_of_payment) === -1) {
+                        frappe.model.set_value(row.doctype, row.name, "mode_of_payment", allowed[0]);
                     }
-                    if (target_account) {
-                        frappe.model.set_value(row.doctype, row.name, "account", target_account);
+
+                    const acct = account_for[row.mode_of_payment] || account_for[allowed[0]];
+                    if (acct) {
+                        frappe.model.set_value(row.doctype, row.name, "account", acct);
                     }
                 });
             },

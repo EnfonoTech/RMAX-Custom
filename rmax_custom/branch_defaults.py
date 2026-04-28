@@ -126,16 +126,44 @@ def _resolve_user_branch(user, company=None, cost_center=None):
     return branches[0]
 
 
-def _branch_default_mops(branch_name):
+def _branch_mops_by_type(branch_name):
+    """Return ({cash:[mops]}, {bank:[mops]}) for this branch.
+
+    Order matches the child-table row order, so the first row of each
+    type is the implicit default for that branch.
+    """
+    cash, bank = [], []
     if not branch_name:
-        return None, None
-    row = frappe.db.get_value(
-        "Branch Configuration",
-        branch_name,
-        ["cash_mode_of_payment", "bank_mode_of_payment"],
-        as_dict=True,
-    ) or {}
-    return row.get("cash_mode_of_payment"), row.get("bank_mode_of_payment")
+        return cash, bank
+
+    rows = frappe.get_all(
+        "Branch Configuration Mode of Payment",
+        filters={"parent": branch_name, "parenttype": "Branch Configuration"},
+        fields=["mode_of_payment"],
+        order_by="idx asc",
+    )
+    if not rows:
+        return cash, bank
+
+    mop_names = [r.mode_of_payment for r in rows if r.mode_of_payment]
+    if not mop_names:
+        return cash, bank
+
+    type_map = {
+        m["name"]: (m.get("type") or "")
+        for m in frappe.get_all(
+            "Mode of Payment",
+            filters={"name": ["in", mop_names]},
+            fields=["name", "type"],
+        )
+    }
+    for r in rows:
+        t = type_map.get(r.mode_of_payment)
+        if t == "Cash":
+            cash.append(r.mode_of_payment)
+        elif t == "Bank":
+            bank.append(r.mode_of_payment)
+    return cash, bank
 
 
 def _mop_account_for_company(mop, company):
@@ -150,13 +178,17 @@ def _mop_account_for_company(mop, company):
 
 
 def override_payment_accounts_from_branch(doc, method=None):
-    """Before validate: rewrite Sales Invoice payments[*] using the user's
-    Branch Configuration default Modes of Payment.
+    """Before validate: constrain Sales Invoice payments[*] to the user's
+    Branch Configuration Mode-of-Payment list.
 
-    For each payment row whose MoP type is Cash, swap to branch.cash_mop
-    and resync the account from `Mode of Payment Account` for the SI's
-    company. Same for Bank. BNPL (type=General) and any other types are
-    left untouched.
+    Each payment row with MoP type Cash or Bank is checked against the
+    branch's allowlist for that type:
+      - if the row's MoP is in the list → keep it, just resync the account
+        from `Mode of Payment Account` for the SI company
+      - if the row's MoP is NOT in the list → swap to the first branch
+        MoP of the same type (the implicit branch default), then resync
+        the account
+    BNPL / General / Phone / any other type → untouched.
 
     Sales Manager / Stock Manager / System Manager / Admin bypass.
     """
@@ -175,11 +207,11 @@ def override_payment_accounts_from_branch(doc, method=None):
     branch = _resolve_user_branch(user, company=doc.company, cost_center=doc.get("cost_center"))
     if not branch:
         return
-    cash_mop, bank_mop = _branch_default_mops(branch)
-    if not cash_mop and not bank_mop:
+    cash_mops, bank_mops = _branch_mops_by_type(branch)
+    if not cash_mops and not bank_mops:
         return
 
-    # Cache MoP.type lookups
+    # Cache MoP.type lookups for rows we may touch
     type_cache: dict = {}
 
     def mop_type(name):
@@ -192,30 +224,36 @@ def override_payment_accounts_from_branch(doc, method=None):
         if not mop:
             continue
         t = mop_type(mop)
-        target_mop = None
-        if t == "Cash" and cash_mop:
-            target_mop = cash_mop
-        elif t == "Bank" and bank_mop:
-            target_mop = bank_mop
+        if t == "Cash":
+            allowed = cash_mops
+        elif t == "Bank":
+            allowed = bank_mops
+        else:
+            continue  # BNPL / General / Phone / etc. — leave alone
 
-        if not target_mop:
-            continue  # General / BNPL / Phone / unmapped — skip
+        if not allowed:
+            continue
 
-        # Swap MoP if different + always refresh account from MoP→Company.
-        if mop != target_mop:
-            row.mode_of_payment = target_mop
-        new_account = _mop_account_for_company(target_mop, doc.company)
+        if mop not in allowed:
+            row.mode_of_payment = allowed[0]
+        new_account = _mop_account_for_company(row.mode_of_payment, doc.company)
         if new_account:
             row.account = new_account
 
 
 @frappe.whitelist()
 def get_user_branch_accounts(user: str | None = None, company: str | None = None) -> dict:
-    """Return {cash_mop, bank_mop, cash_account, bank_account} for the
-    user's resolved Branch Configuration. Account values use the
-    company-specific row from `Mode of Payment Account`.
+    """Return Cash/Bank Mode-of-Payment lists for the user's resolved
+    Branch Configuration plus per-MoP account for the SI company.
 
-    Used by sales_invoice_doctype.js to prefill payment rows.
+    Shape:
+        {
+          "branch": "Jeddah",
+          "cash": [{"mop": "Cash", "account": "Cash - CNC"}, ...],
+          "bank": [{"mop": "Bank Transfer", "account": "Bank A - CNC"}, ...],
+        }
+
+    Used by sales_invoice_doctype.js to prefill / constrain payment rows.
     """
     user = user or frappe.session.user
     if user in ("Administrator", "Guest"):
@@ -224,13 +262,18 @@ def get_user_branch_accounts(user: str | None = None, company: str | None = None
     branch = _resolve_user_branch(user, company=company)
     if not branch:
         return {}
-    cash_mop, bank_mop = _branch_default_mops(branch)
 
     company = company or frappe.db.get_value("Branch Configuration", branch, "company")
+    cash_mops, bank_mops = _branch_mops_by_type(branch)
+
+    def _hydrate(mop_list):
+        return [
+            {"mop": mop, "account": _mop_account_for_company(mop, company)}
+            for mop in mop_list
+        ]
+
     return {
         "branch": branch,
-        "cash_mop": cash_mop,
-        "bank_mop": bank_mop,
-        "cash_account": _mop_account_for_company(cash_mop, company) if cash_mop else None,
-        "bank_account": _mop_account_for_company(bank_mop, company) if bank_mop else None,
+        "cash": _hydrate(cash_mops),
+        "bank": _hydrate(bank_mops),
     }
