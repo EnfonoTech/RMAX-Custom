@@ -399,6 +399,8 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
         return None
     if source_branch == target_branch:
         return None
+    if _is_pre_cut_over(stock_transfer):
+        return None
 
     amount = _stock_transfer_total_value(stock_transfer)
     if amount <= 0:

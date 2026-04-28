@@ -216,7 +216,31 @@ class StockTransfer(Document):
 
 
 	def on_cancel(self):
-		"""Update MR status when ST is cancelled."""
+		"""Run only when document is cancelled (docstatus = 2)"""
+		# Cancel any inter-branch companion JE created on submit
+		try:
+			companion_je_names = frappe.db.sql_list(
+				"""
+				SELECT DISTINCT je.name
+				FROM `tabJournal Entry` je
+				INNER JOIN `tabJournal Entry Account` jea ON jea.parent = je.name
+				WHERE jea.custom_source_doctype = 'Stock Transfer'
+				  AND jea.custom_source_docname = %s
+				  AND je.docstatus = 1
+				""",
+				(self.name,),
+			)
+			for je_name in companion_je_names:
+				je_doc = frappe.get_doc("Journal Entry", je_name)
+				je_doc.flags.skip_inter_branch_injection = True
+				je_doc.cancel()
+		except Exception:
+			frappe.log_error(
+				title="Inter-Branch companion JE cancel failed",
+				message=frappe.get_traceback(),
+			)
+			raise
+
 		self._update_material_request_status()
 
 	def _update_material_request_status(self):

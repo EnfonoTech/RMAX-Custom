@@ -490,3 +490,43 @@ class TestStockTransferCompanionJE(FrappeTestCase):
             self.assertEqual(round(bal, 2), 0.0)
         sourced = [r for r in je.accounts if r.custom_source_doctype == "Stock Transfer"]
         self.assertEqual(len(sourced), len(je.accounts))
+
+    def test_cut_over_guard_skips_pre_cutover_stock_transfer(self):
+        """Companion JE must not be created when ST.posting_date < Company.cut_over_date."""
+        # Set cut-over to a date AFTER the test ST's posting_date
+        original_cut_over = frappe.db.get_value(
+            "Company", self.company, "custom_inter_branch_cut_over_date"
+        )
+        frappe.db.set_value(
+            "Company", self.company, "custom_inter_branch_cut_over_date", "2030-01-01"
+        )
+        try:
+            class Stub:
+                pass
+
+            stub = Stub()
+            stub.name = "ST-TEST-PRECUTOVER"
+            stub.company = self.company
+            stub.set_source_warehouse = "WH_PRECUT_SRC"
+            stub.set_target_warehouse = "WH_PRECUT_TGT"
+            stub.posting_date = "2026-04-28"
+            stub.items = []
+            item = type("ItemRow", (), {})()
+            item.basic_amount = 500
+            item.qty = 1
+            stub.items.append(item)
+
+            original = inter_branch.resolve_warehouse_branch
+            inter_branch.resolve_warehouse_branch = (
+                lambda wh: "Source" if wh == "WH_PRECUT_SRC" else "Target"
+            )
+            try:
+                result = inter_branch.create_companion_inter_branch_je_for_stock_transfer(stub)
+                self.assertIsNone(result, "Expected None for pre-cutover Stock Transfer")
+            finally:
+                inter_branch.resolve_warehouse_branch = original
+        finally:
+            if original_cut_over:
+                frappe.db.set_value(
+                    "Company", self.company, "custom_inter_branch_cut_over_date", original_cut_over
+                )
