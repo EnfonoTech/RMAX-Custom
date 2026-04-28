@@ -432,6 +432,9 @@ fixtures = [
                     "Stock Entry Detail-s_warehouse-ignore_user_permissions",
                     "Stock Entry Detail-t_warehouse-ignore_user_permissions",
                     "Stock Entry Detail-cost_center-ignore_user_permissions",
+
+                    # Customer — make mobile_no part of the global search fields
+                    "Customer-main-search_fields",
                 ]
             ]
         ]

@@ -92,6 +92,7 @@ def create_customer_with_address(
     custom_area=None,
     allow_duplicate_vat=0,
     duplicate_vat_reason=None,
+    buyer_kind=None,
 ):
 
     if not customer_name:
@@ -104,6 +105,27 @@ def create_customer_with_address(
         frappe.throw("Mobile number must have at least 10 digits.")
 
     allow_duplicate_vat = int(allow_duplicate_vat or 0)
+
+    # B2B / B2C gating — mirrors the dialog rules so direct API callers
+    # cannot save a B2B customer without VAT + Address.
+    is_b2b = (buyer_kind or "").startswith("B2B") or (
+        not buyer_kind and customer_type == "Company"
+    )
+
+    if is_b2b:
+        if not custom_vat_registration_number:
+            frappe.throw(_("VAT Registration Number is required for B2B (Company) customers."))
+        for label, value in (
+            (_("Address Line 1"), address_line1),
+            (_("Building Number"), custom_building_number),
+            (_("Area/District"), custom_area),
+            (_("City/Town"), city),
+            (_("Postal Code"), pincode),
+        ):
+            if not value:
+                frappe.throw(_("{0} is required for B2B (Company) customers.").format(label))
+        if pincode and len(str(pincode)) != 5:
+            frappe.throw(_("Postal Code must be exactly 5 digits."))
 
     # VAT duplicate handling
     if custom_vat_registration_number and customer_type != "Branch":
