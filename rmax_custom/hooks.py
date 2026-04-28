@@ -447,6 +447,11 @@ fixtures = [
                     # outside their branch (e.g. global default "Stores").
                     "Quotation-set_warehouse-ignore_user_permissions",
                     "Quotation Item-warehouse-ignore_user_permissions",
+
+                    # Delivery Note — same warehouse-permission pattern.
+                    "Delivery Note-set_warehouse-ignore_user_permissions",
+                    "Delivery Note Item-warehouse-ignore_user_permissions",
+                    "Delivery Note Item-target_warehouse-ignore_user_permissions",
                 ]
             ]
         ]
