@@ -394,6 +394,14 @@ fixtures = [
                     "Company-custom_damage_warehouse",
                     "Company-custom_damage_loss_account",
                     "Company-custom_bnpl_fee_account",
+
+                    # Journal Entry Account — Inter-Branch auto-injected legs
+                    "Journal Entry Account-custom_auto_inserted",
+                    "Journal Entry Account-custom_source_doctype",
+                    "Journal Entry Account-custom_source_docname",
+
+                    # Company — Inter-Branch cut-over date
+                    "Company-custom_inter_branch_cut_over_date",
                 ]
             ]
         ]
