@@ -328,6 +328,8 @@ fixtures = [
                     "Sales Invoice-custom_payment_mode",
                     "Sales Invoice-custom_inter_company_branch",
                     "Sales Invoice-custom_bnpl_portion_ratio",
+                    "Sales Invoice-custom_bnpl_settled",
+                    "Sales Invoice-custom_bnpl_settlement",
 
                     # Sales Invoice Item
                     "Sales Invoice Item-total_vat_linewise",
@@ -336,6 +338,7 @@ fixtures = [
 
                     # Mode of Payment — BNPL surcharge
                     "Mode of Payment-custom_surcharge_percentage",
+                    "Mode of Payment-custom_bnpl_clearing_account",
 
     
                     # Quotation
@@ -381,6 +384,7 @@ fixtures = [
                     # Company — Damage workflow config
                     "Company-custom_damage_warehouse",
                     "Company-custom_damage_loss_account",
+                    "Company-custom_bnpl_fee_account",
                 ]
             ]
         ]

@@ -545,6 +545,11 @@
     <div class="sidebar-section-title">User Guide</div>
     <a href="#sales-invoice-cash"><span class="icon">&#128176;</span> Sales Invoice (Cash)</a>
     <a href="#sales-invoice-credit"><span class="icon">&#128179;</span> Sales Invoice (Credit)</a>
+    <a href="#bnpl-overview"><span class="icon">&#128184;</span> Tabby / Tamara BNPL</a>
+    <a href="#bnpl-setup"><span class="icon">&#9881;</span> BNPL Setup (Admin)</a>
+    <a href="#bnpl-invoice"><span class="icon">&#128176;</span> BNPL on Sales Invoice</a>
+    <a href="#bnpl-settlement"><span class="icon">&#128181;</span> BNPL Settlement</a>
+    <a href="#bnpl-reports"><span class="icon">&#128202;</span> BNPL Reports</a>
     <a href="#create-customer"><span class="icon">&#128100;</span> Create Customer</a>
     <a href="#warehouse-stock"><span class="icon">&#128230;</span> Warehouse Stock</a>
     <a href="#material-request"><span class="icon">&#128666;</span> Material Request</a>
@@ -850,6 +855,196 @@
     <div class="callout callout-warning">
       <span class="callout-icon">&#9888;</span>
       <div><strong>Note:</strong> In Credit mode, there is <strong>no payment popup</strong>. Payment will be collected later through a separate Payment Entry.</div>
+    </div>
+  </section>
+
+  <!-- ─── BNPL OVERVIEW ─── -->
+  <section class="section" id="bnpl-overview">
+    <h2>&#128184; Tabby / Tamara BNPL &mdash; Overview</h2>
+    <p>RMAX accepts Tabby and Tamara as BNPL (Buy Now Pay Later) payment methods. Both providers deduct an <strong>8% commission</strong> when they settle to RMAX's bank, so the selling price is automatically <strong>uplifted by 8.6957% (&divide; 0.92)</strong> on the post-discount rate. The customer pays the uplifted amount via Tabby/Tamara; the provider deducts 8% and remits the original intended amount to RMAX. The uplift is applied <strong>only to the BNPL-funded portion</strong> of the invoice &mdash; cash or card splits are not affected.</p>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128202;</span>
+      <div><strong>Formula:</strong> Effective rate = Post-discount rate &times; (1 + BNPL portion ratio &times; surcharge%). For a fully Tabby-paid invoice with surcharge 8.6957%, the line rate becomes <code>base_rate / 0.92</code>.</div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Scope:</strong> Applies to <strong>Sales Invoice only</strong>. POS Invoice, e-commerce, and any non-Sales-Invoice channel are out of scope. Cost of Goods Sold (COGS) and Stock Ledger valuation are <strong>not</strong> affected by the uplift.</div>
+    </div>
+
+    <h3>How money flows</h3>
+    <ol class="steps">
+      <li>Customer buys goods worth SAR 100 (post-discount). Invoice is raised at SAR 108.70 with Tabby as Mode of Payment.</li>
+      <li>Tabby pays the customer's instalments and holds the SAR 108.70 in a clearing account.</li>
+      <li>1&ndash;2 days later Tabby remits SAR 100.00 net to RMAX's bank, after deducting their 8% commission (SAR 8.70).</li>
+      <li>Accounts team creates a <strong>BNPL Settlement</strong> document &mdash; the system auto-posts a Journal Entry: Dr Bank 100, Dr BNPL Fee Expense 8.70, Cr Tabby Clearing 108.70.</li>
+      <li>Net P&amp;L impact: gross profit on the original SAR 100 sale is preserved &mdash; the surcharge collected exactly offsets the provider's commission.</li>
+    </ol>
+  </section>
+
+  <!-- ─── BNPL SETUP ─── -->
+  <section class="section" id="bnpl-setup">
+    <h2>&#9881; BNPL Setup <span class="badge">Admin</span></h2>
+    <p>One-time configuration per Company. The Chart of Account heads listed below are <strong>auto-created</strong> by the app on the next <code>bench migrate</code>. The accountant only needs to wire them to the right Mode of Payment / Company records.</p>
+
+    <h3>Step 1 &mdash; Account heads (auto-created per Company)</h3>
+    <p>The app provisions these accounts the first time it migrates after install. Replace <code>&lt;abbr&gt;</code> with the Company abbreviation (e.g. <code>R</code> for "RMAX").</p>
+
+    <div class="card">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Account Name</th>
+            <th>Parent Group</th>
+            <th>Account Type</th>
+            <th>Root Type</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>Tabby Clearing - &lt;abbr&gt;</code></td>
+            <td>Bank Accounts</td>
+            <td>Bank</td>
+            <td>Asset</td>
+            <td>Holds gross Tabby receivable between SI submit and settlement.</td>
+          </tr>
+          <tr>
+            <td><code>Tamara Clearing - &lt;abbr&gt;</code></td>
+            <td>Bank Accounts</td>
+            <td>Bank</td>
+            <td>Asset</td>
+            <td>Holds gross Tamara receivable between SI submit and settlement.</td>
+          </tr>
+          <tr>
+            <td><code>BNPL Fee Expense - &lt;abbr&gt;</code></td>
+            <td>Indirect Expenses</td>
+            <td>Expense Account</td>
+            <td>Expense</td>
+            <td>Records provider commission (Tabby/Tamara fees) on settlement.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Important &mdash; Account Type must be "Bank", not "Receivable".</strong> If a previous setup created <code>Tabby - &lt;abbr&gt;</code> as a Receivable account, ERPNext will refuse to auto-post the Payment Entry on Sales Invoice submit ("Customer is required against Receivable account..."). Switch to a Bank-type clearing account using the auto-created <code>Tabby Clearing - &lt;abbr&gt;</code>.</div>
+    </div>
+
+    <h3>Step 2 &mdash; Configure Mode of Payment (Tabby, Tamara)</h3>
+    <ol class="steps">
+      <li>Go to <strong>Accounting &rarr; Mode of Payment</strong>. Open <strong>Tabby</strong> (create the record if it does not exist; type = <em>General</em>).</li>
+      <li>Set <strong class="field">Surcharge Percentage</strong> = <code>8.6957</code>.</li>
+      <li>Set <strong class="field">BNPL Clearing Account</strong> = <code>Tabby Clearing - &lt;abbr&gt;</code>.</li>
+      <li>In the standard <strong>Accounts</strong> child table, add a row per Company: <em>Default Account</em> = the same <code>Tabby Clearing - &lt;abbr&gt;</code>.</li>
+      <li><strong>Save</strong>.</li>
+      <li>Repeat for <strong>Tamara</strong> with <code>Tamara Clearing - &lt;abbr&gt;</code> and the same Surcharge Percentage.</li>
+    </ol>
+
+    <h3>Step 3 &mdash; Verify Company default fee account</h3>
+    <ol class="steps">
+      <li>Open <strong>Accounting &rarr; Company &rarr; &lt;your company&gt;</strong>.</li>
+      <li>Confirm <strong class="field">BNPL Fee Expense Account</strong> = <code>BNPL Fee Expense - &lt;abbr&gt;</code>.</li>
+      <li><strong>Save</strong>.</li>
+    </ol>
+
+    <h3>Step 4 &mdash; Smoke test</h3>
+    <ul class="checklist">
+      <li>Item rate jumps from <code>100.00</code> to <code>108.70</code> when Tabby is selected.</li>
+      <li><strong>Original Rate (Pre-Uplift)</strong> shows <code>100.00</code>.</li>
+      <li><strong>BNPL Portion Ratio</strong> shows <code>100.0000%</code>.</li>
+      <li>On Submit: no Receivable error; GL shows Dr Tabby Clearing 108.70 / Cr Customer Receivable 108.70.</li>
+    </ul>
+  </section>
+
+  <!-- ─── BNPL ON SALES INVOICE ─── -->
+  <section class="section" id="bnpl-invoice">
+    <h2>&#128176; BNPL on Sales Invoice</h2>
+    <p>Day-to-day invoice flow. Uplift is fully automatic &mdash; no manual rate adjustment required.</p>
+
+    <div class="card">
+      <h3>Full BNPL payment</h3>
+      <ol class="steps">
+        <li>Create a New Sales Invoice. Apply line/invoice discounts <strong>first</strong>; uplift always operates on post-discount rate.</li>
+        <li>In the <strong>Enter Payment Amounts</strong> popup, set the full invoice total against <strong>Tabby</strong> or <strong>Tamara</strong>. Cash row = <code>0.00</code>.</li>
+        <li>Line rates jump up by &divide; 0.92 in real time. <strong>BNPL Portion Ratio</strong> shows <code>100%</code>.</li>
+        <li>Click <strong>Save &amp; Submit</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Split payment (cash + BNPL)</h3>
+      <p>Example: SAR 1,000 paid SAR 400 cash + SAR 600 Tabby. BNPL Portion Ratio = 60%. Uplift factor = 1 + (0.60 &times; 0.086957) = <code>1.05217</code>. Each line uplifted by 5.217% &mdash; cash share is <strong>not</strong> uplifted.</p>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#128260;</span>
+      <div><strong>Switching from Tabby to Cash mid-edit:</strong> rates revert to original pre-uplift values automatically.</div>
+    </div>
+
+    <h3>Returns / Credit Notes</h3>
+    <p>Standard <strong>Create &rarr; Return / Credit Note</strong> action inherits the uplifted rates from the parent invoice. Customer is refunded the amount they originally paid through the BNPL provider.</p>
+
+    <h3>Audit fields on the invoice</h3>
+    <ul class="checklist">
+      <li><strong>BNPL Portion Ratio</strong> (parent) &mdash; proportion funded via BNPL.</li>
+      <li><strong>Original Rate (Pre-Uplift)</strong> (item line) &mdash; post-discount rate before uplift.</li>
+      <li><strong>BNPL Uplift Amount</strong> (item line) &mdash; absolute SAR uplift on that line.</li>
+      <li><strong>BNPL Settled</strong> + <strong>BNPL Settlement</strong> (parent) &mdash; populated when a Settlement document is submitted.</li>
+    </ul>
+  </section>
+
+  <!-- ─── BNPL SETTLEMENT ─── -->
+  <section class="section" id="bnpl-settlement">
+    <h2>&#128181; BNPL Settlement <span class="badge">Accounts</span></h2>
+    <p>Used when Tabby/Tamara wires the net amount (gross &minus; commission) to RMAX's bank, typically 1&ndash;2 working days after the sale. Replaces the previous manual Journal Entry workflow.</p>
+
+    <div class="nav-path">
+      <span>Accounting</span> <span class="arrow">&rarr;</span> <span>BNPL Settlement</span> <span class="arrow">&rarr;</span> <span>New</span>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step</h3>
+      <ol class="steps">
+        <li>Open <strong>BNPL Settlement &rarr; New</strong>.</li>
+        <li>Set <strong class="field">Settlement Date</strong>, <strong class="field">Company</strong>, <strong class="field">BNPL Mode of Payment</strong>.</li>
+        <li>Clearing Account auto-fetches from MoP; Fee Account auto-fetches from Company.</li>
+        <li>Pick the <strong class="field">Bank Account</strong> that received the payout.</li>
+        <li>Click <strong>Fetch Pending Invoices</strong> &rarr; pick cutoff date &rarr; table populates.</li>
+        <li>Remove rows not in this batch. Adjust <strong>Allocated Amount</strong> per row if needed.</li>
+        <li>Enter <strong class="field">Provider Fee</strong> from the settlement statement. <strong>Net Amount</strong> auto-calculates.</li>
+        <li>Optionally attach the provider statement and reference number.</li>
+        <li><strong>Save</strong> &rarr; <strong>Submit</strong>.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128202;</span>
+      <div><strong>On Submit:</strong> Journal Entry posts Dr Bank (net) + Dr BNPL Fee (commission) + Cr Clearing (gross). Linked invoices are stamped <strong>BNPL Settled</strong> with a backlink to this document. Use <strong>View Journal Entry</strong> button to drill into the GL.</div>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Cancelling</strong> a settlement reverses the JE and clears the BNPL Settled flag on every linked invoice.</div>
+    </div>
+  </section>
+
+  <!-- ─── BNPL REPORTS ─── -->
+  <section class="section" id="bnpl-reports">
+    <h2>&#128202; BNPL Reports</h2>
+
+    <div class="card">
+      <h3>BNPL Surcharge Collected</h3>
+      <p>Aggregates SAR uplift collected on submitted BNPL invoices, grouped by month, Mode of Payment, and Customer. Reconcile surcharge collected against provider commission deductions.</p>
+      <p><strong>Filters:</strong> From Date, To Date, Company, Customer, Mode of Payment.</p>
+    </div>
+
+    <div class="card">
+      <h3>BNPL Pending Settlement</h3>
+      <p>Lists submitted BNPL invoices not yet settled. Shows expected bank credit and expected provider fee per invoice.</p>
+      <p><strong>Filters:</strong> From Date, To Date, Company, Mode of Payment.</p>
     </div>
   </section>
 

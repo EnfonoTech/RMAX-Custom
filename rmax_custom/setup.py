@@ -207,6 +207,17 @@ def after_migrate():
             "rmax_custom: no vat sale setup failed",
         )
 
+    # BNPL clearing + fee accounts (Tabby/Tamara)
+    try:
+        from rmax_custom.bnpl_settlement_setup import setup_bnpl_accounts
+
+        setup_bnpl_accounts()
+    except Exception:
+        frappe.log_error(
+            frappe.get_traceback(),
+            "rmax_custom: bnpl_settlement_setup failed",
+        )
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
