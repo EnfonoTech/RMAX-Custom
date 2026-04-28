@@ -60,6 +60,68 @@ def _ensure_branch_accounting_dimension() -> None:
     frappe.db.commit()
 
 
+INTER_BRANCH_RECEIVABLE_LABEL = "Inter-Branch Receivable"
+INTER_BRANCH_PAYABLE_LABEL = "Inter-Branch Payable"
+
+
+def _company_abbr(company: str) -> str:
+    return frappe.db.get_value("Company", company, "abbr")
+
+
+def _find_parent_group(company: str, root_type: str, fallback_label: str) -> str:
+    """Return the canonical parent group account name for a given root_type.
+
+    Asset → "Current Assets - <abbr>" if it exists, else falls back to the
+    company's root Asset group. Liability → "Current Liabilities - <abbr>".
+    """
+    abbr = _company_abbr(company)
+    candidate = f"{fallback_label} - {abbr}"
+    if frappe.db.exists("Account", candidate):
+        return candidate
+
+    # Fallback: the company root for the matching root_type
+    root = frappe.db.get_value(
+        "Account",
+        {"company": company, "root_type": root_type, "is_group": 1, "parent_account": ""},
+        "name",
+    )
+    if not root:
+        frappe.throw(_("Cannot locate root {0} group for company {1}").format(root_type, company))
+    return root
+
+
+def _ensure_group_account(company: str, label: str, root_type: str, parent: str) -> str:
+    abbr = _company_abbr(company)
+    name = f"{label} - {abbr}"
+    if frappe.db.exists("Account", name):
+        return name
+
+    acc = frappe.new_doc("Account")
+    acc.account_name = label
+    acc.company = company
+    acc.parent_account = parent
+    acc.is_group = 1
+    acc.root_type = root_type
+    if root_type == "Asset":
+        acc.account_type = "Receivable"
+    elif root_type == "Liability":
+        acc.account_type = "Payable"
+    acc.insert(ignore_permissions=True)
+    return acc.name
+
+
+def _ensure_inter_branch_groups(company: str) -> tuple[str, str]:
+    """Create the two inter-branch parent groups under Current Assets / Current Liabilities."""
+    rec_parent = _find_parent_group(company, "Asset", "Current Assets")
+    pay_parent = _find_parent_group(company, "Liability", "Current Liabilities")
+
+    receivable = _ensure_group_account(company, INTER_BRANCH_RECEIVABLE_LABEL, "Asset", rec_parent)
+    payable = _ensure_group_account(company, INTER_BRANCH_PAYABLE_LABEL, "Liability", pay_parent)
+    return receivable, payable
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate."""
     _ensure_branch_accounting_dimension()
+    for company_name in frappe.get_all("Company", pluck="name"):
+        _ensure_inter_branch_groups(company_name)

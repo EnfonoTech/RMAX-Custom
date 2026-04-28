@@ -36,3 +36,34 @@ class TestBranchAccountingDimension(FrappeTestCase):
             self.assertEqual(row.mandatory_for_bs, 1)
             self.assertEqual(row.mandatory_for_pl, 1)
             self.assertEqual(row.reference_document, "Branch")
+
+
+class TestInterBranchGroups(FrappeTestCase):
+    def setUp(self):
+        self.company = frappe.db.get_value("Company", {}, "name")
+        self.assertIsNotNone(self.company, "Test environment requires at least one Company")
+
+    def test_creates_receivable_and_payable_group_accounts(self):
+        inter_branch._ensure_inter_branch_groups(self.company)
+
+        abbr = frappe.db.get_value("Company", self.company, "abbr")
+        receivable = f"Inter-Branch Receivable - {abbr}"
+        payable = f"Inter-Branch Payable - {abbr}"
+
+        self.assertTrue(frappe.db.exists("Account", receivable))
+        self.assertTrue(frappe.db.exists("Account", payable))
+
+        rec_root = frappe.db.get_value("Account", receivable, "root_type")
+        pay_root = frappe.db.get_value("Account", payable, "root_type")
+        self.assertEqual(rec_root, "Asset")
+        self.assertEqual(pay_root, "Liability")
+
+        rec_is_group = frappe.db.get_value("Account", receivable, "is_group")
+        pay_is_group = frappe.db.get_value("Account", payable, "is_group")
+        self.assertEqual(rec_is_group, 1)
+        self.assertEqual(pay_is_group, 1)
+
+    def test_groups_creation_is_idempotent(self):
+        inter_branch._ensure_inter_branch_groups(self.company)
+        # Second call must not raise
+        inter_branch._ensure_inter_branch_groups(self.company)
