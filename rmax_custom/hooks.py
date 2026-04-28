@@ -68,7 +68,8 @@ doctype_js = {
         "public/js/create_customer.js",
     ],
     "Purchase Invoice": "public/js/purchase_invoice_doctype.js",
-    "Delivery Note": "public/js/delivery_note_doctype.js"
+    "Delivery Note": "public/js/delivery_note_doctype.js",
+    "Journal Entry": "public/js/journal_entry_bnpl_template.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
