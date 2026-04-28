@@ -248,6 +248,18 @@ def after_migrate():
             "rmax_custom: bnpl_settlement_setup failed",
         )
 
+    # Inter-Branch R/P Foundation — Phase 1
+    try:
+        from rmax_custom.inter_branch import setup_inter_branch_foundation
+
+        setup_inter_branch_foundation()
+    except Exception:
+        frappe.log_error(
+            title="Inter-Branch foundation setup failed",
+            message=frappe.get_traceback(),
+        )
+        # Do not raise — after_migrate must be tolerant so other setup runs.
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
