@@ -406,8 +406,9 @@ fixtures = [
                     "Journal Entry Account-custom_source_doctype",
                     "Journal Entry Account-custom_source_docname",
 
-                    # Company — Inter-Branch cut-over date
+                    # Company — Inter-Branch cut-over date + bridge branch
                     "Company-custom_inter_branch_cut_over_date",
+                    "Company-custom_inter_branch_bridge_branch",
                 ]
             ]
         ]

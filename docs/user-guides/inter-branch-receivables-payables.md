@@ -84,9 +84,50 @@ Every auto-generated line carries:
 
 These fields are read-only and exist for traceability and audit.
 
+## Multi-branch (3+) Journal Entries — bridge mode
+
+When a single Journal Entry needs to touch 3 or more branches (e.g. HO bank pays one bill consumed by Riyadh + Jeddah + Bahra together), the system needs to know which branch is the **bridge** (the implicit counterparty for every other branch).
+
+### One-time setup
+1. Open the **Company** record.
+2. Set **Inter-Branch Bridge Branch** = `HO` (or whichever branch acts as your hub).
+3. Save.
+
+### How it works
+For a JE touching N branches, with the bridge among them:
+- Every non-bridge branch is paired against the bridge.
+- For each non-bridge branch the system injects 2 legs (one on the branch's side, one on the bridge's side).
+- Total injected rows = 2 × (N − 1).
+- After injection every branch — including the bridge — nets to zero.
+
+### Example
+HO bank pays a 1,500 bill split: Riyadh consumes 1,000, Jeddah consumes 500.
+
+Operator enters 3 lines:
+| Account | Branch | Dr | Cr |
+|---|---|---|---|
+| Office Rent | Riyadh | 1,000 | |
+| Office Rent | Jeddah | 500 | |
+| HO Bank | HO | | 1,500 |
+
+System auto-adds 4 lines (2 per non-bridge branch):
+| Account | Branch | Dr | Cr |
+|---|---|---|---|
+| Due to HO | Riyadh | | 1,000 |
+| Due from Riyadh | HO | 1,000 | |
+| Due to HO | Jeddah | | 500 |
+| Due from Jeddah | HO | 500 | |
+
+Each branch's books balance. Riyadh owes HO 1,000. Jeddah owes HO 500. HO is owed 1,500 in total.
+
+### Rejection cases
+- **Bridge not configured** → error: *"Multi-branch entries require the Company's Inter-Branch Bridge Branch setting."* Either set the bridge or split into separate two-branch JEs.
+- **Bridge not in JE** → error: *"the configured bridge branch X is not among them. Add at least one line on branch X, or split into separate two-branch Journal Entries."*
+
 ## Rules and limits
 
-1. **Two branches max per JE.** A Journal Entry can touch at most 2 branches. If you try to post a JE that involves 3 or more branches, save will fail with: *"Inter-Branch auto-injection supports exactly two branches per Journal Entry. Please split into separate Journal Entries — one per branch pair."*
+1. **2-branch JE → counterparty inferred from imbalance.** No bridge needed.
+2. **3+-branch JE → bridge must be configured + present.** Otherwise rejected.
 2. **JE must be globally balanced before save.** Standard ERPNext rule: total debits = total credits. The auto-injector only handles per-branch imbalance, not global imbalance.
 3. **Branch is mandatory on every GL-posting line.** This is enforced per Company at the GL layer (set up via the Branch accounting dimension's per-company `mandatory_for_bs` and `mandatory_for_pl` flags).
 4. **Cut-over is prospective only.** Entries dated before the cut-over never get auto-injected. There is no historical restate.

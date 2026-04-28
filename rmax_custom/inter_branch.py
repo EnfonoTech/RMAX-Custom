@@ -238,76 +238,25 @@ def _strip_existing_auto_legs(je) -> None:
     ]
 
 
-def auto_inject_inter_branch_legs(doc, method=None) -> None:
-    """Journal Entry.validate hook.
+def _inject_pair(
+    doc,
+    debtor: str,
+    creditor: str,
+    amount: float,
+    source_doctype: str,
+    source_docname: str,
+) -> None:
+    """Append two balancing rows: debtor's payable + creditor's receivable.
 
-    If the JE touches multiple branches and per-branch debits ≠ credits,
-    inject `Inter-Branch — <other>` balancing legs so each branch zeroes.
+    `amount` is always positive (in company currency, equal to account currency
+    because all inter-branch leaves are in Company default currency).
     """
-    if doc.doctype != "Journal Entry":
-        return
-    if doc.flags.get("skip_inter_branch_injection"):
-        return
-    if not doc.company:
-        return
-    if _is_pre_cut_over(doc):
-        return
-
-    _strip_existing_auto_legs(doc)
-    imbalance = _per_branch_imbalance(doc)
-
-    if not imbalance:
-        return
-
-    if len(imbalance) > 2:
-        frappe.throw(
-            _(
-                "Inter-Branch auto-injection supports exactly two branches per Journal Entry, "
-                "but this entry touches: <b>{0}</b>. "
-                "Please split into separate Journal Entries — one per branch pair."
-            ).format(", ".join(sorted(imbalance))),
-            title=_("Multi-Branch Journal Entry Not Supported"),
-        )
-
-    if len(imbalance) < 2:
-        # Single branch is unbalanced → standard JE validation will catch it
-        return
-
-    branch_a, branch_b = sorted(imbalance.keys())
-    delta_a = imbalance[branch_a]
-    delta_b = imbalance[branch_b]
-
-    if round(delta_a + delta_b, 2) != 0:
-        frappe.throw(
-            _(
-                "Journal Entry totals are unbalanced before inter-branch injection: "
-                "Branch {0} delta = {1}, Branch {2} delta = {3}."
-            ).format(branch_a, delta_a, branch_b, delta_b),
-            title=_("Unbalanced Journal Entry"),
-        )
-
-    # branch_a's excess debit (delta_a > delta_b) means branch_a has received value owed by branch_b.
-    if delta_a > delta_b:
-        debtor, creditor = branch_a, branch_b
-        amount = delta_a
-    else:
-        debtor, creditor = branch_b, branch_a
-        amount = delta_b
-
     debtor_payable = get_or_create_inter_branch_account(doc.company, creditor, side="payable")
     creditor_receivable = get_or_create_inter_branch_account(doc.company, debtor, side="receivable")
 
     company_currency = frappe.db.get_value("Company", doc.company, "default_currency")
     debtor_currency = frappe.db.get_value("Account", debtor_payable, "account_currency") or company_currency
     creditor_currency = frappe.db.get_value("Account", creditor_receivable, "account_currency") or company_currency
-
-    source_doctype = ""
-    source_docname = ""
-    for row in doc.accounts:
-        if getattr(row, "custom_source_doctype", None):
-            source_doctype = row.custom_source_doctype
-            source_docname = row.custom_source_docname or ""
-            break
 
     doc.append(
         "accounts",
@@ -340,6 +289,105 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
         },
     )
 
+
+def auto_inject_inter_branch_legs(doc, method=None) -> None:
+    """Journal Entry.validate hook.
+
+    If the JE touches multiple branches and per-branch debits ≠ credits,
+    inject `Inter-Branch — <other>` balancing legs so each branch zeroes.
+
+    For 2-branch JEs the counterparty is unambiguous and inferred from the
+    imbalance. For 3+-branch JEs the Company's `custom_inter_branch_bridge_branch`
+    field designates the implicit bridge — every other branch is paired against
+    it. The bridge must appear in the JE.
+    """
+    if doc.doctype != "Journal Entry":
+        return
+    if doc.flags.get("skip_inter_branch_injection"):
+        return
+    if not doc.company:
+        return
+    if _is_pre_cut_over(doc):
+        return
+
+    _strip_existing_auto_legs(doc)
+    imbalance = _per_branch_imbalance(doc)
+
+    if not imbalance:
+        return
+
+    if len(imbalance) < 2:
+        # Single branch is unbalanced → standard JE validation will catch it
+        return
+
+    # Sanity: the JE must be globally balanced before injection (sum of deltas == 0)
+    if round(sum(imbalance.values()), 2) != 0:
+        frappe.throw(
+            _(
+                "Journal Entry totals are unbalanced before inter-branch injection. "
+                "Per-branch deltas: {0}"
+            ).format(imbalance),
+            title=_("Unbalanced Journal Entry"),
+        )
+
+    # Source traceability — reuse any pre-stamped source on the JE
+    source_doctype = ""
+    source_docname = ""
+    for row in doc.accounts:
+        if getattr(row, "custom_source_doctype", None):
+            source_doctype = row.custom_source_doctype
+            source_docname = row.custom_source_docname or ""
+            break
+
+    if len(imbalance) == 2:
+        # Direct 2-branch case — counterparty is the other branch in the pair
+        branch_a, branch_b = sorted(imbalance.keys())
+        delta_a = imbalance[branch_a]
+        delta_b = imbalance[branch_b]
+        if delta_a > delta_b:
+            debtor, creditor, amount = branch_a, branch_b, delta_a
+        else:
+            debtor, creditor, amount = branch_b, branch_a, delta_b
+        _inject_pair(doc, debtor, creditor, amount, source_doctype, source_docname)
+    else:
+        # 3+ branches — require a bridge branch configured on Company
+        bridge = frappe.db.get_value(
+            "Company", doc.company, "custom_inter_branch_bridge_branch"
+        )
+        if not bridge:
+            frappe.throw(
+                _(
+                    "This Journal Entry touches {0} branches: <b>{1}</b>. "
+                    "Multi-branch entries require the Company's "
+                    "<b>Inter-Branch Bridge Branch</b> setting (Company → Inter-Branch Bridge Branch). "
+                    "Either configure the bridge or split into separate two-branch Journal Entries."
+                ).format(len(imbalance), ", ".join(sorted(imbalance))),
+                title=_("Bridge Branch Not Configured"),
+            )
+        if bridge not in imbalance:
+            frappe.throw(
+                _(
+                    "This Journal Entry touches branches <b>{0}</b>, but the "
+                    "configured bridge branch <b>{1}</b> is not among them. "
+                    "Add at least one line on branch <b>{1}</b>, or split into "
+                    "separate two-branch Journal Entries."
+                ).format(", ".join(sorted(imbalance)), bridge),
+                title=_("Bridge Branch Missing From Journal Entry"),
+            )
+
+        # For each non-bridge branch, pair it against the bridge.
+        for other_branch, delta in sorted(imbalance.items()):
+            if other_branch == bridge:
+                continue
+            if delta > 0:
+                # other_branch consumed value paid by bridge → other owes bridge
+                debtor, creditor, amount = other_branch, bridge, delta
+            else:
+                # other_branch paid value consumed by bridge → bridge owes other
+                debtor, creditor, amount = bridge, other_branch, abs(delta)
+            _inject_pair(doc, debtor, creditor, amount, source_doctype, source_docname)
+
+    # Final guard — every branch must now balance to zero
     final = _per_branch_imbalance(doc)
     if final:
         frappe.throw(

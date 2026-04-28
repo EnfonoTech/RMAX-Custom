@@ -330,6 +330,118 @@ class TestAutoInjector(FrappeTestCase):
             self.assertEqual(round(bal, 2), 0.0, f"Branch {br} unbalanced: {bal}")
 
 
+class TestMultiBranchBridge(FrappeTestCase):
+    """3+ branch JE: bridge branch on Company drives the implicit counterparty."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(cls.company)
+        frappe.db.set_value(
+            "Company", cls.company, "custom_inter_branch_cut_over_date", "2026-01-01"
+        )
+        for br in ("HO", "Riyadh", "Jeddah", "Bahra"):
+            if not frappe.db.exists("Branch", br):
+                d = frappe.new_doc("Branch")
+                d.branch = br
+                d.insert(ignore_permissions=True)
+
+    def setUp(self):
+        # Reset bridge before each test
+        frappe.db.set_value("Company", self.company, "custom_inter_branch_bridge_branch", None)
+
+    def _accounts(self):
+        rent = frappe.db.get_value(
+            "Account", {"company": self.company, "is_group": 0, "root_type": "Expense"}, "name"
+        )
+        bank = frappe.db.get_value(
+            "Account", {"company": self.company, "account_type": "Bank", "is_group": 0}, "name"
+        )
+        return rent, bank
+
+    def _build_three_branch_je(self):
+        """HO bank pays 1500, split: 1000 Riyadh + 500 Jeddah."""
+        rent, bank = self._accounts()
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        je.append("accounts", {"account": rent, "debit_in_account_currency": 1000, "branch": "Riyadh"})
+        je.append("accounts", {"account": rent, "debit_in_account_currency": 500, "branch": "Jeddah"})
+        je.append("accounts", {"account": bank, "credit_in_account_currency": 1500, "branch": "HO"})
+        return je
+
+    def test_three_branch_rejected_when_bridge_not_configured(self):
+        je = self._build_three_branch_je()
+        with self.assertRaises(frappe.ValidationError):
+            inter_branch.auto_inject_inter_branch_legs(je)
+
+    def test_three_branch_injected_via_bridge(self):
+        frappe.db.set_value(
+            "Company", self.company, "custom_inter_branch_bridge_branch", "HO"
+        )
+        je = self._build_three_branch_je()
+        inter_branch.auto_inject_inter_branch_legs(je)
+
+        # Expect 4 injected legs: 2 per non-bridge branch (Riyadh, Jeddah)
+        injected = [r for r in je.accounts if getattr(r, "custom_auto_inserted", 0)]
+        self.assertEqual(len(injected), 4, f"Expected 4 injected legs, got {len(injected)}")
+
+        # Per-branch net must be zero
+        per_branch: dict[str, float] = {}
+        for r in je.accounts:
+            br = r.branch or ""
+            per_branch[br] = per_branch.get(br, 0.0) + flt(r.debit_in_account_currency) - flt(r.credit_in_account_currency)
+        for br, bal in per_branch.items():
+            self.assertEqual(round(bal, 2), 0.0, f"Branch {br} unbalanced after multi-branch inject: {bal}")
+
+        # Riyadh owes HO 1000, Jeddah owes HO 500
+        riyadh_credits = sum(flt(r.credit_in_account_currency) for r in injected if r.branch == "Riyadh")
+        jeddah_credits = sum(flt(r.credit_in_account_currency) for r in injected if r.branch == "Jeddah")
+        ho_debits = sum(flt(r.debit_in_account_currency) for r in injected if r.branch == "HO")
+        self.assertEqual(round(riyadh_credits, 2), 1000.0)
+        self.assertEqual(round(jeddah_credits, 2), 500.0)
+        self.assertEqual(round(ho_debits, 2), 1500.0)
+
+    def test_bridge_must_appear_in_je(self):
+        # Bridge configured as HO but JE only touches Riyadh + Jeddah + Bahra
+        frappe.db.set_value(
+            "Company", self.company, "custom_inter_branch_bridge_branch", "HO"
+        )
+        rent, bank = self._accounts()
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        je.append("accounts", {"account": rent, "debit_in_account_currency": 600, "branch": "Riyadh"})
+        je.append("accounts", {"account": rent, "debit_in_account_currency": 400, "branch": "Jeddah"})
+        je.append("accounts", {"account": bank, "credit_in_account_currency": 1000, "branch": "Bahra"})
+
+        with self.assertRaises(frappe.ValidationError):
+            inter_branch.auto_inject_inter_branch_legs(je)
+
+    def test_two_branch_path_unaffected_by_bridge(self):
+        """Two-branch JEs ignore bridge; existing pair logic still applies."""
+        frappe.db.set_value(
+            "Company", self.company, "custom_inter_branch_bridge_branch", "HO"
+        )
+        rent, bank = self._accounts()
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        je.append("accounts", {"account": rent, "debit_in_account_currency": 250, "branch": "Riyadh"})
+        je.append("accounts", {"account": bank, "credit_in_account_currency": 250, "branch": "Jeddah"})
+        inter_branch.auto_inject_inter_branch_legs(je)
+
+        injected = [r for r in je.accounts if getattr(r, "custom_auto_inserted", 0)]
+        self.assertEqual(len(injected), 2)
+        # Ensure injection didn't route through HO
+        for r in injected:
+            self.assertIn(r.branch, ("Riyadh", "Jeddah"))
+
+
 class TestRentScenarioE2E(FrappeTestCase):
     @classmethod
     def setUpClass(cls):
