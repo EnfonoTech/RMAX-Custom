@@ -361,3 +361,84 @@ def setup_inter_branch_foundation() -> None:
     _ensure_branch_accounting_dimension()
     for company_name in frappe.get_all("Company", pluck="name"):
         _ensure_inter_branch_groups(company_name)
+
+
+def _stock_transfer_total_value(stock_transfer) -> float:
+    """Sum the basic_amount across items; falls back to qty * basic_rate when needed."""
+    total = 0.0
+    for item in stock_transfer.items or []:
+        amt = flt(getattr(item, "basic_amount", 0))
+        if not amt:
+            amt = flt(getattr(item, "qty", 0)) * flt(getattr(item, "basic_rate", 0))
+        total += amt
+    return round(total, 2)
+
+
+def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str | None:
+    """Create a 2-line Journal Entry that records the inter-branch obligation
+    arising from a cross-branch Stock Transfer at valuation cost.
+
+    Returns the new JE name, or None if no JE was needed (same-branch transfer).
+
+    Posts:
+        Dr Inter-Branch—<target>  (branch = <source>)  — source has receivable from target
+        Cr Inter-Branch—<source>  (branch = <target>)  — target owes source
+
+    The JE is balanced as a unit (debit total = credit total). Mark
+    `flags.skip_inter_branch_injection = True` so the auto-injector does not
+    attempt to add additional legs (per-branch the JE is intentionally one-sided
+    because the underlying Stock Entry's GL contributes the offsetting Stock-in-Hand
+    legs to each branch).
+    """
+    source_wh = getattr(stock_transfer, "set_source_warehouse", None)
+    target_wh = getattr(stock_transfer, "set_target_warehouse", None)
+    source_branch = resolve_warehouse_branch(source_wh)
+    target_branch = resolve_warehouse_branch(target_wh)
+
+    if not source_branch or not target_branch:
+        return None
+    if source_branch == target_branch:
+        return None
+
+    amount = _stock_transfer_total_value(stock_transfer)
+    if amount <= 0:
+        return None
+
+    company = stock_transfer.company
+
+    src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
+    tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
+
+    je = frappe.new_doc("Journal Entry")
+    je.posting_date = stock_transfer.posting_date
+    je.company = company
+    je.voucher_type = "Journal Entry"
+    je.user_remark = _("Inter-Branch obligation from Stock Transfer {0}").format(
+        stock_transfer.name
+    )
+    je.append(
+        "accounts",
+        {
+            "account": src_receivable,
+            "debit_in_account_currency": amount,
+            "branch": source_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Stock Transfer",
+            "custom_source_docname": stock_transfer.name,
+        },
+    )
+    je.append(
+        "accounts",
+        {
+            "account": tgt_payable,
+            "credit_in_account_currency": amount,
+            "branch": target_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Stock Transfer",
+            "custom_source_docname": stock_transfer.name,
+        },
+    )
+    je.flags.skip_inter_branch_injection = True
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je.name

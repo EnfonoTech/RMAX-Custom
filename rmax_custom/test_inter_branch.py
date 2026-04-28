@@ -411,3 +411,82 @@ class TestBranchResolver(FrappeTestCase):
 
     def test_unmapped_warehouse_returns_none(self):
         self.assertIsNone(inter_branch.resolve_warehouse_branch("NonExistentWH-XYZ"))
+
+
+class TestStockTransferCompanionJE(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(cls.company)
+        frappe.db.set_value(
+            "Company", cls.company, "custom_inter_branch_cut_over_date", "2026-01-01"
+        )
+
+    def test_returns_none_when_warehouses_in_same_branch(self):
+        # Build a Stock Transfer doc-like stub with same source/target branch
+        class Stub:
+            name = "ST-TEST-SAME"
+            company = self.company
+            set_source_warehouse = "WH1"
+            set_target_warehouse = "WH2"
+            posting_date = "2026-04-28"
+
+        # Force resolver to return the same branch for both
+        original = inter_branch.resolve_warehouse_branch
+        inter_branch.resolve_warehouse_branch = lambda wh: "Riyadh"
+        try:
+            result = inter_branch.create_companion_inter_branch_je_for_stock_transfer(Stub())
+            self.assertIsNone(result)
+        finally:
+            inter_branch.resolve_warehouse_branch = original
+
+    def test_creates_companion_je_when_branches_differ(self):
+        # Find a real cross-branch warehouse pair
+        rows = frappe.db.sql(
+            """
+            SELECT bcw.warehouse, bc.branch
+            FROM `tabBranch Configuration Warehouse` bcw
+            INNER JOIN `tabBranch Configuration` bc ON bc.name = bcw.parent
+            WHERE bc.branch IS NOT NULL
+            """,
+            as_dict=True,
+        )
+        if len(rows) < 2 or len({r.branch for r in rows}) < 2:
+            self.skipTest("Need at least two warehouses in different branches to run this test")
+
+        by_branch: dict[str, list[str]] = {}
+        for r in rows:
+            by_branch.setdefault(r.branch, []).append(r.warehouse)
+        branches = [b for b, whs in by_branch.items() if whs]
+        source_branch, target_branch = branches[0], branches[1]
+        source_wh = by_branch[source_branch][0]
+        target_wh = by_branch[target_branch][0]
+
+        class Stub:
+            pass
+
+        stub = Stub()
+        stub.name = "ST-TEST-CROSS"
+        stub.company = self.company
+        stub.set_source_warehouse = source_wh
+        stub.set_target_warehouse = target_wh
+        stub.posting_date = "2026-04-28"
+        stub.items = []
+        item = type("ItemRow", (), {})()
+        item.item_code = "TestItem"
+        item.basic_amount = 500
+        item.qty = 1
+        stub.items.append(item)
+
+        je_name = inter_branch.create_companion_inter_branch_je_for_stock_transfer(stub)
+        self.assertIsNotNone(je_name, "Expected companion JE to be created for cross-branch transfer")
+        je = frappe.get_doc("Journal Entry", je_name)
+        self.assertEqual(je.docstatus, 1)
+        per_branch: dict[str, float] = {}
+        for row in je.accounts:
+            per_branch[row.branch] = per_branch.get(row.branch, 0.0) + flt(row.debit_in_account_currency) - flt(row.credit_in_account_currency)
+        for br, bal in per_branch.items():
+            self.assertEqual(round(bal, 2), 0.0)
+        sourced = [r for r in je.accounts if r.custom_source_doctype == "Stock Transfer"]
+        self.assertEqual(len(sourced), len(je.accounts))

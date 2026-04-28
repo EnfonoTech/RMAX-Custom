@@ -132,6 +132,18 @@ class StockTransfer(Document):
 		self.create_stock_entry()
 		self._update_material_request_status()
 
+		# Inter-Branch companion JE — only when source and target branches differ
+		from rmax_custom import inter_branch
+		try:
+			inter_branch.create_companion_inter_branch_je_for_stock_transfer(self)
+		except Exception:
+			frappe.log_error(
+				title="Inter-Branch companion JE failed",
+				message=frappe.get_traceback(),
+			)
+			# Re-raise so operator sees the error and the Stock Transfer rolls back.
+			raise
+
 	def _validate_stock_availability(self):
 		"""Check stock availability for all items before creating Stock Entry.
 		Throws a clear error listing all insufficient items."""
