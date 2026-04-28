@@ -178,7 +178,12 @@ def on_branch_insert(doc, method=None) -> None:
     msgprint warning so the operator knows accounts were auto-loaded.
     """
     new_branch = doc.name
-    companies = frappe.get_all("Company", pluck="name")
+    # Only create against root-level companies; ERPNext auto-syncs to children.
+    companies = frappe.get_all(
+        "Company",
+        filters={"parent_company": ["in", ["", None]]},
+        pluck="name",
+    )
 
     created: list[str] = []
     for company in companies:
@@ -357,9 +362,19 @@ def resolve_warehouse_branch(warehouse: str) -> str | None:
 
 
 def setup_inter_branch_foundation() -> None:
-    """Idempotent entrypoint called from setup.after_migrate."""
+    """Idempotent entrypoint called from setup.after_migrate.
+
+    Only root-level companies (no parent_company) get the Inter-Branch groups
+    created directly. ERPNext auto-syncs accounts from a root company down to
+    its child companies via `validate_root_company_and_sync_account_to_children`.
+    """
     _ensure_branch_accounting_dimension()
-    for company_name in frappe.get_all("Company", pluck="name"):
+    root_companies = frappe.get_all(
+        "Company",
+        filters={"parent_company": ["in", ["", None]]},
+        pluck="name",
+    )
+    for company_name in root_companies:
         _ensure_inter_branch_groups(company_name)
 
 
