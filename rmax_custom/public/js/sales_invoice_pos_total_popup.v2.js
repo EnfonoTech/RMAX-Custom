@@ -234,21 +234,61 @@ function rmax_render_dialog(frm) {
 		frappe.flags.rmax_payment_popup_showing = false;
 		return;
 	}
-	
+
 	const payments = frm.doc.payments || [];
 	if (payments.length === 0) {
 		frappe.flags.rmax_payment_popup_showing = false;
 		return;
 	}
 
-	const invoice_total = flt(frm.doc.rounded_total || frm.doc.grand_total || 0);
+	const base_invoice_total = flt(frm.doc.rounded_total || frm.doc.grand_total || 0);
 	const currency = frm.doc.currency || "";
-	
+
 	// Validate invoice total
-	if (invoice_total <= 0) {
+	if (base_invoice_total <= 0) {
 		frappe.flags.rmax_payment_popup_showing = false;
 		frappe.msgprint(__("Invoice total must be greater than zero."));
 		return;
+	}
+
+	// Fetch BNPL surcharge % per Mode of Payment so the popup can show the
+	// uplifted total live (matches server-side bnpl_uplift.apply_bnpl_uplift).
+	const mode_names = payments
+		.map((p) => p.mode_of_payment)
+		.filter(Boolean);
+	frappe.call({
+		method: "frappe.client.get_list",
+		args: {
+			doctype: "Mode of Payment",
+			filters: { name: ["in", mode_names] },
+			fields: ["name", "custom_surcharge_percentage"],
+			limit_page_length: 0,
+		},
+		callback: function (r) {
+			const surcharge_map = {};
+			(r.message || []).forEach(function (row) {
+				surcharge_map[row.name] = flt(row.custom_surcharge_percentage);
+			});
+			rmax_build_dialog(frm, payments, base_invoice_total, currency, surcharge_map);
+		},
+		error: function () {
+			rmax_build_dialog(frm, payments, base_invoice_total, currency, {});
+		},
+	});
+}
+
+function rmax_build_dialog(frm, payments, base_invoice_total, currency, surcharge_map) {
+	function compute_uplifted_total(vals) {
+		let total = 0;
+		let weighted = 0;
+		payments.forEach(function (p, i) {
+			const amt = flt(vals["pay_" + i]) || 0;
+			total += amt;
+			weighted += amt * (surcharge_map[p.mode_of_payment] || 0);
+		});
+		if (total <= 0) return base_invoice_total;
+		const factor = 1 + (weighted / total) / 100;
+		return flt(base_invoice_total * factor, 2);
 	}
 
 	const fields = [
@@ -256,7 +296,7 @@ function rmax_render_dialog(frm) {
 			fieldname: "invoice_total",
 			fieldtype: "Currency",
 			label: __("Invoice Total"),
-			default: invoice_total,
+			default: base_invoice_total,
 			read_only: 1,
 			options: currency,
 		},
@@ -279,6 +319,9 @@ function rmax_render_dialog(frm) {
 				label: mode,
 				default: payment.amount || 0,
 				options: currency,
+				onchange: function () {
+					rmax_refresh_invoice_total();
+				},
 			},
 			{ fieldtype: "Column Break", fieldname: "cb_" + idx },
 			{
@@ -286,13 +329,24 @@ function rmax_render_dialog(frm) {
 				fieldname: "fill_" + idx,
 				label: mode,
 				click: function () {
+					// Single-mode fill: uplifted total = base * (1 + pct/100)
+					const pct = surcharge_map[payment.mode_of_payment] || 0;
+					const uplifted = flt(base_invoice_total * (1 + pct / 100), 2);
 					payments.forEach(function (_, i) {
-						d.set_value("pay_" + i, i === idx ? invoice_total : 0);
+						d.set_value("pay_" + i, i === idx ? uplifted : 0);
 					});
+					rmax_refresh_invoice_total();
 				},
 			}
 		);
 	});
+
+	function rmax_refresh_invoice_total() {
+		if (!d) return;
+		const vals = d.get_values(true) || {};
+		const uplifted = compute_uplifted_total(vals);
+		d.set_value("invoice_total", uplifted);
+	}
 
 	function apply_payments_and_close(vals, submit) {
 		// Prevent multiple simultaneous saves
@@ -336,21 +390,24 @@ function rmax_render_dialog(frm) {
 			}
 		});
 
-		if (total < invoice_total) {
+		// Compare against the BNPL-uplifted total, not the bare grand_total.
+		const expected_total = compute_uplifted_total(vals);
+
+		if (total < expected_total - 0.01) {
 			frappe.msgprint({
 				title: __("Incomplete"),
-				message: __("{0} still to be allocated", [format_currency(invoice_total - total, currency)]),
+				message: __("{0} still to be allocated", [format_currency(expected_total - total, currency)]),
 				indicator: "red",
 			});
 			return;
 		}
 
-		if (total - invoice_total > 0.5) {
+		if (total - expected_total > 0.5) {
 			frappe.msgprint({
 				title: __("Error"),
 				message: __(
 					"Total payment amount {0} cannot be greater than invoice total {1}.",
-					[format_currency(total, currency), format_currency(invoice_total, currency)]
+					[format_currency(total, currency), format_currency(expected_total, currency)]
 				),
 				indicator: "red",
 			});
@@ -623,6 +680,10 @@ function rmax_render_dialog(frm) {
 
 	d.show();
 
+	// Initial render — if any payments pre-default to non-zero (e.g. Tabby filled
+	// before popup), reflect uplifted total immediately.
+	rmax_refresh_invoice_total();
+
 	// Align button with input (same level) and field click handler
 	frappe.utils.sleep(100).then(function () {
 		// Align button with input (same level)
@@ -631,17 +692,42 @@ function rmax_render_dialog(frm) {
 			alignItems: "flex-end",
 		});
 
-		// Field click: fill with balance only (invoice_total - sum of others)
+		// Field click: fill with balance only (uplifted_total - sum of others).
+		// Uplifted total depends on which modes are funded, so recompute each click.
 		payments.forEach(function (_, idx) {
 			const field = d.fields_dict["pay_" + idx];
 			if (!field || !field.$wrapper) return;
 			const $input = field.$wrapper.find("input");
 			$input.off("click.sf_fill_balance").on("click.sf_fill_balance", function () {
-				let other = 0;
-				payments.forEach(function (__, i) {
-					if (i !== idx) other += flt(d.get_value("pay_" + i)) || 0;
+				const cur_vals = d.get_values(true) || {};
+				const other = payments.reduce(function (sum, __, i) {
+					if (i === idx) return sum;
+					return sum + (flt(cur_vals["pay_" + i]) || 0);
+				}, 0);
+				const this_pct = surcharge_map[payments[idx].mode_of_payment] || 0;
+				let other_weighted = 0;
+				payments.forEach(function (p, i) {
+					if (i === idx) return;
+					other_weighted += (flt(cur_vals["pay_" + i]) || 0) * (surcharge_map[p.mode_of_payment] || 0);
 				});
-				d.set_value("pay_" + idx, Math.max(0, flt(invoice_total - other, 2)));
+				// Solve: total = base * (1 + (other_weighted + this_amt * this_pct) / total / 100)
+				// → this_amt = (target_total - other) where target_total satisfies the equation.
+				// Closed form: target_total = base + (other_weighted + this_amt * this_pct) * base / 100 / target_total
+				// Easier: assume the unknown share carries this_pct, base ≈ pre-uplift grand_total.
+				// uplifted = base * (1 + weighted/total/100); set total = other + this_amt
+				// total = base + (other_weighted + this_amt * this_pct) * base / total / 100
+				// total^2 - other*total = base*total + base*(other_weighted + this_amt*this_pct)/100  → quadratic.
+				// Approximate via fixed-point: start from current uplifted display, iterate twice.
+				let target = compute_uplifted_total(cur_vals);
+				for (let k = 0; k < 3; k++) {
+					const this_amt_guess = Math.max(0, target - other);
+					const total_guess = other + this_amt_guess;
+					if (total_guess <= 0) break;
+					const weighted = other_weighted + this_amt_guess * this_pct;
+					target = flt(base_invoice_total * (1 + weighted / total_guess / 100), 2);
+				}
+				d.set_value("pay_" + idx, Math.max(0, flt(target - other, 2)));
+				rmax_refresh_invoice_total();
 			});
 		});
 	});
