@@ -60,6 +60,13 @@ BRANCH_USER_PERMISSIONS = [
     {"parent": "Damage Slip", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
     {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
     {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    # Item permlevel 1 — Custom DocPerm wipe drops Branch User from the
+    # standard permlevel 1 row, breaking Item form opens (standard_rate /
+    # valuation_rate read).
+    {"parent": "Item", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0, "permlevel": 1},
+    # Bin / SLE — needed by stock reports + warehouse stock popup
+    {"parent": "Stock Ledger Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "Bin", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
 ]
 
 
@@ -107,6 +114,24 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     {"parent": "Damage Slip", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
     {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 0, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
     {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    # Core master + stock support doctypes — Custom DocPerm on Branch User wiped
+    # standard ERPNext permissions for these, so Stock User needs explicit rows.
+    {"parent": "Warehouse", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "Company", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Mode of Payment", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Sales Taxes and Charges Template", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Payment Terms Template", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Territory", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Customer Group", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    {"parent": "Stock Settings", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
+    # Stock Ledger / Bin — needed by stock reports and warehouse stock popup
+    {"parent": "Stock Ledger Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    {"parent": "Bin", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    # Item — explicit permlevel 0 + 1 because the standard DocPerm wipe means
+    # Stock User loses access to permlevel 1 fields (standard_rate, valuation_rate)
+    # which Item form reads on every open.
+    {"parent": "Item", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0, "permlevel": 0},
+    {"parent": "Item", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0, "permlevel": 1},
 ]
 
 
@@ -394,28 +419,28 @@ def setup_branch_user_permissions():
 
     for perm in BRANCH_USER_PERMISSIONS:
         doctype = perm["parent"]
+        permlevel = int(perm.get("permlevel") or 0)
+        payload = {k: v for k, v in perm.items() if k not in ("parent", "permlevel")}
 
-        # Check if permission already exists
         existing = frappe.db.exists("Custom DocPerm", {
             "parent": doctype,
             "role": BRANCH_USER_ROLE,
-            "permlevel": 0,
+            "permlevel": permlevel,
         })
 
         if existing:
-            # Update existing permission
             frappe.db.set_value("Custom DocPerm", existing, {
-                "read": perm.get("read", 0),
-                "write": perm.get("write", 0),
-                "create": perm.get("create", 0),
-                "submit": perm.get("submit", 0),
-                "cancel": perm.get("cancel", 0),
-                "delete": perm.get("delete", 0),
-                "print": perm.get("print", 0),
-                "email": perm.get("email", 0),
-                "report": perm.get("report", 0),
-                "export": perm.get("export", 0),
-                "share": perm.get("share", 0),
+                "read": payload.get("read", 0),
+                "write": payload.get("write", 0),
+                "create": payload.get("create", 0),
+                "submit": payload.get("submit", 0),
+                "cancel": payload.get("cancel", 0),
+                "delete": payload.get("delete", 0),
+                "print": payload.get("print", 0),
+                "email": payload.get("email", 0),
+                "report": payload.get("report", 0),
+                "export": payload.get("export", 0),
+                "share": payload.get("share", 0),
             })
         else:
             doc = frappe.get_doc({
@@ -424,8 +449,8 @@ def setup_branch_user_permissions():
                 "parenttype": "DocType",
                 "parentfield": "permissions",
                 "role": BRANCH_USER_ROLE,
-                "permlevel": 0,
-                **{k: v for k, v in perm.items() if k != "parent"},
+                "permlevel": permlevel,
+                **payload,
             })
             doc.insert(ignore_permissions=True)
 
@@ -433,23 +458,27 @@ def setup_branch_user_permissions():
 
 
 def setup_stock_user_extra_permissions():
-    """Create Custom DocPerm records for Stock User (only missing ones)."""
+    """Create Custom DocPerm records for Stock User (only missing ones).
+
+    Honours an optional `permlevel` key on the perm dict so we can grant
+    permlevel=1 read on doctypes like Item where standard ERPNext
+    restricts certain fields (standard_rate, valuation_rate, etc.)."""
     if not frappe.db.exists("Role", STOCK_USER_ROLE):
         return
 
     for perm in STOCK_USER_EXTRA_PERMISSIONS:
         doctype = perm["parent"]
+        permlevel = int(perm.get("permlevel") or 0)
+        payload = {k: v for k, v in perm.items() if k not in ("parent", "permlevel")}
 
         existing = frappe.db.exists("Custom DocPerm", {
             "parent": doctype,
             "role": STOCK_USER_ROLE,
-            "permlevel": 0,
+            "permlevel": permlevel,
         })
 
         if existing:
-            frappe.db.set_value("Custom DocPerm", existing, {
-                k: v for k, v in perm.items() if k != "parent"
-            })
+            frappe.db.set_value("Custom DocPerm", existing, payload)
         else:
             doc = frappe.get_doc({
                 "doctype": "Custom DocPerm",
@@ -457,8 +486,8 @@ def setup_stock_user_extra_permissions():
                 "parenttype": "DocType",
                 "parentfield": "permissions",
                 "role": STOCK_USER_ROLE,
-                "permlevel": 0,
-                **{k: v for k, v in perm.items() if k != "parent"},
+                "permlevel": permlevel,
+                **payload,
             })
             doc.insert(ignore_permissions=True)
 
