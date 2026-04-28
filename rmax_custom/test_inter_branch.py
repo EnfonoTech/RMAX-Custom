@@ -113,3 +113,42 @@ class TestLazyLeafCreation(FrappeTestCase):
             inter_branch.get_or_create_inter_branch_account(
                 self.company, self.counterparty, side="bogus"
             )
+
+
+class TestBranchAfterInsert(FrappeTestCase):
+    def setUp(self):
+        self.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(self.company)
+
+    def test_after_insert_creates_leaves_for_all_existing_branches(self):
+        # Seed two existing branches
+        for br_name in ("TestExistingA", "TestExistingB"):
+            if not frappe.db.exists("Branch", br_name):
+                b = frappe.new_doc("Branch")
+                b.branch = br_name
+                b.insert(ignore_permissions=True)
+
+        # Insert the new branch — its after_insert should create leaves both directions
+        new_branch = "TestNewBranch"
+        if frappe.db.exists("Branch", new_branch):
+            frappe.delete_doc("Branch", new_branch, force=1, ignore_permissions=True)
+        b = frappe.new_doc("Branch")
+        b.branch = new_branch
+        b.insert(ignore_permissions=True)
+        # Trigger the hook explicitly in case fixtures don't wire it during tests
+        inter_branch.on_branch_insert(b)
+
+        abbr = frappe.db.get_value("Company", self.company, "abbr")
+        # New branch must have receivable + payable leaves for each existing branch
+        for existing in ("TestExistingA", "TestExistingB"):
+            self.assertTrue(
+                frappe.db.exists("Account", f"Due from {existing} - {abbr}"),
+                f"Missing receivable leaf for existing branch {existing}",
+            )
+            self.assertTrue(
+                frappe.db.exists("Account", f"Due to {existing} - {abbr}"),
+                f"Missing payable leaf for existing branch {existing}",
+            )
+        # And the existing branches now also have leaves pointing at the new branch
+        self.assertTrue(frappe.db.exists("Account", f"Due from {new_branch} - {abbr}"))
+        self.assertTrue(frappe.db.exists("Account", f"Due to {new_branch} - {abbr}"))

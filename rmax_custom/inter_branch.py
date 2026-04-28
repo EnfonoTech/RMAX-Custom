@@ -170,6 +170,39 @@ def get_or_create_inter_branch_account(
     return acc.name
 
 
+def on_branch_insert(doc, method=None) -> None:
+    """Branch.after_insert hook.
+
+    For every Company in the system, create the receivable + payable leaves
+    that connect the new branch to every other existing branch. Emits a
+    msgprint warning so the operator knows accounts were auto-loaded.
+    """
+    new_branch = doc.name
+    companies = frappe.get_all("Company", pluck="name")
+
+    created: list[str] = []
+    for company in companies:
+        _ensure_inter_branch_groups(company)
+        existing_branches = [
+            b for b in frappe.get_all("Branch", pluck="name") if b != new_branch
+        ]
+        for other in existing_branches:
+            for side in ("receivable", "payable"):
+                # Leaves on the new branch that reference each existing counterparty
+                created.append(get_or_create_inter_branch_account(company, other, side))
+                # And reverse: existing branches need leaves referencing the new branch
+                created.append(get_or_create_inter_branch_account(company, new_branch, side))
+
+    frappe.msgprint(
+        _(
+            "Inter-Branch account heads have been auto-loaded for branch <b>{0}</b>. "
+            "Verify the Chart of Accounts before posting transactions."
+        ).format(new_branch),
+        title=_("Inter-Branch Accounts Created"),
+        indicator="orange",
+    )
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate."""
     _ensure_branch_accounting_dimension()

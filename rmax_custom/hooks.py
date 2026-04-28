@@ -217,6 +217,9 @@ doc_events = {
 	"Journal Entry": {
 		"validate": "rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
 	},
+	"Branch": {
+		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
+	},
 }
 
 # Scheduled Tasks
