@@ -4,5 +4,5 @@
 from frappe.model.document import Document
 
 
-class BranchConfigurationModeOfPayment(Document):
+class BranchConfigurationModeofPayment(Document):
 	pass
