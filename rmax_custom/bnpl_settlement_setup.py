@@ -167,15 +167,20 @@ def wire_bnpl_modes_of_payment(surcharge_percentage: float = 8.6957):
 	results = []
 	for mop_name, base_clearing in targets:
 		if not frappe.db.exists("Mode of Payment", mop_name):
+			payload = {
+				"doctype": "Mode of Payment",
+				"mode_of_payment": mop_name,
+				"type": "Bank",
+				"enabled": 1,
+			}
+			# ksa_compliance bolts on a mandatory ZATCA payment means code
+			# field — use code 10 (cash payment) to match the existing
+			# Tabby record, since Tabby/Tamara act like cash from the
+			# customer's perspective at point-of-sale.
+			if frappe.db.has_column("Mode of Payment", "custom_zatca_payment_means_code"):
+				payload["custom_zatca_payment_means_code"] = "10"
 			try:
-				frappe.get_doc(
-					{
-						"doctype": "Mode of Payment",
-						"mode_of_payment": mop_name,
-						"type": "General",
-						"enabled": 1,
-					}
-				).insert(ignore_permissions=True)
+				frappe.get_doc(payload).insert(ignore_permissions=True)
 			except Exception:
 				frappe.log_error(
 					frappe.get_traceback(),
