@@ -6,6 +6,7 @@ import json
 
 import frappe
 from frappe import _
+from frappe.utils import flt
 
 
 @frappe.whitelist()
@@ -50,3 +51,44 @@ def set_pos_payments_snapshot(sales_invoice: str, payments_json):
 	)
 	frappe.db.commit()
 	return payload
+
+
+@frappe.whitelist()
+def get_clearing_account_for_mop(mop: str, company: str) -> dict:
+	"""Resolve clearing account + currency for a (Mode of Payment, Company) pair.
+
+	Returns: {"account": <account name or None>, "currency": <ccy or None>}.
+	Used by the Journal Entry "Load BNPL Settlement" button on the client.
+	"""
+	if not (mop and company):
+		return {"account": None, "currency": None}
+	account = frappe.db.get_value(
+		"Mode of Payment Account",
+		{"parent": mop, "company": company},
+		"default_account",
+	)
+	currency = (
+		frappe.db.get_value("Account", account, "account_currency") if account else None
+	)
+	return {"account": account, "currency": currency}
+
+
+@frappe.whitelist()
+def get_clearing_balance(account: str) -> float:
+	"""Live balance of an account (debit - credit across all GL entries).
+
+	Used by the JE "Load BNPL Settlement" dialog to show the operator the
+	current clearing balance before they fill in the credit amount.
+	"""
+	if not account or not frappe.db.exists("Account", account):
+		return 0.0
+	rows = frappe.db.sql(
+		"""
+		SELECT COALESCE(SUM(IFNULL(debit, 0) - IFNULL(credit, 0)), 0) AS bal
+		FROM `tabGL Entry`
+		WHERE account = %(account)s AND IFNULL(is_cancelled, 0) = 0
+		""",
+		{"account": account},
+		as_dict=True,
+	)
+	return flt(rows[0].bal) if rows else 0.0
