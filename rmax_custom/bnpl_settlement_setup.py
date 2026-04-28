@@ -145,6 +145,84 @@ def _find_bank_parent(company: str, abbr: str) -> Optional[str]:
 	return asset_root
 
 
+def wire_bnpl_modes_of_payment(surcharge_percentage: float = 8.6957):
+	"""One-shot helper: wire Tabby + Tamara Mode of Payment to their
+	clearing accounts and set the surcharge percentage.
+
+	Called manually via `bench execute` after the auto-created clearing
+	accounts exist. Idempotent — re-running does not duplicate child rows.
+
+	Not part of after_migrate so that customer Mode of Payment records are
+	never silently mutated. Run explicitly when go-live config is required.
+	"""
+	targets = [
+		("Tabby", "Tabby Clearing"),
+		("Tamara", "Tamara Clearing"),
+	]
+	companies = frappe.get_all(
+		"Company",
+		filters=[["parent_company", "in", ["", None]]],
+		fields=["name", "abbr"],
+	)
+
+	results = []
+	for mop_name, base_clearing in targets:
+		if not frappe.db.exists("Mode of Payment", mop_name):
+			try:
+				frappe.get_doc(
+					{
+						"doctype": "Mode of Payment",
+						"mode_of_payment": mop_name,
+						"type": "General",
+						"enabled": 1,
+					}
+				).insert(ignore_permissions=True)
+			except Exception:
+				frappe.log_error(
+					frappe.get_traceback(),
+					f"rmax_custom: failed to create MoP {mop_name}",
+				)
+				continue
+
+		mop = frappe.get_doc("Mode of Payment", mop_name)
+		mop.custom_surcharge_percentage = flt(surcharge_percentage)
+
+		# Prefer the RMAX (abbr R) clearing account on the parent if available.
+		rmax_clearing = f"{base_clearing} - R"
+		if frappe.db.exists("Account", rmax_clearing):
+			mop.custom_bnpl_clearing_account = rmax_clearing
+		else:
+			# Fallback: first available clearing account.
+			for c in companies:
+				candidate = f"{base_clearing} - {c.abbr}"
+				if frappe.db.exists("Account", candidate):
+					mop.custom_bnpl_clearing_account = candidate
+					break
+
+		# Rebuild Accounts child rows from scratch so old Receivable links die.
+		new_rows = []
+		for c in companies:
+			clearing = f"{base_clearing} - {c.abbr}"
+			if not frappe.db.exists("Account", clearing):
+				continue
+			new_rows.append({"company": c.name, "default_account": clearing})
+
+		mop.set("accounts", [])
+		for r in new_rows:
+			mop.append("accounts", r)
+
+		mop.save(ignore_permissions=True)
+		results.append(
+			f"{mop_name}: surcharge={mop.custom_surcharge_percentage} "
+			f"clearing={mop.custom_bnpl_clearing_account} rows={len(mop.accounts)}"
+		)
+
+	frappe.db.commit()
+	for line in results:
+		print(line)
+	return results
+
+
 def _find_indirect_expenses_parent(company: str) -> Optional[str]:
 	parent = frappe.db.get_value(
 		"Account",
