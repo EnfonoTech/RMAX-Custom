@@ -219,9 +219,11 @@ def override_payment_accounts_from_branch(doc, method=None):
             type_cache[name] = frappe.db.get_value("Mode of Payment", name, "type") or ""
         return type_cache[name]
 
+    kept_rows = []
     for row in payments:
         mop = getattr(row, "mode_of_payment", None)
         if not mop:
+            kept_rows.append(row)
             continue
         t = mop_type(mop)
         if t == "Cash":
@@ -229,9 +231,11 @@ def override_payment_accounts_from_branch(doc, method=None):
         elif t == "Bank":
             allowed = bank_mops
         else:
+            kept_rows.append(row)
             continue  # BNPL / General / Phone / etc. — leave alone
 
         if not allowed:
+            # Branch explicitly opted out of this type — drop the row.
             continue
 
         if mop not in allowed:
@@ -239,6 +243,13 @@ def override_payment_accounts_from_branch(doc, method=None):
         new_account = _mop_account_for_company(row.mode_of_payment, doc.company)
         if new_account:
             row.account = new_account
+        kept_rows.append(row)
+
+    if len(kept_rows) != len(payments):
+        # Reseat the payments table without the removed rows.
+        doc.set("payments", [])
+        for r in kept_rows:
+            doc.append("payments", r.as_dict() if hasattr(r, "as_dict") else r)
 
 
 @frappe.whitelist()
