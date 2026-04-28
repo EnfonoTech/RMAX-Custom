@@ -239,15 +239,25 @@ function open_create_customer_dialog(frm) {
         });
 
         d.show();
+
+        // Digits-only mobile, capped at 15
         d.fields_dict.mobile_no.$input.on("input", function () {
-            this.value = this.value.replace(/[^0-9]/g, '');
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 15) value = value.slice(0, 15);
+            this.value = value;
         });
 
+        // Digits-only VAT, capped at 15
         d.fields_dict.custom_vat_registration_number.$input.on("input", function () {
-            let value = this.value.replace(/[^0-9]/g, '');
-            if (value.length > 15) {
-                value = value.slice(0, 15);
-            }
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 15) value = value.slice(0, 15);
+            this.value = value;
+        });
+
+        // Digits-only pincode, capped at 5
+        d.fields_dict.pincode.$input.on("input", function () {
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 5) value = value.slice(0, 5);
             this.value = value;
         });
 
