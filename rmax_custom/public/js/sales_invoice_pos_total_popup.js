@@ -453,9 +453,20 @@ function rmax_render_dialog(frm) {
 			});
 		}
 		
+		// Stash payment-mode breakdown on the SI for the BNPL uplift hook.
+		// ERPNext wipes the standard payments child table when is_pos=0,
+		// so this JSON snapshot is the only signal the server-side
+		// before_validate hook (rmax_custom.bnpl_uplift) has to detect a
+		// Tabby/Tamara-funded invoice and apply the surcharge uplift.
+		try {
+			frm.doc.custom_pos_payments_json = JSON.stringify(payments_payload);
+		} catch (e) {
+			console.warn("rmax_custom: failed to stash payments_payload", e);
+		}
+
 		// Mark form as dirty to ensure changes are saved
 		frm.dirty();
-		
+
 		// Refresh payments field to update UI before saving
 		frm.refresh_field("payments");
 		

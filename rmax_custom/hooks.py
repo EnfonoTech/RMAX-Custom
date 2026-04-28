@@ -330,6 +330,8 @@ fixtures = [
                     "Sales Invoice-custom_bnpl_portion_ratio",
                     "Sales Invoice-custom_bnpl_settled",
                     "Sales Invoice-custom_bnpl_settlement",
+                    "Sales Invoice-custom_pos_payments_json",
+                    "Sales Invoice-custom_bnpl_total_uplift",
 
                     # Sales Invoice Item
                     "Sales Invoice Item-total_vat_linewise",

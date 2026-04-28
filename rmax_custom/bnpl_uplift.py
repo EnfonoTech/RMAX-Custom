@@ -21,6 +21,8 @@ calculations and blocks submission on drift.
 
 from __future__ import annotations
 
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import flt
@@ -52,6 +54,42 @@ def _get_surcharge_pct(doc, mode_of_payment):
     return pct
 
 
+def _read_payment_breakdown(doc):
+    """Resolve the list of (mode_of_payment, amount) pairs for ratio calc.
+
+    Two sources, in priority order:
+
+    1. ``custom_pos_payments_json`` — populated by the RMAX POS popup
+       (rmax_custom/public/js/sales_invoice_pos_total_popup.js) before
+       ``frm.save()``. Used when ``is_pos = 0`` so ERPNext silently wipes
+       the standard ``payments`` child table and the popup keeps the
+       breakdown only in memory + this JSON snapshot.
+
+    2. ``doc.payments`` — the standard ERPNext POS payments child table.
+       Populated when ``is_pos = 1`` is set on the Sales Invoice.
+
+    Returning an empty list means "no BNPL info available" — uplift skips.
+    """
+    raw = doc.get("custom_pos_payments_json")
+    if raw:
+        try:
+            rows = json.loads(raw)
+        except (TypeError, ValueError):
+            rows = []
+        if isinstance(rows, list) and rows:
+            return [
+                (r.get("mode_of_payment"), flt(r.get("amount")))
+                for r in rows
+                if isinstance(r, dict) and r.get("mode_of_payment")
+            ]
+
+    return [
+        (p.mode_of_payment, flt(p.amount))
+        for p in (doc.get("payments") or [])
+        if p.mode_of_payment
+    ]
+
+
 def _compute_factor(doc):
     """Return (bnpl_portion_ratio, weighted_uplift_factor).
 
@@ -62,18 +100,18 @@ def _compute_factor(doc):
         Equals 1.0 when there are no BNPL payments. Supports a mix of BNPL
         providers with different surcharge rates by weighted average.
     """
-    payments = doc.get("payments") or []
-    total = sum(flt(p.amount) for p in payments)
+    rows = _read_payment_breakdown(doc)
+    total = sum(amt for _, amt in rows)
     if total <= 0:
         return 0.0, 1.0
 
     bnpl_amount = 0.0
     weighted_pct_sum = 0.0
-    for p in payments:
-        pct = _get_surcharge_pct(doc, p.mode_of_payment)
+    for mode, amt in rows:
+        pct = _get_surcharge_pct(doc, mode)
         if pct > 0:
-            bnpl_amount += flt(p.amount)
-            weighted_pct_sum += flt(p.amount) * pct
+            bnpl_amount += amt
+            weighted_pct_sum += amt * pct
 
     ratio = bnpl_amount / total if total else 0.0
     factor = 1 + (weighted_pct_sum / total) / 100.0
@@ -105,8 +143,10 @@ def apply_bnpl_uplift(doc, method=None):
             row.custom_original_rate = 0
             row.custom_bnpl_uplift_amount = 0
         doc.custom_bnpl_portion_ratio = 0
+        doc.custom_bnpl_total_uplift = 0
         return
 
+    total_uplift = 0.0
     for row in items:
         base = flt(row.get("custom_original_rate")) or flt(row.rate)
         if base <= 0:
@@ -116,11 +156,14 @@ def apply_bnpl_uplift(doc, method=None):
         new_rate = flt(base * factor, row.precision("rate"))
         row.custom_original_rate = base
         row.rate = new_rate
-        row.custom_bnpl_uplift_amount = flt(
+        line_uplift = flt(
             (new_rate - base) * flt(row.qty), row.precision("amount")
         )
+        row.custom_bnpl_uplift_amount = line_uplift
+        total_uplift += line_uplift
 
     doc.custom_bnpl_portion_ratio = flt(ratio * 100, 4)
+    doc.custom_bnpl_total_uplift = flt(total_uplift, 2)
 
 
 def validate_bnpl_uplift(doc, method=None):
