@@ -185,37 +185,44 @@ def create_customer_with_address(
 
     customer.insert(ignore_permissions=True)
 
+    # Address only when there's actually something to store. B2C path
+    # leaves every address field blank — skip the Address insert
+    # entirely so we don't trip Address.validate's mandatory checks.
     address_name = None
+    has_address_payload = any([
+        address_line1, address_line2, city, custom_area, custom_building_number, pincode,
+    ])
+    if has_address_payload:
+        address = frappe.get_doc({
+            "doctype": "Address",
+            "address_title": customer_name,
+            "address_type": address_type or "Billing",
+            "address_line1": address_line1,
+            "address_line2": address_line2,
+            "city": city,
+            "state": state,
+            "custom_area": custom_area,
+            "custom_building_number": custom_building_number,
+            "pincode": pincode,
+            "country": country,
+            "is_primary_address": 1,
+            "is_shipping_address": 1,
+        })
+        address.append("links", {
+            "link_doctype": "Customer",
+            "link_name": customer.name,
+            "link_title": customer.customer_name,
+        })
+        address.insert(ignore_permissions=True)
+        address_name = address.name
 
-    address = frappe.get_doc({
-        "doctype": "Address",
-        "address_title": customer_name,
-        "address_type": address_type or "Billing",
-        "address_line1": address_line1,
-        "address_line2": address_line2,
-        "city": city,
-        "state": state,
-        "custom_area": custom_area,
-        "custom_building_number": custom_building_number,
-        "pincode": pincode,
-        "country": country,
-        "is_primary_address": 1,
-        "is_shipping_address": 1
-    })
-    address.append("links", {
-        "link_doctype": "Customer",
-        "link_name": customer.name,
-        "link_title": customer.customer_name
-    })
-
-    address.insert(ignore_permissions=True)
-    customer.customer_primary_address = address.name
-    customer.save(ignore_permissions=True)
+        customer.customer_primary_address = address_name
+        customer.save(ignore_permissions=True)
 
     return {
         "customer": customer.name,
-        "address": address.name,
-        "message": "Customer and Address created successfully"
+        "address": address_name,
+        "message": _("Customer {0} created successfully").format(customer.name),
     }
 
 
