@@ -328,3 +328,64 @@ class TestAutoInjector(FrappeTestCase):
             per_branch[br] = per_branch.get(br, 0.0) + flt(row.debit_in_account_currency) - flt(row.credit_in_account_currency)
         for br, bal in per_branch.items():
             self.assertEqual(round(bal, 2), 0.0, f"Branch {br} unbalanced: {bal}")
+
+
+class TestRentScenarioE2E(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(cls.company)
+        frappe.db.set_value(
+            "Company", cls.company, "custom_inter_branch_cut_over_date", "2026-01-01"
+        )
+        for br in ("HO", "Riyadh"):
+            if not frappe.db.exists("Branch", br):
+                d = frappe.new_doc("Branch")
+                d.branch = br
+                d.insert(ignore_permissions=True)
+        # Force leaves to exist
+        inter_branch.get_or_create_inter_branch_account(cls.company, "HO", "receivable")
+        inter_branch.get_or_create_inter_branch_account(cls.company, "HO", "payable")
+        inter_branch.get_or_create_inter_branch_account(cls.company, "Riyadh", "receivable")
+        inter_branch.get_or_create_inter_branch_account(cls.company, "Riyadh", "payable")
+
+    def test_rent_paid_by_ho_for_riyadh_books_correctly(self):
+        rent_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "is_group": 0, "root_type": "Expense"}, "name"
+        )
+        bank_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "account_type": "Bank", "is_group": 0}, "name"
+        )
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        je.append(
+            "accounts",
+            {"account": rent_acc, "debit_in_account_currency": 1000, "branch": "Riyadh"},
+        )
+        je.append(
+            "accounts",
+            {"account": bank_acc, "credit_in_account_currency": 1000, "branch": "HO"},
+        )
+        je.insert(ignore_permissions=True)
+        je.submit()
+
+        je.reload()
+        # Expect 4 lines after injection
+        self.assertEqual(len(je.accounts), 4)
+        injected = [r for r in je.accounts if r.custom_auto_inserted]
+        self.assertEqual(len(injected), 2)
+
+        # GL entries balance per-branch
+        gl_rows = frappe.get_all(
+            "GL Entry",
+            filters={"voucher_no": je.name, "is_cancelled": 0},
+            fields=["branch", "debit", "credit"],
+        )
+        per_branch: dict[str, float] = {}
+        for r in gl_rows:
+            per_branch[r.branch] = per_branch.get(r.branch, 0.0) + flt(r.debit) - flt(r.credit)
+        for br, bal in per_branch.items():
+            self.assertEqual(round(bal, 2), 0.0, f"Branch {br} GL not balanced: {bal}")
