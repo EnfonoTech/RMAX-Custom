@@ -59,6 +59,17 @@ def create_material_request(item_code, from_warehouse, to_warehouse, qty, schedu
     material_request.company = company
     material_request.material_request_type = "Material Transfer"
 
+    # Header-level warehouses — required by:
+    #   - create_stock_transfer_from_mr (reads set_from_warehouse / set_warehouse)
+    #   - material_request_doctype.js (Source Avl / Target Avl computation)
+    # Without these, the MR opens with blank header warehouses and the
+    # Stock Transfer flow rejects it with "Source or Target Warehouse is
+    # required on the Material Request".
+    material_request.set_from_warehouse = from_warehouse
+    material_request.set_warehouse = to_warehouse
+    schedule_date = schedule_date or add_days(nowdate(), 7)
+    material_request.schedule_date = schedule_date
+
     # Add item row
     material_request.append("items", {
         "item_code": item_code,
@@ -67,7 +78,7 @@ def create_material_request(item_code, from_warehouse, to_warehouse, qty, schedu
         "qty": flt(qty),
         "uom": item_doc.stock_uom,
         "stock_uom": item_doc.stock_uom,
-        "schedule_date": schedule_date or add_days(nowdate(), 7),
+        "schedule_date": schedule_date,
         "warehouse": to_warehouse,
         "from_warehouse": from_warehouse,
         "item_group": item_doc.item_group,
@@ -130,8 +141,31 @@ def create_stock_transfer_from_mr(material_request):
     source_wh = mr.set_from_warehouse
     target_wh = mr.set_warehouse
 
+    # Fallback: header-level fields are sometimes blank on MRs created
+    # from the SI warehouse-stock dialog. Promote the first item row's
+    # from_warehouse / warehouse instead of failing.
+    if not source_wh:
+        for itm in mr.items:
+            if itm.from_warehouse:
+                source_wh = itm.from_warehouse
+                break
+    if not target_wh:
+        for itm in mr.items:
+            if itm.warehouse:
+                target_wh = itm.warehouse
+                break
+
     if not source_wh and not target_wh:
         frappe.throw(_("Source or Target Warehouse is required on the Material Request"))
+
+    # Backfill the MR header so future calls + the form's available-qty
+    # widget have correct values. Direct DB write — keeps docstatus=1.
+    if source_wh and not mr.set_from_warehouse:
+        frappe.db.set_value("Material Request", mr.name, "set_from_warehouse", source_wh, update_modified=False)
+        mr.set_from_warehouse = source_wh
+    if target_wh and not mr.set_warehouse:
+        frappe.db.set_value("Material Request", mr.name, "set_warehouse", target_wh, update_modified=False)
+        mr.set_warehouse = target_wh
 
     # Calculate already transferred qty per MR item
     transferred_map = _get_transferred_qty_map(mr.name)

@@ -23,10 +23,9 @@ BRANCH_USER_PERMISSIONS = [
     {"parent": "Address", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 1, "report": 1, "export": 1, "share": 1},
     {"parent": "Contact", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 1, "report": 1, "export": 1, "share": 1},
     {"parent": "Stock Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
-    # Branch — HRMS locks this to HR roles only; Branch Users need read for No VAT Sale and other branch links.
+    # Branch — HRMS locks this to HR roles only; Branch Users need read for branch links elsewhere.
     {"parent": "Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
-    # No VAT Sale — create/submit gated at the doctype level by role permissions (only SM + Accounts Mgr can submit).
-    {"parent": "No VAT Sale", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
+    # No VAT Sale — Branch User no longer has access. Sales Manager-only feature.
     # Settings doctypes (read-only, needed for opening PR/PI forms)
     {"parent": "Buying Settings", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Selling Settings", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
@@ -104,10 +103,9 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     {"parent": "Material Request", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
     # Stock Transfer — Stock Users need full access to create/edit/submit STs
     {"parent": "Stock Transfer", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
-    # Branch — needed for No VAT Sale form
+    # Branch — kept for legacy form refs (branch link list view).
     {"parent": "Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
-    # No VAT Sale — Stock Users can draft (submit is gated)
-    {"parent": "No VAT Sale", "read": 1, "write": 1, "create": 1, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
+    # No VAT Sale — Stock User no longer has access. Sales Manager-only feature.
     # Warehouse Pick List — picking operations
     {"parent": "Warehouse Pick List", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
     # Damage workflow DocTypes
@@ -195,6 +193,7 @@ def after_migrate():
     setup_damage_user_module_profile()
     restrict_core_workspaces()
     setup_role_home_pages()
+    restrict_no_vat_sale_to_sales_manager()
 
     # HR defaults (no-op if hrms not installed)
     try:
@@ -740,4 +739,31 @@ def setup_damage_user_module_profile():
             "module": mod,
         }).db_insert()
 
+    frappe.db.commit()
+
+
+# ---------------------------------------------------------------------------
+# No VAT Sale — Sales Manager-only access
+# ---------------------------------------------------------------------------
+
+NO_VAT_SALE_ALLOWED_ROLES = {"System Manager", "Sales Manager"}
+
+
+def restrict_no_vat_sale_to_sales_manager():
+    """Drop any Custom DocPerm row on 'No VAT Sale' that grants access to a
+    role outside NO_VAT_SALE_ALLOWED_ROLES. The DocType JSON's standard
+    permissions block is already trimmed; this just cleans up rows left
+    behind by previous setup runs (Branch User, Stock User, Sales User,
+    Accounts Manager, etc.).
+    """
+    rows = frappe.get_all(
+        "Custom DocPerm",
+        filters={"parent": "No VAT Sale"},
+        fields=["name", "role"],
+    )
+    for row in rows:
+        if row.role not in NO_VAT_SALE_ALLOWED_ROLES:
+            frappe.db.delete("Custom DocPerm", {"name": row.name})
+
+    frappe.clear_cache(doctype="No VAT Sale")
     frappe.db.commit()

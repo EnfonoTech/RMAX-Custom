@@ -33,18 +33,40 @@ class NoVATSale(Document):
 
 	# -- Lifecycle --------------------------------------------------------
 
+	def before_insert(self):
+		# New docs always start as Draft regardless of what the client sent.
+		if not self.approval_status:
+			self.approval_status = "Draft"
+
 	def validate(self):
 		self._resolve_accounts()
 		self._populate_valuation_rates()
 		self._compute_totals()
 		self._validate_branch_warehouse_match()
 		self._validate_stock_availability()
+		self._guard_submit_status()
+
+	def before_submit(self):
+		# Submission only allowed when explicitly approved via the
+		# whitelisted approve API. This protects against direct submits
+		# from /api/method/frappe.client.submit.
+		if self.approval_status != "Approved":
+			frappe.throw(
+				_("No VAT Sale {0} must be Approved before it can be submitted.").format(self.name)
+			)
+
+	def on_update(self):
+		# Side-effects when status flips to Pending Approval — assign
+		# ToDo + email approver. Idempotent: skip if ToDo already exists.
+		if self.approval_status == "Pending Approval":
+			self._notify_approver()
 
 	def on_submit(self):
 		je_name = self._create_journal_entry()
 		se_name = self._create_stock_entry()
 		self.db_set("journal_entry", je_name, update_modified=False)
 		self.db_set("stock_entry", se_name, update_modified=False)
+		self._close_approval_todos()
 
 	def on_cancel(self):
 		# Cancel dependent docs
@@ -125,14 +147,15 @@ class NoVATSale(Document):
 		self.gross_profit = total_selling - total_cost
 
 	def _validate_branch_warehouse_match(self):
-		"""Warehouse must belong to the same Company as the selected Branch.
+		"""Warehouse must (a) belong to the selected Company, and
+		(b) appear in Branch Configuration → Warehouse for the selected Branch.
 
-		Core ERPNext Warehouse has no `branch` field, so we cross-check by
-		Company instead. If a site adds a custom `branch` link on
-		Warehouse later, this check still passes harmlessly.
+		Branch Configuration is keyed by branch (autoname), so we look up
+		the child rows directly.
 		"""
 		if not (self.branch and self.warehouse):
 			return
+
 		wh_company = frappe.db.get_value("Warehouse", self.warehouse, "company")
 		if wh_company and wh_company != self.company:
 			frappe.throw(
@@ -140,6 +163,98 @@ class NoVATSale(Document):
 					self.warehouse, wh_company, self.company
 				)
 			)
+
+		permitted = _branch_warehouses(self.branch)
+		if permitted and self.warehouse not in permitted:
+			frappe.throw(
+				_("Warehouse {0} is not configured under Branch {1}. "
+				  "Open Branch Configuration → {1} to add it, or pick another warehouse.")
+				.format(self.warehouse, self.branch)
+			)
+
+	def _guard_submit_status(self):
+		# Final safety net — Approved + draft only happens via approve API.
+		# If a save flips the status back to Draft on a submitted doc,
+		# Frappe blocks via docstatus anyway.
+		if self.docstatus == 0 and self.approval_status not in (
+			"Draft",
+			"Pending Approval",
+			"Approved",
+			"Rejected",
+		):
+			self.approval_status = "Draft"
+
+	# -- Approval flow ---------------------------------------------------
+
+	def _notify_approver(self):
+		if not self.approved_by:
+			return
+		todo_filters = {
+			"reference_type": self.doctype,
+			"reference_name": self.name,
+			"allocated_to": self.approved_by,
+			"status": "Open",
+		}
+		if frappe.db.exists("ToDo", todo_filters):
+			return
+
+		desc = _(
+			"No VAT Sale {0} is awaiting your approval — Branch {1}, "
+			"Selling {2}, Cost {3}."
+		).format(
+			self.name,
+			self.branch or "",
+			self.total_selling_value or 0,
+			self.total_cost_value or 0,
+		)
+		try:
+			from frappe.desk.form.assign_to import add as assign_to_user
+			assign_to_user(
+				{
+					"assign_to": [self.approved_by],
+					"doctype": self.doctype,
+					"name": self.name,
+					"description": desc,
+					"notify": 1,
+				}
+			)
+		except Exception:
+			# Fall back to a manual ToDo + email if the assign helper bombs.
+			frappe.get_doc({
+				"doctype": "ToDo",
+				"allocated_to": self.approved_by,
+				"reference_type": self.doctype,
+				"reference_name": self.name,
+				"description": desc,
+				"status": "Open",
+				"priority": "Medium",
+			}).insert(ignore_permissions=True)
+			try:
+				frappe.sendmail(
+					recipients=[self.approved_by],
+					subject=_("No VAT Sale {0} pending approval").format(self.name),
+					message=desc,
+					reference_doctype=self.doctype,
+					reference_name=self.name,
+				)
+			except Exception:
+				frappe.log_error(
+					frappe.get_traceback(),
+					f"rmax_custom: NVS approver notify failed {self.name}",
+				)
+
+	def _close_approval_todos(self):
+		todos = frappe.get_all(
+			"ToDo",
+			filters={
+				"reference_type": self.doctype,
+				"reference_name": self.name,
+				"status": "Open",
+			},
+			pluck="name",
+		)
+		for todo in todos:
+			frappe.db.set_value("ToDo", todo, "status", "Closed", update_modified=False)
 
 	def _validate_stock_availability(self):
 		if not self.warehouse:
@@ -273,3 +388,117 @@ def get_item_valuation(item_code: str, warehouse: str) -> float:
 	if not rate:
 		rate = frappe.db.get_value("Item", item_code, "valuation_rate")
 	return flt(rate)
+
+
+# ---------------------------------------------------------------------------
+# Branch → Warehouse filter
+# ---------------------------------------------------------------------------
+
+
+def _branch_warehouses(branch: str) -> list[str]:
+	if not branch:
+		return []
+	rows = frappe.get_all(
+		"Branch Configuration Warehouse",
+		filters={"parent": branch, "parenttype": "Branch Configuration"},
+		pluck="warehouse",
+	)
+	# Drop blank rows + dedupe while preserving order.
+	seen, out = set(), []
+	for w in rows:
+		if w and w not in seen:
+			seen.add(w)
+			out.append(w)
+	return out
+
+
+@frappe.whitelist()
+def get_branch_warehouses(branch: str) -> list[str]:
+	"""Whitelisted: return Warehouse names listed under the given Branch's
+	Branch Configuration child table. Used by the form to filter the
+	warehouse dropdown."""
+	return _branch_warehouses(branch)
+
+
+# ---------------------------------------------------------------------------
+# Approval workflow APIs
+# ---------------------------------------------------------------------------
+
+
+def _assert_can_approve(doc: "NoVATSale"):
+	user = frappe.session.user
+	if user == "Administrator":
+		return
+	if user == doc.approved_by:
+		return
+	# Sales Manager / System Manager can act on any NVS as a fallback.
+	roles = set(frappe.get_roles(user))
+	if roles & {"Sales Manager", "System Manager"}:
+		return
+	frappe.throw(
+		_("Only the named Approver ({0}) can approve or reject this No VAT Sale.")
+		.format(doc.approved_by or "—")
+	)
+
+
+@frappe.whitelist()
+def submit_for_approval(name: str) -> dict:
+	"""Move a Draft NVS into 'Pending Approval'. Notifies the approver."""
+	doc = frappe.get_doc("No VAT Sale", name)
+	if doc.docstatus != 0:
+		frappe.throw(_("Only Draft documents can be sent for approval."))
+	if doc.approval_status == "Pending Approval":
+		return {"status": doc.approval_status}
+	if not doc.approved_by:
+		frappe.throw(_("Set 'Approved By' before sending for approval."))
+
+	doc.approval_status = "Pending Approval"
+	doc.save()
+	return {"status": doc.approval_status}
+
+
+@frappe.whitelist()
+def approve_no_vat_sale(name: str, remarks: str | None = None) -> dict:
+	"""Approve + submit. Only the named approver (or Sales/System Mgr) can call."""
+	doc = frappe.get_doc("No VAT Sale", name)
+	if doc.docstatus != 0:
+		frappe.throw(_("Only Draft documents can be approved."))
+	if doc.approval_status not in ("Pending Approval", "Draft"):
+		frappe.throw(
+			_("Cannot approve from status {0}.").format(doc.approval_status)
+		)
+	_assert_can_approve(doc)
+
+	if remarks:
+		doc.approval_remarks = remarks
+	doc.approval_status = "Approved"
+	# Bypass DocPerm submit check — the role gate is _assert_can_approve.
+	doc.flags.ignore_permissions = True
+	doc.submit()
+	return {"status": doc.approval_status, "name": doc.name}
+
+
+@frappe.whitelist()
+def reject_no_vat_sale(name: str, remarks: str | None = None) -> dict:
+	"""Reject — keeps the doc as Draft with status=Rejected."""
+	doc = frappe.get_doc("No VAT Sale", name)
+	if doc.docstatus != 0:
+		frappe.throw(_("Only Draft documents can be rejected."))
+	_assert_can_approve(doc)
+
+	if remarks:
+		doc.approval_remarks = remarks
+	doc.approval_status = "Rejected"
+	doc.save()
+	# Close any pending ToDos so the approver's queue clears.
+	for todo in frappe.get_all(
+		"ToDo",
+		filters={
+			"reference_type": "No VAT Sale",
+			"reference_name": doc.name,
+			"status": "Open",
+		},
+		pluck="name",
+	):
+		frappe.db.set_value("ToDo", todo, "status", "Closed", update_modified=False)
+	return {"status": doc.approval_status, "name": doc.name}

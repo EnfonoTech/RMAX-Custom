@@ -245,12 +245,15 @@ def damage_transfer_permission_query(user):
 
 
 def no_vat_sale_permission_query(user):
-    """Filter No VAT Sales by the user's branch warehouses."""
+    """No VAT Sale is restricted to Sales Manager + System Manager at the
+    DocPerm level; both bypass list filtering. Anyone else somehow
+    holding read access falls back to the standard branch filter.
+    """
     if not user or user == "Administrator":
         return ""
 
     roles = frappe.get_roles(user)
-    if "System Manager" in roles or "Accounts Manager" in roles:
+    if "System Manager" in roles or "Sales Manager" in roles:
         return ""
 
     warehouses = get_branch_warehouse_condition(user)
