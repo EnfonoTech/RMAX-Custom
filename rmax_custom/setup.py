@@ -81,6 +81,8 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     # Purchase Receipt — Stock Users need to create/submit PRs
     # (Custom DocPerm on Branch User replaced standard permissions, so Stock User needs explicit entry)
     {"parent": "Purchase Receipt", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 1, "report": 1, "export": 1, "share": 0},
+    # Delivery Note — Stock Users need to create/submit DNs alongside PRs
+    {"parent": "Delivery Note", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 1, "report": 1, "export": 1, "share": 0},
     # Purchase Invoice — Stock Users need to create/submit PIs
     {"parent": "Purchase Invoice", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 1, "report": 1, "export": 1, "share": 0},
     # Support doctypes for Purchase Receipt / forms (read-only)
