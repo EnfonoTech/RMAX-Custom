@@ -57,20 +57,37 @@ def _get_surcharge_pct(doc, mode_of_payment):
 def _read_payment_breakdown(doc):
     """Resolve the list of (mode_of_payment, amount) pairs for ratio calc.
 
-    Two sources, in priority order:
+    Three sources, in priority order:
 
-    1. ``custom_pos_payments_json`` — populated by the RMAX POS popup
-       (rmax_custom/public/js/sales_invoice_pos_total_popup.js) before
-       ``frm.save()``. Used when ``is_pos = 0`` so ERPNext silently wipes
-       the standard ``payments`` child table and the popup keeps the
-       breakdown only in memory + this JSON snapshot.
+    1. ``custom_pos_payments_json`` on the in-memory doc — populated by
+       the RMAX POS popup before ``frm.save()`` and forwarded with the
+       save POST. Frappe's form serialiser sometimes drops hidden field
+       writes for already-saved docs, so this isn't always reliable on
+       its own.
 
-    2. ``doc.payments`` — the standard ERPNext POS payments child table.
+    2. ``custom_pos_payments_json`` re-read from the DB. The popup also
+       persists the snapshot via the
+       ``rmax_custom.api.bnpl.set_pos_payments_snapshot`` whitelisted
+       method *before* it triggers ``frm.save()``. That guarantees the
+       value is in the DB even when (1) gets dropped from the POST.
+
+    3. ``doc.payments`` — the standard ERPNext POS payments child table.
        Populated when ``is_pos = 1`` is set on the Sales Invoice.
 
     Returning an empty list means "no BNPL info available" — uplift skips.
     """
     raw = doc.get("custom_pos_payments_json")
+
+    if not raw and doc.get("name") and not str(doc.get("name")).startswith("new-"):
+        try:
+            raw = frappe.db.get_value(
+                "Sales Invoice", doc.name, "custom_pos_payments_json"
+            )
+        except Exception:
+            raw = None
+        if raw:
+            doc.custom_pos_payments_json = raw
+
     if raw:
         try:
             rows = json.loads(raw)

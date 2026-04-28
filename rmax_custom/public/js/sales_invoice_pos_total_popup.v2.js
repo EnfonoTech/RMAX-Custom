@@ -458,29 +458,48 @@ function rmax_render_dialog(frm) {
 		// so this JSON snapshot is the only signal the server-side
 		// before_validate hook (rmax_custom.bnpl_uplift) has to detect a
 		// Tabby/Tamara-funded invoice and apply the surcharge uplift.
+		const payments_json = JSON.stringify(payments_payload);
 		try {
-			frm.doc.custom_pos_payments_json = JSON.stringify(payments_payload);
+			frm.doc.custom_pos_payments_json = payments_json;
 		} catch (e) {
-			console.warn("rmax_custom: failed to stash payments_payload", e);
+			console.warn("rmax_custom: failed to stash payments_payload on doc", e);
 		}
+
+		// Belt-and-suspenders: also persist the snapshot via a direct API
+		// call before saving. Frappe's form save serialiser sometimes
+		// drops hidden custom-field writes from the POST body, so the
+		// in-memory write alone isn't always reliable. The server-side
+		// BNPL hook reads from the DB when the value isn't in the doc.
+		const persist_snapshot = (frm.doc.name && !String(frm.doc.name).startsWith("new-"))
+			? frappe.call({
+				method: "rmax_custom.api.bnpl.set_pos_payments_snapshot",
+				args: {
+					sales_invoice: frm.doc.name,
+					payments_json: payments_json,
+				},
+			}).catch(function (err) {
+				console.warn("rmax_custom: set_pos_payments_snapshot failed", err);
+			})
+			: Promise.resolve();
 
 		// Mark form as dirty to ensure changes are saved
 		frm.dirty();
 
 		// Refresh payments field to update UI before saving
 		frm.refresh_field("payments");
-		
+
 		// Close dialog before saving
 		d.hide();
 		frappe.flags.rmax_skip_payment_popup = true;
 		frappe.flags.rmax_payment_popup_showing = false;
 		frappe.flags.rmax_payment_popup_saving = true;
-		
+
 		// Use save with "Submit" action instead of savesubmit
 		const save_action = submit ? "Submit" : "Save";
-		
+
 		// Delay to ensure refresh_field completes and form processes updates
-		setTimeout(function() {
+		// AND that the snapshot persistence call completes before we save.
+		Promise.resolve(persist_snapshot).then(function () { setTimeout(function() {
 			// Double-check payments are in form doc before saving
 			if (!frm.doc.payments || frm.doc.payments.length === 0) {
 				frappe.msgprint({
@@ -581,7 +600,7 @@ function rmax_render_dialog(frm) {
 					delete frappe.flags.rmax_payment_popup_saving;
 				}, 500);
 			});
-		}, 300);
+		}, 300); });
 	}
 
 	const d = new frappe.ui.Dialog({
