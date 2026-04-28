@@ -389,3 +389,25 @@ class TestRentScenarioE2E(FrappeTestCase):
             per_branch[r.branch] = per_branch.get(r.branch, 0.0) + flt(r.debit) - flt(r.credit)
         for br, bal in per_branch.items():
             self.assertEqual(round(bal, 2), 0.0, f"Branch {br} GL not balanced: {bal}")
+
+
+class TestBranchResolver(FrappeTestCase):
+    def test_resolves_warehouse_via_branch_configuration(self):
+        # Test environment seeded with at least one Branch Configuration mapping
+        sample = frappe.db.sql(
+            """
+            SELECT bcw.warehouse, bc.branch
+            FROM `tabBranch Configuration Warehouse` bcw
+            INNER JOIN `tabBranch Configuration` bc ON bc.name = bcw.parent
+            WHERE bcw.warehouse IS NOT NULL AND bc.branch IS NOT NULL
+            LIMIT 1
+            """,
+            as_dict=True,
+        )
+        if not sample:
+            self.skipTest("No Branch Configuration → Warehouse mapping in test data")
+        wh, expected_branch = sample[0].warehouse, sample[0].branch
+        self.assertEqual(inter_branch.resolve_warehouse_branch(wh), expected_branch)
+
+    def test_unmapped_warehouse_returns_none(self):
+        self.assertIsNone(inter_branch.resolve_warehouse_branch("NonExistentWH-XYZ"))

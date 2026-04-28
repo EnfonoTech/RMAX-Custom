@@ -333,6 +333,29 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
         )
 
 
+def resolve_warehouse_branch(warehouse: str) -> str | None:
+    """Look up the Branch linked to a warehouse via Branch Configuration.
+
+    Returns None when no mapping exists. The first matching mapping wins
+    (multiple Branch Configurations could reference the same warehouse —
+    in RMAX this is rare and indicates shared-warehouse setups).
+    """
+    if not warehouse:
+        return None
+    rows = frappe.db.sql(
+        """
+        SELECT bc.branch
+        FROM `tabBranch Configuration Warehouse` bcw
+        INNER JOIN `tabBranch Configuration` bc ON bc.name = bcw.parent
+        WHERE bcw.warehouse = %s AND bc.branch IS NOT NULL
+        ORDER BY bc.modified DESC
+        LIMIT 1
+        """,
+        (warehouse,),
+    )
+    return rows[0][0] if rows else None
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate."""
     _ensure_branch_accounting_dimension()
