@@ -441,6 +441,12 @@ fixtures = [
 
                     # Customer — make mobile_no part of the global search fields
                     "Customer-main-search_fields",
+
+                    # Quotation — ignore user permissions on warehouse fields
+                    # so Branch Users can open quotes referencing warehouses
+                    # outside their branch (e.g. global default "Stores").
+                    "Quotation-set_warehouse-ignore_user_permissions",
+                    "Quotation Item-warehouse-ignore_user_permissions",
                 ]
             ]
         ]
