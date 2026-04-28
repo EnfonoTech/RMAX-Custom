@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import frappe
 from frappe.tests.utils import FrappeTestCase
+from frappe.utils import flt
 
 from rmax_custom import inter_branch
 
@@ -152,3 +153,114 @@ class TestBranchAfterInsert(FrappeTestCase):
         # And the existing branches now also have leaves pointing at the new branch
         self.assertTrue(frappe.db.exists("Account", f"Due from {new_branch} - {abbr}"))
         self.assertTrue(frappe.db.exists("Account", f"Due to {new_branch} - {abbr}"))
+
+
+class TestAutoInjector(FrappeTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(cls.company)
+        cls.abbr = frappe.db.get_value("Company", cls.company, "abbr")
+
+        # Ensure cut-over date so injector applies
+        frappe.db.set_value(
+            "Company", cls.company, "custom_inter_branch_cut_over_date", "2026-01-01"
+        )
+
+        for br in ("HO", "Riyadh"):
+            if not frappe.db.exists("Branch", br):
+                d = frappe.new_doc("Branch")
+                d.branch = br
+                d.insert(ignore_permissions=True)
+
+    def _make_je_template(self, posting_date: str = "2026-04-28"):
+        """Build an UNSAVED Journal Entry that posts rent in Riyadh paid by HO bank."""
+        rent_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "is_group": 0, "root_type": "Expense"}, "name"
+        )
+        bank_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "account_type": "Bank", "is_group": 0}, "name"
+        )
+        self.assertIsNotNone(rent_acc)
+        self.assertIsNotNone(bank_acc)
+
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = posting_date
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        je.append(
+            "accounts",
+            {"account": rent_acc, "debit_in_account_currency": 1000, "branch": "Riyadh"},
+        )
+        je.append(
+            "accounts",
+            {"account": bank_acc, "credit_in_account_currency": 1000, "branch": "HO"},
+        )
+        return je
+
+    def test_two_branch_imbalance_gets_injected(self):
+        je = self._make_je_template()
+        inter_branch.auto_inject_inter_branch_legs(je)
+
+        injected = [row for row in je.accounts if getattr(row, "custom_auto_inserted", 0)]
+        self.assertEqual(len(injected), 2, f"Expected 2 injected legs, got: {injected}")
+
+        per_branch: dict[str, float] = {}
+        for row in je.accounts:
+            br = row.branch or ""
+            per_branch[br] = per_branch.get(br, 0.0) + flt(row.debit_in_account_currency) - flt(row.credit_in_account_currency)
+        for br, bal in per_branch.items():
+            self.assertEqual(round(bal, 2), 0.0, f"Branch {br} unbalanced: {bal}")
+
+    def test_three_branch_je_rejected(self):
+        je = self._make_je_template()
+        rent_acc = je.accounts[0].account
+        je.append(
+            "accounts",
+            {"account": rent_acc, "debit_in_account_currency": 500, "branch": "Jeddah"},
+        )
+        je.accounts[1].credit_in_account_currency = 1500
+
+        if not frappe.db.exists("Branch", "Jeddah"):
+            d = frappe.new_doc("Branch")
+            d.branch = "Jeddah"
+            d.insert(ignore_permissions=True)
+
+        with self.assertRaises(frappe.ValidationError):
+            inter_branch.auto_inject_inter_branch_legs(je)
+
+    def test_pre_cutover_je_skipped(self):
+        je = self._make_je_template(posting_date="2025-01-01")
+        inter_branch.auto_inject_inter_branch_legs(je)
+        injected = [row for row in je.accounts if getattr(row, "custom_auto_inserted", 0)]
+        self.assertEqual(injected, [])
+
+    def test_balanced_single_branch_untouched(self):
+        rent_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "is_group": 0, "root_type": "Expense"}, "name"
+        )
+        bank_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "account_type": "Bank", "is_group": 0}, "name"
+        )
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.append(
+            "accounts",
+            {"account": rent_acc, "debit_in_account_currency": 100, "branch": "Riyadh"},
+        )
+        je.append(
+            "accounts",
+            {"account": bank_acc, "credit_in_account_currency": 100, "branch": "Riyadh"},
+        )
+        inter_branch.auto_inject_inter_branch_legs(je)
+        injected = [row for row in je.accounts if getattr(row, "custom_auto_inserted", 0)]
+        self.assertEqual(injected, [])
+
+    def test_idempotent_on_repeat_validate(self):
+        je = self._make_je_template()
+        inter_branch.auto_inject_inter_branch_legs(je)
+        first_count = len(je.accounts)
+        inter_branch.auto_inject_inter_branch_legs(je)
+        self.assertEqual(len(je.accounts), first_count, "Re-running injector duplicated legs")

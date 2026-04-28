@@ -215,7 +215,10 @@ doc_events = {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
 	},
 	"Journal Entry": {
-		"validate": "rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+		"validate": [
+			"rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+			"rmax_custom.inter_branch.auto_inject_inter_branch_legs",
+		],
 	},
 	"Branch": {
 		"after_insert": "rmax_custom.inter_branch.on_branch_insert",

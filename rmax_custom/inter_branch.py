@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate  # noqa: F401  — used in Tasks 6+
+from frappe.utils import flt, getdate
 
 
 def _ensure_branch_accounting_dimension() -> None:
@@ -201,6 +201,136 @@ def on_branch_insert(doc, method=None) -> None:
         title=_("Inter-Branch Accounts Created"),
         indicator="orange",
     )
+
+
+def _per_branch_imbalance(je) -> dict[str, float]:
+    """Return {branch: signed_imbalance}; positive = excess debit, negative = excess credit."""
+    totals: dict[str, float] = {}
+    for row in je.accounts or []:
+        br = (row.branch or "").strip()
+        if not br:
+            continue
+        totals[br] = totals.get(br, 0.0) + flt(row.debit_in_account_currency) - flt(
+            row.credit_in_account_currency
+        )
+    return {br: round(v, 2) for br, v in totals.items() if abs(v) >= 0.01}
+
+
+def _is_pre_cut_over(je) -> bool:
+    cut_over = frappe.db.get_value(
+        "Company", je.company, "custom_inter_branch_cut_over_date"
+    )
+    if not cut_over:
+        # No cut-over configured = injector disabled for this company
+        return True
+    return getdate(je.posting_date) < getdate(cut_over)
+
+
+def _strip_existing_auto_legs(je) -> None:
+    """Remove any prior auto-injected rows so we can recompute idempotently."""
+    je.accounts = [
+        row for row in (je.accounts or []) if not getattr(row, "custom_auto_inserted", 0)
+    ]
+
+
+def auto_inject_inter_branch_legs(doc, method=None) -> None:
+    """Journal Entry.validate hook.
+
+    If the JE touches multiple branches and per-branch debits ≠ credits,
+    inject `Inter-Branch — <other>` balancing legs so each branch zeroes.
+    """
+    if doc.doctype != "Journal Entry":
+        return
+    if doc.flags.get("skip_inter_branch_injection"):
+        return
+    if not doc.company:
+        return
+    if _is_pre_cut_over(doc):
+        return
+
+    _strip_existing_auto_legs(doc)
+    imbalance = _per_branch_imbalance(doc)
+
+    if not imbalance:
+        return
+
+    if len(imbalance) > 2:
+        frappe.throw(
+            _(
+                "Inter-Branch auto-injection supports exactly two branches per Journal Entry, "
+                "but this entry touches: <b>{0}</b>. "
+                "Please split into separate Journal Entries — one per branch pair."
+            ).format(", ".join(sorted(imbalance))),
+            title=_("Multi-Branch Journal Entry Not Supported"),
+        )
+
+    if len(imbalance) < 2:
+        # Single branch is unbalanced → standard JE validation will catch it
+        return
+
+    branch_a, branch_b = sorted(imbalance.keys())
+    delta_a = imbalance[branch_a]
+    delta_b = imbalance[branch_b]
+
+    if round(delta_a + delta_b, 2) != 0:
+        frappe.throw(
+            _(
+                "Journal Entry totals are unbalanced before inter-branch injection: "
+                "Branch {0} delta = {1}, Branch {2} delta = {3}."
+            ).format(branch_a, delta_a, branch_b, delta_b),
+            title=_("Unbalanced Journal Entry"),
+        )
+
+    # branch_a's excess debit (delta_a > 0) means branch_a has received value owed by branch_b.
+    if delta_a > 0:
+        debtor, creditor = branch_a, branch_b
+        amount = delta_a
+    else:
+        debtor, creditor = branch_b, branch_a
+        amount = delta_b
+
+    debtor_payable = get_or_create_inter_branch_account(doc.company, creditor, side="payable")
+    creditor_receivable = get_or_create_inter_branch_account(doc.company, debtor, side="receivable")
+
+    source_doctype = ""
+    source_docname = ""
+    for row in doc.accounts:
+        if getattr(row, "custom_source_doctype", None):
+            source_doctype = row.custom_source_doctype
+            source_docname = row.custom_source_docname or ""
+            break
+
+    doc.append(
+        "accounts",
+        {
+            "account": debtor_payable,
+            "credit_in_account_currency": amount,
+            "branch": debtor,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": source_doctype or "Journal Entry",
+            "custom_source_docname": source_docname or doc.name or "",
+            "user_remark": _("Auto-injected: {0} owes {1}").format(debtor, creditor),
+        },
+    )
+    doc.append(
+        "accounts",
+        {
+            "account": creditor_receivable,
+            "debit_in_account_currency": amount,
+            "branch": creditor,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": source_doctype or "Journal Entry",
+            "custom_source_docname": source_docname or doc.name or "",
+            "user_remark": _("Auto-injected: {0} receivable from {1}").format(creditor, debtor),
+        },
+    )
+
+    final = _per_branch_imbalance(doc)
+    if final:
+        frappe.throw(
+            _("Auto-injection failed to balance branches: {0}").format(final),
+            title=_("Inter-Branch Auto-Injection Error"),
+        )
 
 
 def setup_inter_branch_foundation() -> None:
