@@ -371,6 +371,65 @@ def resolve_warehouse_branch(warehouse: str) -> str | None:
     return rows[0][0] if rows else None
 
 
+@frappe.whitelist()
+def print_reconciliation(company: str, from_date: str = "2026-01-01", to_date: str = "2026-12-31") -> None:
+    """Print the Inter-Branch Reconciliation matrix to stdout (debug helper)."""
+    from rmax_custom.rmax_custom.report.inter_branch_reconciliation.inter_branch_reconciliation import execute as run_report
+    columns, data = run_report({"company": company, "from_date": from_date, "to_date": to_date})
+
+    label_map = {c["fieldname"]: c["label"] for c in columns}
+
+    def col_has_data(fn, rows):
+        return any(abs(flt(r.get(fn, 0))) > 0.01 for r in rows)
+
+    active_fields = [c["fieldname"] for c in columns[1:] if col_has_data(c["fieldname"], data)]
+
+    def row_has_data(r):
+        return any(abs(flt(r.get(f, 0))) > 0.01 for f in active_fields)
+
+    active_rows = [r for r in data if row_has_data(r)]
+
+    print("=== INTER-BRANCH RECONCILIATION ===")
+    print(f"Company: {company}    Period: {from_date} to {to_date}")
+    print("")
+    if not active_rows:
+        print("(No inter-branch activity in the period.)")
+        return
+    header = ["From \\ To"] + [label_map[f] for f in active_fields]
+    print("  " + " | ".join(f"{h:18s}" for h in header))
+    print("  " + "-" * (21 * len(header)))
+    for r in active_rows:
+        cells = [r.get("from_branch", "")]
+        for f in active_fields:
+            cells.append(f"{flt(r.get(f, 0)):.2f}")
+        print("  " + " | ".join(f"{c:18s}" for c in cells))
+    print("")
+    print("=== HEALTH CHECK (each pair must net to zero) ===")
+    seen = set()
+    for r in active_rows:
+        fb = r.get("from_branch")
+        for f in active_fields:
+            tb = label_map[f]
+            if fb == tb:
+                continue
+            ab = flt(r.get(f, 0))
+            if abs(ab) < 0.01:
+                continue
+            pair = tuple(sorted([fb, tb]))
+            if pair in seen:
+                continue
+            seen.add(pair)
+            ba = 0.0
+            rev_field = next((f2 for f2 in active_fields if label_map[f2] == fb), None)
+            for r2 in active_rows:
+                if r2.get("from_branch") == tb and rev_field:
+                    ba = flt(r2.get(rev_field, 0))
+                    break
+            net = ab + ba
+            status = "OK" if abs(net) < 0.01 else "MISMATCH"
+            print(f"  {fb:8s} -> {tb:8s} = {ab:8.2f}    {tb:8s} -> {fb:8s} = {ba:8.2f}    sum = {net:8.2f}  [{status}]")
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate.
 
