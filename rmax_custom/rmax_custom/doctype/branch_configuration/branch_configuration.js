@@ -18,12 +18,7 @@ frappe.ui.form.on("Branch Configuration", {
 			frm.clear_table("cost_center");
 			frm.refresh_field("cost_center");
 		}
-		if (frm.doc.cash_account) {
-			frm.set_value("cash_account", null);
-		}
-		if (frm.doc.bank_account) {
-			frm.set_value("bank_account", null);
-		}
+		// MoPs are global, not company-bound — no need to clear on company change.
 	}
 });
 
@@ -46,23 +41,11 @@ function set_child_filters(frm) {
 		};
 	});
 
-	frm.set_query("cash_account", function () {
-		return {
-			filters: {
-				company: frm.doc.company,
-				account_type: "Cash",
-				is_group: 0
-			}
-		};
+	frm.set_query("cash_mode_of_payment", function () {
+		return { filters: { type: "Cash" } };
 	});
 
-	frm.set_query("bank_account", function () {
-		return {
-			filters: {
-				company: frm.doc.company,
-				account_type: "Bank",
-				is_group: 0
-			}
-		};
+	frm.set_query("bank_mode_of_payment", function () {
+		return { filters: { type: "Bank" } };
 	});
 }

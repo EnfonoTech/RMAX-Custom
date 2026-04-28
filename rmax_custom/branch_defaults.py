@@ -126,23 +126,38 @@ def _resolve_user_branch(user, company=None, cost_center=None):
     return branches[0]
 
 
-def _branch_default_accounts(branch_name):
+def _branch_default_mops(branch_name):
     if not branch_name:
         return None, None
     row = frappe.db.get_value(
         "Branch Configuration",
         branch_name,
-        ["cash_account", "bank_account"],
+        ["cash_mode_of_payment", "bank_mode_of_payment"],
         as_dict=True,
     ) or {}
-    return row.get("cash_account"), row.get("bank_account")
+    return row.get("cash_mode_of_payment"), row.get("bank_mode_of_payment")
+
+
+def _mop_account_for_company(mop, company):
+    """Read the company-scoped account from `Mode of Payment Account`."""
+    if not (mop and company):
+        return None
+    return frappe.db.get_value(
+        "Mode of Payment Account",
+        {"parent": mop, "company": company},
+        "default_account",
+    )
 
 
 def override_payment_accounts_from_branch(doc, method=None):
-    """Before validate: rewrite Sales Invoice payments[*].account based on
-    the user's Branch Configuration cash / bank account defaults.
+    """Before validate: rewrite Sales Invoice payments[*] using the user's
+    Branch Configuration default Modes of Payment.
 
-    BNPL and any non-Cash/Bank Mode of Payment is left untouched.
+    For each payment row whose MoP type is Cash, swap to branch.cash_mop
+    and resync the account from `Mode of Payment Account` for the SI's
+    company. Same for Bank. BNPL (type=General) and any other types are
+    left untouched.
+
     Sales Manager / Stock Manager / System Manager / Admin bypass.
     """
     user = frappe.session.user
@@ -160,11 +175,11 @@ def override_payment_accounts_from_branch(doc, method=None):
     branch = _resolve_user_branch(user, company=doc.company, cost_center=doc.get("cost_center"))
     if not branch:
         return
-    cash_account, bank_account = _branch_default_accounts(branch)
-    if not cash_account and not bank_account:
+    cash_mop, bank_mop = _branch_default_mops(branch)
+    if not cash_mop and not bank_mop:
         return
 
-    # Cache MoP type lookups (one row per MoP regardless of branch)
+    # Cache MoP.type lookups
     type_cache: dict = {}
 
     def mop_type(name):
@@ -177,17 +192,30 @@ def override_payment_accounts_from_branch(doc, method=None):
         if not mop:
             continue
         t = mop_type(mop)
-        if t == "Cash" and cash_account:
-            row.account = cash_account
-        elif t == "Bank" and bank_account:
-            row.account = bank_account
-        # Other types (General / BNPL / Phone / etc.) — untouched.
+        target_mop = None
+        if t == "Cash" and cash_mop:
+            target_mop = cash_mop
+        elif t == "Bank" and bank_mop:
+            target_mop = bank_mop
+
+        if not target_mop:
+            continue  # General / BNPL / Phone / unmapped — skip
+
+        # Swap MoP if different + always refresh account from MoP→Company.
+        if mop != target_mop:
+            row.mode_of_payment = target_mop
+        new_account = _mop_account_for_company(target_mop, doc.company)
+        if new_account:
+            row.account = new_account
 
 
 @frappe.whitelist()
 def get_user_branch_accounts(user: str | None = None, company: str | None = None) -> dict:
-    """Return {cash, bank} default accounts from the user's resolved Branch
-    Configuration. Used by sales_invoice_doctype.js to prefill payment rows.
+    """Return {cash_mop, bank_mop, cash_account, bank_account} for the
+    user's resolved Branch Configuration. Account values use the
+    company-specific row from `Mode of Payment Account`.
+
+    Used by sales_invoice_doctype.js to prefill payment rows.
     """
     user = user or frappe.session.user
     if user in ("Administrator", "Guest"):
@@ -196,5 +224,13 @@ def get_user_branch_accounts(user: str | None = None, company: str | None = None
     branch = _resolve_user_branch(user, company=company)
     if not branch:
         return {}
-    cash, bank = _branch_default_accounts(branch)
-    return {"cash": cash, "bank": bank, "branch": branch}
+    cash_mop, bank_mop = _branch_default_mops(branch)
+
+    company = company or frappe.db.get_value("Branch Configuration", branch, "company")
+    return {
+        "branch": branch,
+        "cash_mop": cash_mop,
+        "bank_mop": bank_mop,
+        "cash_account": _mop_account_for_company(cash_mop, company) if cash_mop else None,
+        "bank_account": _mop_account_for_company(bank_mop, company) if bank_mop else None,
+    }

@@ -117,7 +117,7 @@ function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
     if (!payments.length) return;
 
     _rmax_get_branch_accounts(function (accts) {
-        if (!accts || (!accts.cash && !accts.bank)) return;
+        if (!accts || (!accts.cash_mop && !accts.bank_mop)) return;
 
         // Cache MoP type lookups per session.
         const mops = [...new Set(payments.map((p) => p.mode_of_payment).filter(Boolean))];
@@ -141,10 +141,23 @@ function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
                     if (cdn && row.name !== cdn) return;
                     if (!row.mode_of_payment) return;
                     const t = type_map[row.mode_of_payment];
-                    if (t === "Cash" && accts.cash) {
-                        frappe.model.set_value(row.doctype, row.name, "account", accts.cash);
-                    } else if (t === "Bank" && accts.bank) {
-                        frappe.model.set_value(row.doctype, row.name, "account", accts.bank);
+
+                    let target_mop = null;
+                    let target_account = null;
+                    if (t === "Cash" && accts.cash_mop) {
+                        target_mop = accts.cash_mop;
+                        target_account = accts.cash_account;
+                    } else if (t === "Bank" && accts.bank_mop) {
+                        target_mop = accts.bank_mop;
+                        target_account = accts.bank_account;
+                    }
+                    if (!target_mop) return;
+
+                    if (row.mode_of_payment !== target_mop) {
+                        frappe.model.set_value(row.doctype, row.name, "mode_of_payment", target_mop);
+                    }
+                    if (target_account) {
+                        frappe.model.set_value(row.doctype, row.name, "account", target_account);
                     }
                 });
             },
