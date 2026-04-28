@@ -67,3 +67,49 @@ class TestInterBranchGroups(FrappeTestCase):
         inter_branch._ensure_inter_branch_groups(self.company)
         # Second call must not raise
         inter_branch._ensure_inter_branch_groups(self.company)
+
+
+class TestLazyLeafCreation(FrappeTestCase):
+    def setUp(self):
+        self.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(self.company)
+
+        # Ensure we have at least one Branch to use as counterparty
+        if not frappe.db.exists("Branch", "TestBranchAlpha"):
+            br = frappe.new_doc("Branch")
+            br.branch = "TestBranchAlpha"
+            br.insert(ignore_permissions=True)
+        self.counterparty = "TestBranchAlpha"
+
+    def test_creates_receivable_leaf(self):
+        name = inter_branch.get_or_create_inter_branch_account(
+            self.company, self.counterparty, side="receivable"
+        )
+        self.assertTrue(frappe.db.exists("Account", name))
+        is_group = frappe.db.get_value("Account", name, "is_group")
+        root_type = frappe.db.get_value("Account", name, "root_type")
+        self.assertEqual(is_group, 0)
+        self.assertEqual(root_type, "Asset")
+
+    def test_creates_payable_leaf(self):
+        name = inter_branch.get_or_create_inter_branch_account(
+            self.company, self.counterparty, side="payable"
+        )
+        self.assertTrue(frappe.db.exists("Account", name))
+        root_type = frappe.db.get_value("Account", name, "root_type")
+        self.assertEqual(root_type, "Liability")
+
+    def test_lookup_is_idempotent(self):
+        first = inter_branch.get_or_create_inter_branch_account(
+            self.company, self.counterparty, side="receivable"
+        )
+        second = inter_branch.get_or_create_inter_branch_account(
+            self.company, self.counterparty, side="receivable"
+        )
+        self.assertEqual(first, second)
+
+    def test_invalid_side_raises(self):
+        with self.assertRaises(ValueError):
+            inter_branch.get_or_create_inter_branch_account(
+                self.company, self.counterparty, side="bogus"
+            )

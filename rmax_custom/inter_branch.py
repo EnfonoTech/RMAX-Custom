@@ -120,6 +120,56 @@ def _ensure_inter_branch_groups(company: str) -> tuple[str, str]:
     return receivable, payable
 
 
+def _slug(text: str) -> str:
+    """Strip non-alphanumeric chars to keep account name compact."""
+    return "".join(ch for ch in text if ch.isalnum() or ch == " ").strip()
+
+
+def get_or_create_inter_branch_account(
+    company: str, counterparty_branch: str, side: str
+) -> str:
+    """Return the leaf account name for the given counterparty + side.
+
+    side = "receivable" → "Due from <Branch> - <abbr>" under Inter-Branch Receivable group
+    side = "payable"    → "Due to <Branch> - <abbr>" under Inter-Branch Payable group
+
+    Creates the account on first call; subsequent calls return the existing name.
+    """
+    if side not in ("receivable", "payable"):
+        raise ValueError(f"side must be 'receivable' or 'payable', got: {side!r}")
+
+    abbr = _company_abbr(company)
+    if side == "receivable":
+        prefix = "Due from"
+        parent = f"{INTER_BRANCH_RECEIVABLE_LABEL} - {abbr}"
+        root_type = "Asset"
+    else:
+        prefix = "Due to"
+        parent = f"{INTER_BRANCH_PAYABLE_LABEL} - {abbr}"
+        root_type = "Liability"
+
+    if not frappe.db.exists("Account", parent):
+        _ensure_inter_branch_groups(company)
+
+    leaf_label = f"{prefix} {_slug(counterparty_branch)}"
+    leaf_name = f"{leaf_label} - {abbr}"
+
+    if frappe.db.exists("Account", leaf_name):
+        return leaf_name
+
+    company_currency = frappe.db.get_value("Company", company, "default_currency")
+    acc = frappe.new_doc("Account")
+    acc.account_name = leaf_label
+    acc.company = company
+    acc.parent_account = parent
+    acc.is_group = 0
+    acc.root_type = root_type
+    # Leaf account_type left blank so JE entries do not require a Party.
+    acc.account_currency = company_currency
+    acc.insert(ignore_permissions=True)
+    return acc.name
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate."""
     _ensure_branch_accounting_dimension()
