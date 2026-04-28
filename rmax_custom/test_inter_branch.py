@@ -18,15 +18,21 @@ class TestBranchAccountingDimension(FrappeTestCase):
         second = frappe.db.exists("Accounting Dimension", {"document_type": "Branch"})
         self.assertEqual(first, second)
 
-    def test_branch_dimension_mandatory_on_journal_entry(self):
+    def test_branch_dimension_mandatory_per_company(self):
         inter_branch._ensure_branch_accounting_dimension()
-        detail = frappe.db.get_value(
-            "Accounting Dimension Detail",
-            {"parent": frappe.db.get_value("Accounting Dimension", {"document_type": "Branch"}),
-             "document_type": "Journal Entry"},
-            ["mandatory_for_bs", "mandatory_for_pl"],
-            as_dict=True,
-        )
-        self.assertTrue(detail)
-        self.assertEqual(detail.mandatory_for_bs, 1)
-        self.assertEqual(detail.mandatory_for_pl, 1)
+
+        companies = frappe.get_all("Company", pluck="name")
+        self.assertGreater(len(companies), 0, "Need at least one Company in test data")
+
+        dim_name = frappe.db.get_value("Accounting Dimension", {"document_type": "Branch"})
+        for company in companies:
+            row = frappe.db.get_value(
+                "Accounting Dimension Detail",
+                {"parent": dim_name, "company": company},
+                ["mandatory_for_bs", "mandatory_for_pl", "reference_document"],
+                as_dict=True,
+            )
+            self.assertIsNotNone(row, f"No dimension_defaults row for company {company}")
+            self.assertEqual(row.mandatory_for_bs, 1)
+            self.assertEqual(row.mandatory_for_pl, 1)
+            self.assertEqual(row.reference_document, "Branch")
