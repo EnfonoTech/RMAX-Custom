@@ -281,8 +281,8 @@ def auto_inject_inter_branch_legs(doc, method=None) -> None:
             title=_("Unbalanced Journal Entry"),
         )
 
-    # branch_a's excess debit (delta_a > 0) means branch_a has received value owed by branch_b.
-    if delta_a > 0:
+    # branch_a's excess debit (delta_a > delta_b) means branch_a has received value owed by branch_b.
+    if delta_a > delta_b:
         debtor, creditor = branch_a, branch_b
         amount = delta_a
     else:

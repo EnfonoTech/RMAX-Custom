@@ -261,6 +261,70 @@ class TestAutoInjector(FrappeTestCase):
     def test_idempotent_on_repeat_validate(self):
         je = self._make_je_template()
         inter_branch.auto_inject_inter_branch_legs(je)
-        first_count = len(je.accounts)
+
+        first_snapshot = [
+            (r.account, flt(r.debit_in_account_currency), flt(r.credit_in_account_currency),
+             r.branch, getattr(r, "custom_auto_inserted", 0))
+            for r in je.accounts
+        ]
+
         inter_branch.auto_inject_inter_branch_legs(je)
-        self.assertEqual(len(je.accounts), first_count, "Re-running injector duplicated legs")
+
+        second_snapshot = [
+            (r.account, flt(r.debit_in_account_currency), flt(r.credit_in_account_currency),
+             r.branch, getattr(r, "custom_auto_inserted", 0))
+            for r in je.accounts
+        ]
+
+        self.assertEqual(first_snapshot, second_snapshot, "Re-running injector changed JE rows")
+
+    def test_first_alphabetic_branch_as_debtor(self):
+        """Cover the path where sorted-first branch has positive delta (it's the debtor)."""
+        # Use "Alpha" (sorted first) as debtor and "Zeta" (sorted last) as creditor
+        for br in ("Alpha", "Zeta"):
+            if not frappe.db.exists("Branch", br):
+                d = frappe.new_doc("Branch")
+                d.branch = br
+                d.insert(ignore_permissions=True)
+
+        rent_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "is_group": 0, "root_type": "Expense"}, "name"
+        )
+        bank_acc = frappe.db.get_value(
+            "Account", {"company": self.company, "account_type": "Bank", "is_group": 0}, "name"
+        )
+
+        je = frappe.new_doc("Journal Entry")
+        je.posting_date = "2026-04-28"
+        je.company = self.company
+        je.voucher_type = "Journal Entry"
+        # Alpha is debtor (consumes Zeta's bank); rent expense booked under Alpha
+        je.append(
+            "accounts",
+            {"account": rent_acc, "debit_in_account_currency": 750, "branch": "Alpha"},
+        )
+        je.append(
+            "accounts",
+            {"account": bank_acc, "credit_in_account_currency": 750, "branch": "Zeta"},
+        )
+
+        inter_branch.auto_inject_inter_branch_legs(je)
+
+        injected = [row for row in je.accounts if getattr(row, "custom_auto_inserted", 0)]
+        self.assertEqual(len(injected), 2)
+
+        # Alpha must end up with the credit-side payable leg (debtor's credit)
+        alpha_inj = [r for r in injected if r.branch == "Alpha"]
+        zeta_inj = [r for r in injected if r.branch == "Zeta"]
+        self.assertEqual(len(alpha_inj), 1)
+        self.assertEqual(len(zeta_inj), 1)
+        self.assertEqual(flt(alpha_inj[0].credit_in_account_currency), 750.0)
+        self.assertEqual(flt(zeta_inj[0].debit_in_account_currency), 750.0)
+
+        # Per-branch balance check
+        per_branch: dict[str, float] = {}
+        for row in je.accounts:
+            br = row.branch or ""
+            per_branch[br] = per_branch.get(br, 0.0) + flt(row.debit_in_account_currency) - flt(row.credit_in_account_currency)
+        for br, bal in per_branch.items():
+            self.assertEqual(round(bal, 2), 0.0, f"Branch {br} unbalanced: {bal}")
