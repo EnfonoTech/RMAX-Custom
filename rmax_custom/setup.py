@@ -26,6 +26,8 @@ BRANCH_USER_PERMISSIONS = [
     # Branch — HRMS locks this to HR roles only; Branch Users need read for branch links elsewhere.
     {"parent": "Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     # No VAT Sale — Branch User no longer has access. Sales Manager-only feature.
+    # Inter Company Branch — read so the SI inter-company link field opens for Branch Users.
+    {"parent": "Inter Company Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     # Settings doctypes (read-only, needed for opening PR/PI forms)
     {"parent": "Buying Settings", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     {"parent": "Selling Settings", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
@@ -106,6 +108,8 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     # Branch — kept for legacy form refs (branch link list view).
     {"parent": "Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     # No VAT Sale — Stock User no longer has access. Sales Manager-only feature.
+    # Inter Company Branch — read needed by SI inter-company link.
+    {"parent": "Inter Company Branch", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     # Warehouse Pick List — picking operations
     {"parent": "Warehouse Pick List", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
     # Damage workflow DocTypes
