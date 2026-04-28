@@ -19,6 +19,7 @@
 	var ALLOWED_DOCTYPES = [
 		"Sales Invoice",
 		"Quotation",
+		"Delivery Note",
 		"Customer",
 		"Payment Entry",
 		"Purchase Receipt",
