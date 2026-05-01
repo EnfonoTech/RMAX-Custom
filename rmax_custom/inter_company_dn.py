@@ -108,6 +108,8 @@ def create_si_from_multiple_dns(delivery_note_names):
 	si.due_date = frappe.utils.today()
 	si.currency = head.currency
 	si.selling_price_list = head.selling_price_list or INTER_COMPANY_PRICE_LIST
+	# DNs already moved stock on the selling side. SI is invoice-only.
+	si.update_stock = 0
 	if head.get("custom_inter_company_branch"):
 		si.custom_inter_company_branch = head.custom_inter_company_branch
 
@@ -141,12 +143,29 @@ def create_si_from_multiple_dns(delivery_note_names):
 			"included_in_print_rate": tax.included_in_print_rate,
 		})
 
-	# Inter Company Branch master lookup → cost center for the selling side
-	branch_data = _get_branch_data(head.get("custom_inter_company_branch"), selling_company)
+	# Inter Company Branch master lookup → cost center for the SELLING side.
+	branch = head.get("custom_inter_company_branch")
+	branch_data = _get_branch_data(branch, selling_company)
 	if branch_data.get("cost_center"):
 		si.cost_center = branch_data["cost_center"]
 		for item in si.items:
 			item.cost_center = branch_data["cost_center"]
+
+	# Internal-customer SIs require a target warehouse on every row — that's the
+	# BUYING-company warehouse which receives the auto-generated PI's stock.
+	# Fetch it from the buying-company row of the same Inter Company Branch.
+	target_warehouse = _get_target_warehouse(branch, head.represents_company)
+	if not target_warehouse:
+		frappe.throw(
+			_("Configure a Warehouse for company {0} on Inter Company Branch {1} before consolidating.").format(
+				frappe.bold(head.represents_company),
+				frappe.bold(branch or "—"),
+			),
+			title=_("Target Warehouse Missing"),
+		)
+	si.set_target_warehouse = target_warehouse
+	for item in si.items:
+		item.target_warehouse = target_warehouse
 
 	si.insert(ignore_permissions=False)
 
@@ -337,6 +356,17 @@ def _get_branch_data(inter_company_branch: str | None, buying_company: str) -> d
 		result["cost_center"] = erpnext.get_default_cost_center(buying_company)
 
 	return result
+
+
+def _get_target_warehouse(inter_company_branch: str | None, buying_company: str | None) -> str | None:
+	"""Return the buying-side warehouse from Inter Company Branch Cost Center."""
+	if not inter_company_branch or not buying_company:
+		return None
+	return frappe.db.get_value(
+		"Inter Company Branch Cost Center",
+		{"parent": inter_company_branch, "company": buying_company},
+		"warehouse",
+	)
 
 
 def _warehouse_belongs_to_company(warehouse: str, company: str) -> bool:

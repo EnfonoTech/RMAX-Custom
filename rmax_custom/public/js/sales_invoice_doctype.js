@@ -49,11 +49,23 @@ frappe.ui.form.on("Sales Invoice", {
     onload: function (frm) {
         if (!frm.is_new()) return;
 
-        if (!frm.doc.update_stock) {
+        // Skip the update_stock=1 default when:
+        //   * SI was created from a Delivery Note (each item carries a
+        //     delivery_note link) — DN already moved stock; flipping
+        //     update_stock back on triggers ERPNext's
+        //     "Stock cannot be updated against Delivery Note" guard.
+        //   * SI is for an internal customer (inter-company invoice) —
+        //     stock leg lives on the DN/PR pair, never on the SI.
+        const created_from_dn = (frm.doc.items || []).some(function (row) {
+            return row.delivery_note;
+        });
+        const skip_update_stock = created_from_dn || frm.doc.is_internal_customer;
+
+        if (!skip_update_stock && !frm.doc.update_stock) {
             frm.set_value("update_stock", 1);
         }
 
-        if (!frm.doc.set_warehouse) {
+        if (!skip_update_stock && !frm.doc.set_warehouse) {
             _rmax_fetch_default_warehouse(function (wh) {
                 if (wh && frm.is_new() && !frm.doc.set_warehouse) {
                     frm.set_value("set_warehouse", wh);
