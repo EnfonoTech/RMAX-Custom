@@ -69,7 +69,8 @@ doctype_js = {
     ],
     "Purchase Invoice": "public/js/purchase_invoice_doctype.js",
     "Delivery Note": "public/js/delivery_note_doctype.js",
-    "Journal Entry": "public/js/journal_entry_bnpl_template.js"
+    "Journal Entry": "public/js/journal_entry_bnpl_template.js",
+    "Stock Entry": "public/js/stock_entry_inter_branch.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
@@ -267,6 +268,8 @@ doc_events = {
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+	"Stock Transfer": "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+	"Stock Entry": "rmax_custom.api.dashboard_overrides.stock_entry_dashboard",
 }
 
 # exempt linked doctypes from being automatically cancelled
@@ -413,6 +416,10 @@ fixtures = [
                     # Company — Inter-Branch cut-over date + bridge branch
                     "Company-custom_inter_branch_cut_over_date",
                     "Company-custom_inter_branch_bridge_branch",
+
+                    # Journal Entry header — Inter-Branch source backlink (powers dashboards)
+                    "Journal Entry-custom_source_doctype",
+                    "Journal Entry-custom_source_docname",
                 ]
             ]
         ]

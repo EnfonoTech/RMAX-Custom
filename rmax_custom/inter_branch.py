@@ -420,6 +420,49 @@ def resolve_warehouse_branch(warehouse: str) -> str | None:
 
 
 @frappe.whitelist()
+def backfill_je_header_source() -> int:
+    """Populate `custom_source_doctype` and `custom_source_docname` on the Journal
+    Entry header for any submitted JE whose child accounts already carry those
+    fields but whose header was created before the Phase 2 dashboard support.
+
+    Returns the count of JEs updated. Idempotent — only touches rows where the
+    header field is empty AND the child rows agree on a single source.
+
+    Run: `bench --site rmax_dev2 execute rmax_custom.inter_branch.backfill_je_header_source`
+    """
+    rows = frappe.db.sql(
+        """
+        SELECT je.name, MIN(jea.custom_source_doctype) AS dt, MIN(jea.custom_source_docname) AS dn,
+               COUNT(DISTINCT jea.custom_source_docname) AS distinct_dns
+        FROM `tabJournal Entry` je
+        INNER JOIN `tabJournal Entry Account` jea ON jea.parent = je.name
+        WHERE jea.custom_auto_inserted = 1
+          AND jea.custom_source_doctype IS NOT NULL
+          AND jea.custom_source_doctype != ''
+          AND jea.custom_source_docname IS NOT NULL
+          AND jea.custom_source_docname != ''
+          AND (je.custom_source_docname IS NULL OR je.custom_source_docname = '')
+          AND je.docstatus = 1
+        GROUP BY je.name
+        HAVING distinct_dns = 1
+        """,
+        as_dict=True,
+    )
+    updated = 0
+    for r in rows:
+        frappe.db.set_value(
+            "Journal Entry",
+            r.name,
+            {"custom_source_doctype": r.dt, "custom_source_docname": r.dn},
+            update_modified=False,
+        )
+        updated += 1
+    frappe.db.commit()
+    print(f"Backfilled {updated} Journal Entry header(s).")
+    return updated
+
+
+@frappe.whitelist()
 def print_reconciliation(company: str, from_date: str = "2026-01-01", to_date: str = "2026-12-31") -> None:
     """Print the Inter-Branch Reconciliation matrix to stdout (debug helper)."""
     from rmax_custom.rmax_custom.report.inter_branch_reconciliation.inter_branch_reconciliation import execute as run_report
@@ -551,6 +594,8 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
     je.posting_date = stock_transfer.posting_date
     je.company = company
     je.voucher_type = "Journal Entry"
+    je.custom_source_doctype = "Stock Transfer"
+    je.custom_source_docname = stock_transfer.name
     je.user_remark = _("Inter-Branch obligation from Stock Transfer {0}").format(
         stock_transfer.name
     )
@@ -702,6 +747,8 @@ def create_companion_inter_branch_je_for_stock_entry(
     je.posting_date = stock_entry.posting_date
     je.company = company
     je.voucher_type = "Journal Entry"
+    je.custom_source_doctype = "Stock Entry"
+    je.custom_source_docname = stock_entry.name
     je.user_remark = _("Inter-Branch obligation from Stock Entry {0}").format(
         stock_entry.name
     )
