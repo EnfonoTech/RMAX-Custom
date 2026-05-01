@@ -204,9 +204,13 @@ class StockTransfer(Document):
 					"s_warehouse": self.set_source_warehouse,
 					"t_warehouse": self.set_target_warehouse
 				})
+		# Mark the SE so the inter-branch SE submit hook skips this one — the
+		# Stock Transfer's own on_submit drives the companion JE creation.
+		se.flags.from_stock_transfer = True
 		se.insert()
 		self.stock_entry = se.name
 		self.stock_entry_created = 1
+		se.flags.from_stock_transfer = True
 		se.submit()
 		frappe.msgprint(
 			f'Stock Entry Created: <a href="/app/stock-entry/{se.name}">{se.name}</a>',

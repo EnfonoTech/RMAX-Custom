@@ -223,6 +223,10 @@ doc_events = {
 	"Branch": {
 		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
 	},
+	"Stock Entry": {
+		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
+		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
+	},
 }
 
 # Scheduled Tasks

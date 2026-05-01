@@ -642,3 +642,121 @@ class TestStockTransferCompanionJE(FrappeTestCase):
                 frappe.db.set_value(
                     "Company", self.company, "custom_inter_branch_cut_over_date", original_cut_over
                 )
+
+
+class TestStockEntryDirectInterBranch(FrappeTestCase):
+    """Direct Stock Entry (Material Transfer) — inter-branch detection + companion JE.
+
+    Uses stubs (no real Stock Entry insert) for the helper-level paths so the
+    suite stays runnable without an item master / valuation history.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.company = frappe.db.get_value("Company", {}, "name")
+        inter_branch._ensure_inter_branch_groups(cls.company)
+        frappe.db.set_value(
+            "Company", cls.company, "custom_inter_branch_cut_over_date", "2026-01-01"
+        )
+
+    def _stub_se(self, items, name="SE-STUB-1"):
+        class Stub:
+            pass
+
+        s = Stub()
+        s.doctype = "Stock Entry"
+        s.name = name
+        s.company = self.company
+        s.posting_date = "2026-04-28"
+        s.purpose = "Material Transfer"
+        s.items = items
+        s.flags = type("F", (), {"get": lambda self_, k, d=None: getattr(self_, k, d)})()
+        return s
+
+    def _stub_item(self, s_wh, t_wh, amount=500, qty=1):
+        item = type("Row", (), {})()
+        item.s_warehouse = s_wh
+        item.t_warehouse = t_wh
+        item.basic_amount = amount
+        item.qty = qty
+        item.basic_rate = amount / qty if qty else 0
+        return item
+
+    def test_branch_pair_resolves_single_pair(self):
+        items = [self._stub_item("WH-A", "WH-B", 800)]
+        se = self._stub_se(items, name="SE-PAIR")
+        original = inter_branch.resolve_warehouse_branch
+        inter_branch.resolve_warehouse_branch = (
+            lambda wh: "Riyadh" if wh == "WH-A" else "Jeddah"
+        )
+        try:
+            src, tgt, total = inter_branch._stock_entry_branch_pair(se)
+            self.assertEqual(src, "Riyadh")
+            self.assertEqual(tgt, "Jeddah")
+            self.assertEqual(total, 800.0)
+        finally:
+            inter_branch.resolve_warehouse_branch = original
+
+    def test_same_branch_returns_pair_but_skips_companion(self):
+        """Two warehouses under the same branch — pair resolves but companion skipped."""
+        items = [self._stub_item("WH-HO-1", "WH-HO-2", 300)]
+        se = self._stub_se(items, name="SE-SAMEBRANCH")
+        original = inter_branch.resolve_warehouse_branch
+        inter_branch.resolve_warehouse_branch = lambda wh: "HO"
+        try:
+            src, tgt, total = inter_branch._stock_entry_branch_pair(se)
+            self.assertEqual(src, tgt)
+            # create_companion returns None when source==target
+            res = inter_branch.create_companion_inter_branch_je_for_stock_entry(
+                se, src, tgt, total
+            )
+            self.assertIsNone(res)
+        finally:
+            inter_branch.resolve_warehouse_branch = original
+
+    def test_multi_pair_se_returns_none(self):
+        """Multi-pair SE is out of scope — helper returns (None, None, 0)."""
+        items = [
+            self._stub_item("WH-RIY", "WH-JED", 500),
+            self._stub_item("WH-RIY", "WH-MAL", 200),
+        ]
+        se = self._stub_se(items, name="SE-MULTIPAIR")
+
+        def fake_resolver(wh):
+            return {
+                "WH-RIY": "Riyadh",
+                "WH-JED": "Jeddah",
+                "WH-MAL": "Warehouse Malaz",
+            }.get(wh)
+
+        original = inter_branch.resolve_warehouse_branch
+        inter_branch.resolve_warehouse_branch = fake_resolver
+        try:
+            src, tgt, total = inter_branch._stock_entry_branch_pair(se)
+            self.assertIsNone(src)
+            self.assertIsNone(tgt)
+            self.assertEqual(total, 0.0)
+        finally:
+            inter_branch.resolve_warehouse_branch = original
+
+    def test_pre_cutover_se_skipped(self):
+        """SE dated before Company cut-over → no companion JE."""
+        original_cut_over = frappe.db.get_value(
+            "Company", self.company, "custom_inter_branch_cut_over_date"
+        )
+        frappe.db.set_value(
+            "Company", self.company, "custom_inter_branch_cut_over_date", "2030-01-01"
+        )
+        try:
+            items = [self._stub_item("WH-A", "WH-B", 100)]
+            se = self._stub_se(items, name="SE-PRECUT")
+            res = inter_branch.create_companion_inter_branch_je_for_stock_entry(
+                se, "Riyadh", "Jeddah", 100
+            )
+            self.assertIsNone(res)
+        finally:
+            if original_cut_over:
+                frappe.db.set_value(
+                    "Company", self.company, "custom_inter_branch_cut_over_date", original_cut_over
+                )

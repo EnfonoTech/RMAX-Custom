@@ -68,12 +68,25 @@ Save. System adds Due-from / Due-to legs.
 
 ### Scenario C — Stock transfer between branches (automatic)
 
-Use the existing **Stock Transfer** workflow:
-1. Material Request → Stock Transfer → Approval.
-2. On approval, ERPNext creates the Stock Entry as usual.
-3. **Automatic**: if source warehouse and target warehouse belong to different branches, the system creates a companion Journal Entry recording the inter-branch obligation at valuation cost.
+Two routes — both produce the same accounting outcome:
 
-The companion JE is linked back to the Stock Transfer (visible on the JE's Source DocType / Source Document fields). If you cancel the Stock Transfer later, the companion JE is auto-cancelled.
+**Route 1: Stock Transfer workflow (preferred for branch users)**
+1. Material Request → Stock Transfer → Approval.
+2. On approval, the system creates the Stock Entry as usual.
+3. **Automatic**: if source warehouse and target warehouse belong to different branches, a companion Journal Entry records the inter-branch obligation at valuation cost. Source DocType = `Stock Transfer`.
+
+**Route 2: Direct Stock Entry (Material Transfer)**
+1. Stock Manager opens Stock Entry directly, picks `Material Transfer`, fills source warehouse + target warehouse + items.
+2. On submit:
+   - System resolves each warehouse → Branch via Branch Configuration.
+   - **If source and target sit on the same branch** (e.g. both warehouses under HO) → no companion JE. Standard Stock Entry GL is enough; intra-branch shuffle.
+   - **If source ≠ target branch** → system re-tags the Stock Entry's own GL (source legs get source branch, target legs get target branch) and creates a companion JE at valuation cost. Source DocType = `Stock Entry`.
+
+The companion JE is linked to the source document (Stock Transfer or Stock Entry). Cancelling the source document auto-cancels the companion JE.
+
+**Same-branch warehouse pair (e.g. WH-HO-1 ↔ WH-HO-2 both under HO branch)** is supported natively — no obligation is recorded because there is no inter-branch movement. Both Stock-in-Hand GL legs end up branch=HO.
+
+**Multi-pair Stock Entry (rare):** if a single SE moves stock across multiple branch pairs (e.g. items going Riyadh→Jeddah AND Riyadh→Malaz in one doc), the system logs a hint and skips companion-JE creation. Split the SE into separate one-pair documents.
 
 ## Auto-injected line markers
 

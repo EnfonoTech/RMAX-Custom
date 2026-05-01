@@ -586,3 +586,228 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
     je.insert(ignore_permissions=True)
     je.submit()
     return je.name
+
+
+# ----------------------------------------------------------------------------
+# Direct Stock Entry hooks (no Stock Transfer wrapper)
+# ----------------------------------------------------------------------------
+
+# Stock Entry purposes that move inventory between two warehouses on a single SE.
+# Phase 1 only handles the simple Material Transfer flow.
+STOCK_ENTRY_INTER_BRANCH_PURPOSES = ("Material Transfer",)
+
+
+def _stock_entry_branch_pair(stock_entry) -> tuple[str | None, str | None, float]:
+    """Return (source_branch, target_branch, total_value) for a Material Transfer SE.
+
+    Walks every item row, resolves each row's `s_warehouse` and `t_warehouse`
+    to a Branch via Branch Configuration, and:
+
+    * if every row carries the same (source_branch, target_branch) pair,
+      returns that pair plus the summed valuation; rows whose warehouses do
+      not map to a Branch are tolerated only if their pair matches the
+      dominant pair.
+    * if rows disagree on the pair (multi-pair SE — out of scope for Phase 1),
+      returns (None, None, 0.0) so the caller skips with a warning.
+
+    `total_value` sums `basic_amount`, falling back to `qty * basic_rate`
+    when ERPNext has not stamped basic_amount yet.
+    """
+    pairs: dict[tuple[str, str], float] = {}
+    for item in stock_entry.items or []:
+        s_wh = getattr(item, "s_warehouse", None)
+        t_wh = getattr(item, "t_warehouse", None)
+        if not s_wh or not t_wh:
+            continue
+        s_br = resolve_warehouse_branch(s_wh)
+        t_br = resolve_warehouse_branch(t_wh)
+        if not s_br or not t_br:
+            continue
+        amt = flt(getattr(item, "basic_amount", 0))
+        if not amt:
+            amt = flt(getattr(item, "qty", 0)) * flt(getattr(item, "basic_rate", 0))
+        pairs[(s_br, t_br)] = pairs.get((s_br, t_br), 0.0) + amt
+
+    if not pairs:
+        return None, None, 0.0
+    if len(pairs) > 1:
+        # Multi-pair SE — Phase 1 does not handle this; log a hint to ops.
+        frappe.log_error(
+            title="Inter-Branch SE skipped (multi-pair)",
+            message=(
+                f"Stock Entry {stock_entry.name} moves stock across multiple "
+                f"branch pairs: {sorted(pairs)}. Phase 1 supports only single-pair "
+                f"Material Transfer SEs. Split this SE into one-pair-per-doc."
+            ),
+        )
+        return None, None, 0.0
+
+    (src, tgt), total = next(iter(pairs.items()))
+    return src, tgt, round(total, 2)
+
+
+def _retag_se_gl_entries(stock_entry, source_branch: str, target_branch: str) -> None:
+    """Rewrite per-leg branch tags on a freshly-submitted Stock Entry's GL.
+
+    ERPNext's `make_gl_entries` copies the SE header `branch` (or the row's
+    `branch` field) onto every GL row. For cross-branch transfers we need:
+
+      * source warehouse legs (Cr Stock-in-Hand on source) → branch=<source>
+      * target warehouse legs (Dr Stock-in-Hand on target) → branch=<target>
+
+    Resolved by the warehouse linked to each GL row.
+    """
+    gl_rows = frappe.get_all(
+        "GL Entry",
+        filters={"voucher_no": stock_entry.name, "is_cancelled": 0},
+        fields=["name", "account", "debit", "credit"],
+    )
+    for row in gl_rows:
+        warehouse = frappe.db.get_value("Account", row.account, "warehouse")
+        if not warehouse:
+            continue
+        wh_branch = resolve_warehouse_branch(warehouse)
+        if not wh_branch:
+            continue
+        if wh_branch not in (source_branch, target_branch):
+            continue
+        frappe.db.set_value("GL Entry", row.name, "branch", wh_branch, update_modified=False)
+
+
+def create_companion_inter_branch_je_for_stock_entry(
+    stock_entry, source_branch: str, target_branch: str, amount: float
+) -> str | None:
+    """Mirror of the Stock Transfer companion JE, sourced from a direct SE.
+
+    Posts:
+        Dr Inter-Branch—<target>  (branch=<source>)
+        Cr Inter-Branch—<source>  (branch=<target>)
+    """
+    if amount <= 0:
+        return None
+    if source_branch == target_branch:
+        return None
+    if _is_pre_cut_over(stock_entry):
+        return None
+
+    company = stock_entry.company
+    src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
+    tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
+
+    company_currency = frappe.db.get_value("Company", company, "default_currency")
+    src_currency = frappe.db.get_value("Account", src_receivable, "account_currency") or company_currency
+    tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
+
+    je = frappe.new_doc("Journal Entry")
+    je.posting_date = stock_entry.posting_date
+    je.company = company
+    je.voucher_type = "Journal Entry"
+    je.user_remark = _("Inter-Branch obligation from Stock Entry {0}").format(
+        stock_entry.name
+    )
+    je.append(
+        "accounts",
+        {
+            "account": src_receivable,
+            "account_currency": src_currency,
+            "exchange_rate": 1,
+            "debit_in_account_currency": amount,
+            "debit": amount,
+            "branch": source_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Stock Entry",
+            "custom_source_docname": stock_entry.name,
+        },
+    )
+    je.append(
+        "accounts",
+        {
+            "account": tgt_payable,
+            "account_currency": tgt_currency,
+            "exchange_rate": 1,
+            "credit_in_account_currency": amount,
+            "credit": amount,
+            "branch": target_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Stock Entry",
+            "custom_source_docname": stock_entry.name,
+        },
+    )
+    je.flags.skip_inter_branch_injection = True
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je.name
+
+
+def on_stock_entry_submit(doc, method=None) -> None:
+    """Stock Entry.on_submit hook.
+
+    Generates an inter-branch companion JE and re-tags per-leg GL Entry
+    branches when source and target warehouses sit on different branches.
+
+    Skipped when:
+      * SE was created by a Stock Transfer (the ST hook handles it)
+      * SE purpose is not in STOCK_ENTRY_INTER_BRANCH_PURPOSES
+      * SE warehouses map to the same branch (intra-branch shuffle)
+      * Company cut-over date is not yet reached
+      * A companion JE already exists for this SE name (idempotency)
+    """
+    if doc.doctype != "Stock Entry":
+        return
+    if doc.flags.get("from_stock_transfer"):
+        return
+    if doc.purpose not in STOCK_ENTRY_INTER_BRANCH_PURPOSES:
+        return
+    if not doc.company:
+        return
+
+    # Idempotency — if a JE sourced from this SE already exists, do nothing
+    existing = frappe.db.exists(
+        "Journal Entry Account",
+        {
+            "custom_source_doctype": "Stock Entry",
+            "custom_source_docname": doc.name,
+            "docstatus": 1,
+        },
+    )
+    if existing:
+        return
+
+    source_branch, target_branch, amount = _stock_entry_branch_pair(doc)
+    if not source_branch or not target_branch:
+        return
+    if source_branch == target_branch:
+        return
+
+    _retag_se_gl_entries(doc, source_branch, target_branch)
+    create_companion_inter_branch_je_for_stock_entry(
+        doc, source_branch, target_branch, amount
+    )
+
+
+def on_stock_entry_cancel(doc, method=None) -> None:
+    """Stock Entry.on_cancel hook — cancel the linked companion JE if present."""
+    if doc.doctype != "Stock Entry":
+        return
+    try:
+        companion_names = frappe.db.sql_list(
+            """
+            SELECT DISTINCT je.name
+            FROM `tabJournal Entry` je
+            INNER JOIN `tabJournal Entry Account` jea ON jea.parent = je.name
+            WHERE jea.custom_source_doctype = 'Stock Entry'
+              AND jea.custom_source_docname = %s
+              AND je.docstatus = 1
+            """,
+            (doc.name,),
+        )
+        for je_name in companion_names:
+            je_doc = frappe.get_doc("Journal Entry", je_name)
+            je_doc.flags.skip_inter_branch_injection = True
+            je_doc.cancel()
+    except Exception:
+        frappe.log_error(
+            title="Inter-Branch SE companion JE cancel failed",
+            message=frappe.get_traceback(),
+        )
+        raise
