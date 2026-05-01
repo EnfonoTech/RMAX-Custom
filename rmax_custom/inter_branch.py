@@ -786,6 +786,51 @@ def create_companion_inter_branch_je_for_stock_entry(
     return je.name
 
 
+def auto_set_branch_from_warehouse(doc, method=None) -> None:
+    """Populate `branch` from each item row's warehouse mapping.
+
+    Hook target: any submittable stock-side doctype whose items carry a
+    `warehouse` field (or `s_warehouse` / `t_warehouse` for Stock Entry).
+    Avoids the per-Company `mandatory_for_bs` GL rejection on Stock
+    Reconciliation, opening stock, Stock Entry repacks, etc.
+
+    For each item row with no `branch`, resolves via Branch Configuration
+    Warehouse mapping. Header `branch` (if absent) is set to the first row
+    that resolves successfully — operator can override afterwards.
+
+    Material Transfer Stock Entry rows have BOTH `s_warehouse` and
+    `t_warehouse`; this helper fills `branch` from the source side because
+    that's the warehouse the GL row will hang on for the credit leg. The
+    target-side leg's branch is corrected post-submit by
+    `_retag_se_gl_entries`.
+    """
+    items = getattr(doc, "items", None)
+    if not items:
+        return
+
+    first_resolved = None
+    for item in items:
+        if getattr(item, "branch", None):
+            if not first_resolved:
+                first_resolved = item.branch
+            continue
+        wh = (
+            getattr(item, "warehouse", None)
+            or getattr(item, "s_warehouse", None)
+            or getattr(item, "t_warehouse", None)
+        )
+        if not wh:
+            continue
+        br = resolve_warehouse_branch(wh)
+        if br:
+            item.branch = br
+            if not first_resolved:
+                first_resolved = br
+
+    if first_resolved and not getattr(doc, "branch", None):
+        doc.branch = first_resolved
+
+
 def on_stock_entry_submit(doc, method=None) -> None:
     """Stock Entry.on_submit hook.
 

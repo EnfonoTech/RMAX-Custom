@@ -225,8 +225,24 @@ doc_events = {
 		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
 	},
 	"Stock Entry": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
 		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
+	},
+	"Stock Reconciliation": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Purchase Receipt": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Delivery Note": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Purchase Invoice": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Sales Invoice": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 }
 
