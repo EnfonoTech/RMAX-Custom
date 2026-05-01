@@ -130,6 +130,17 @@ function _rmax_dn_hide_target_warehouse(frm) {
     const is_internal = !!frm.doc.is_internal_customer;
     const should_hide = _rmax_dn_is_branch_restricted() || !is_internal;
 
+    // Also hide the header-level Set Target Warehouse field.
+    if (frm.set_df_property) {
+        frm.set_df_property("set_target_warehouse", "hidden", should_hide ? 1 : 0);
+        frm.set_df_property("set_target_warehouse", "reqd", 0);
+        if (frm.fields_dict.set_target_warehouse) {
+            try {
+                frm.toggle_display("set_target_warehouse", !should_hide);
+            } catch (e) {}
+        }
+    }
+
     try {
         // 1) Mutate the in-memory DocField so any subsequent render uses it.
         const df = frappe.meta.get_docfield("Delivery Note Item", "target_warehouse", frm.doc.name);

@@ -476,8 +476,12 @@ function setup_item_code_field_listeners(frm) {
 
 	const grid = frm.fields_dict.items.grid;
 
+	// Remove any previously-bound delegated listeners so repeated refresh
+	// calls do not stack handlers (which would fire the popup N times).
+	grid.wrapper.off("click.rmax_stock focus.rmax_stock");
+
 	// Listen for clicks on item_code field in grid rows
-	grid.wrapper.on("click focus", "[data-fieldname='item_code'] input, [data-fieldname='item_code'] .link-field", function() {
+	grid.wrapper.on("click.rmax_stock focus.rmax_stock", "[data-fieldname='item_code'] input, [data-fieldname='item_code'] .link-field", function() {
 		let $field = $(this);
 		let $row = $field.closest(".grid-row");
 		let idx = $row.attr("data-idx");
@@ -554,6 +558,12 @@ frappe.ui.form.on("Delivery Note", {
 		setup_item_code_field_listeners(frm);
 		rmax_custom.hide_stock_display(frm);
 		setup_hide_stock_on_click_outside(frm);
-	}
+		// Re-attach after grid finishes its first render (the wrapper.on
+		// listener attaches to nothing if the grid DOM is not mounted yet).
+		setTimeout(() => setup_item_code_field_listeners(frm), 300);
+	},
+	items_on_form_rendered: function(frm) {
+		setup_item_code_field_listeners(frm);
+	},
 });
 
