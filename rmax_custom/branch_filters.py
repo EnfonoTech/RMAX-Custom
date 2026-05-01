@@ -244,6 +244,31 @@ def damage_transfer_permission_query(user):
     )"""
 
 
+def stock_entry_permission_query(user):
+    """Filter Stock Entries by branch warehouse on header set fields and
+    on per-item s_warehouse / t_warehouse references. Owner always sees
+    own SEs.
+
+    Without this filter Branch Users with read-on-Stock-Entry could see
+    every company's stock entries in the list view (cross-branch leakage).
+    """
+    warehouses = get_branch_warehouse_condition(user)
+    if not warehouses:
+        return ""
+
+    wh_list = ", ".join(frappe.db.escape(w) for w in warehouses)
+
+    return f"""(
+        `tabStock Entry`.`from_warehouse` IN ({wh_list})
+        OR `tabStock Entry`.`to_warehouse` IN ({wh_list})
+        OR `tabStock Entry`.`name` IN (
+            SELECT DISTINCT parent FROM `tabStock Entry Detail`
+            WHERE s_warehouse IN ({wh_list}) OR t_warehouse IN ({wh_list})
+        )
+        OR `tabStock Entry`.`owner` = {frappe.db.escape(user)}
+    )"""
+
+
 def no_vat_sale_permission_query(user):
     """No VAT Sale is restricted to Sales Manager + System Manager at the
     DocPerm level; both bypass list filtering. Anyone else somehow

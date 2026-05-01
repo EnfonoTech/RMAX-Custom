@@ -174,6 +174,7 @@ permission_query_conditions = {
 	"Material Request": "rmax_custom.branch_filters.material_request_permission_query",
 	"Damage Slip": "rmax_custom.branch_filters.damage_slip_permission_query",
 	"Damage Transfer": "rmax_custom.branch_filters.damage_transfer_permission_query",
+	"Stock Entry": "rmax_custom.branch_filters.stock_entry_permission_query",
 }
 
 # DocType Class
@@ -527,6 +528,21 @@ fixtures = [
                     "Delivery Note-set_warehouse-ignore_user_permissions",
                     "Delivery Note Item-warehouse-ignore_user_permissions",
                     "Delivery Note Item-target_warehouse-ignore_user_permissions",
+
+                    # Sales Invoice / Purchase Invoice / Purchase Receipt —
+                    # mirror Quotation/DN: Branch Users open docs whose
+                    # default header set_warehouse is "Stores - <abbr>"
+                    # without User Permission rejection.
+                    "Sales Invoice-set_warehouse-ignore_user_permissions",
+                    "Sales Invoice Item-warehouse-ignore_user_permissions",
+                    "Sales Invoice Item-cost_center-ignore_user_permissions",
+                    "Purchase Invoice-set_warehouse-ignore_user_permissions",
+                    "Purchase Invoice Item-warehouse-ignore_user_permissions",
+                    "Purchase Invoice Item-cost_center-ignore_user_permissions",
+                    "Purchase Receipt-set_warehouse-ignore_user_permissions",
+                    "Purchase Receipt Item-warehouse-ignore_user_permissions",
+                    "Purchase Receipt Item-cost_center-ignore_user_permissions",
+                    "Purchase Receipt Item-rejected_warehouse-ignore_user_permissions",
 
                     # Default Print Format per doctype — RMAX bilingual / branded formats.
                     "Sales Invoice-default_print_format",
