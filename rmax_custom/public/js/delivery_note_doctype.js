@@ -1,18 +1,65 @@
 /**
- * RMAX Custom: Delivery Note form — Inter-Company mode.
+ * RMAX Custom: Delivery Note form.
  *
- * Ticking `Inter Company` restricts the customer dropdown to internal
- * customers and locks the selling price list to "Inter Company Price".
+ *  - Inter-Company mode: ticking `Inter Company` restricts the customer
+ *    dropdown to internal customers, locks the selling price list to
+ *    "Inter Company Price", and reveals the inter-company branch picker.
+ *  - Branch/Stock User: filter source warehouse + per-item warehouse
+ *    to the user's Branch Configuration warehouse list.
+ *  - Hide target_warehouse on the items grid for non-transfer DNs;
+ *    target side isn't part of the standard outbound DN flow.
  */
 
 const RMAX_INTER_COMPANY_PRICE_LIST = "Inter Company Price";
 
+const RMAX_BRANCH_RESTRICTED_ROLES = ["Branch User", "Stock User"];
+const RMAX_BRANCH_OVERRIDE_ROLES = [
+    "System Manager",
+    "Stock Manager",
+    "Sales Manager",
+    "Sales Master Manager",
+    "Administrator",
+];
+
+function _rmax_dn_is_branch_restricted() {
+    if (frappe.session.user === "Administrator") return false;
+    const roles = frappe.user_roles || [];
+    if (RMAX_BRANCH_OVERRIDE_ROLES.some((r) => roles.includes(r))) return false;
+    return RMAX_BRANCH_RESTRICTED_ROLES.some((r) => roles.includes(r));
+}
+
+let _rmax_dn_branch_warehouses_cache = null;
+
+function _rmax_dn_load_branch_warehouses(callback) {
+    if (_rmax_dn_branch_warehouses_cache !== null) {
+        callback(_rmax_dn_branch_warehouses_cache);
+        return;
+    }
+    frappe.call({
+        method: "frappe.client.get_list",
+        args: {
+            doctype: "User Permission",
+            filters: { user: frappe.session.user, allow: "Warehouse" },
+            fields: ["for_value"],
+            limit_page_length: 200,
+        },
+        callback: function (r) {
+            const list = (r.message || []).map((row) => row.for_value).filter(Boolean);
+            _rmax_dn_branch_warehouses_cache = list;
+            callback(list);
+        },
+    });
+}
+
 frappe.ui.form.on("Delivery Note", {
     onload: function (frm) {
         _rmax_apply_inter_company_mode(frm);
+        _rmax_dn_apply_warehouse_query(frm);
     },
     refresh: function (frm) {
         _rmax_apply_inter_company_mode(frm);
+        _rmax_dn_apply_warehouse_query(frm);
+        _rmax_dn_hide_target_warehouse(frm);
     },
     custom_is_inter_company: function (frm) {
         _rmax_apply_inter_company_mode(frm);
@@ -29,9 +76,59 @@ frappe.ui.form.on("Delivery Note", {
                         }
                     });
             }
+        } else {
+            // Clear the inter-company branch picker so a stale value doesn't
+            // get carried forward.
+            if (frm.doc.custom_inter_company_branch) {
+                frm.set_value("custom_inter_company_branch", null);
+            }
         }
     },
 });
+
+function _rmax_dn_apply_warehouse_query(frm) {
+    if (!_rmax_dn_is_branch_restricted()) return;
+
+    _rmax_dn_load_branch_warehouses(function (allowed) {
+        if (!allowed.length) return;
+
+        const filter_fn = function () {
+            return {
+                filters: {
+                    name: ["in", allowed],
+                    is_group: 0,
+                },
+                ignore_user_permissions: 1,
+            };
+        };
+
+        frm.set_query("set_warehouse", filter_fn);
+        frm.set_query("warehouse", "items", filter_fn);
+    });
+}
+
+function _rmax_dn_hide_target_warehouse(frm) {
+    // target_warehouse on Delivery Note Item only matters when the DN is
+    // a stock-transfer style document. Hide it on the standard outbound
+    // grid so operators aren't asked for it. Branch/Stock Users always
+    // see source-only.
+    const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+    if (!grid) return;
+
+    const should_hide = _rmax_dn_is_branch_restricted() ||
+        !frm.doc.is_internal_supplier_invoice;
+    try {
+        const df = frappe.meta.get_docfield("Delivery Note Item", "target_warehouse", frm.doc.name);
+        if (df) df.hidden = should_hide ? 1 : 0;
+        if (grid.update_docfield_property) {
+            grid.update_docfield_property("target_warehouse", "hidden", should_hide ? 1 : 0);
+            grid.update_docfield_property("target_warehouse", "reqd", 0);
+        }
+        grid.refresh();
+    } catch (e) {
+        // grid may not be mounted yet on the very first refresh
+    }
+}
 
 function _rmax_apply_inter_company_mode(frm) {
     const on = !!frm.doc.custom_is_inter_company;

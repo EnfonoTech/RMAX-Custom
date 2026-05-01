@@ -6,18 +6,41 @@
  * from the selling (Head Office) company. Existing SI on_submit hook
  * then auto-creates the matching Purchase Invoice on the receiving
  * side.
+ *
+ * Defensive: any error in the menu wiring is swallowed so the list
+ * itself still renders. Branch Users without the action role were
+ * previously losing the list to a runtime error → "flashing" symptom.
  */
+
+const _RMAX_DN_ACTION_ROLES = [
+    "System Manager",
+    "Sales Manager",
+    "Sales Master Manager",
+    "Accounts Manager",
+];
+
+function _rmax_dn_user_can_consolidate() {
+    if (frappe.session.user === "Administrator") return true;
+    const roles = frappe.user_roles || [];
+    return _RMAX_DN_ACTION_ROLES.some((r) => roles.includes(r));
+}
 
 frappe.listview_settings["Delivery Note"] = Object.assign(
     frappe.listview_settings["Delivery Note"] || {},
     {
         onload: function (listview) {
-            listview.page.add_actions_menu_item(
-                __("Create Inter-Company Sales Invoice"),
-                function () {
-                    _rmax_create_inter_company_si(listview);
-                }
-            );
+            try {
+                if (!_rmax_dn_user_can_consolidate()) return;
+                if (!listview || !listview.page || typeof listview.page.add_actions_menu_item !== "function") return;
+                listview.page.add_actions_menu_item(
+                    __("Create Inter-Company Sales Invoice"),
+                    function () {
+                        _rmax_create_inter_company_si(listview);
+                    }
+                );
+            } catch (e) {
+                console.warn("rmax_custom: Delivery Note list action wiring failed", e);
+            }
         },
     }
 );

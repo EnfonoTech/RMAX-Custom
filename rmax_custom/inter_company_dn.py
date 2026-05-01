@@ -171,13 +171,29 @@ def create_si_from_multiple_dns(delivery_note_names):
 # ---------------------------------------------------------------------------
 
 
+def sales_invoice_on_submit(doc, method=None):
+	"""When a consolidated inter-company SI is submitted, refresh
+	billing status on each source DN so the list view shows
+	'Completed'/'Billed' instead of 'To Bill'.
+	"""
+	dn_names = _source_dns_for_si(doc)
+	if not dn_names:
+		return
+	_refresh_dn_billing_status(dn_names)
+
+
 def sales_invoice_on_cancel(doc, method=None):
-	"""When a consolidated SI is cancelled, free up the source DNs."""
+	"""When a consolidated SI is cancelled, free up the source DNs and
+	reset their billing status."""
 	linked = frappe.get_all(
 		"Delivery Note",
 		filters={"custom_inter_company_si": doc.name},
 		pluck="name",
 	)
+	# Source DN names from item references — include any DN linked via
+	# delivery_note even if it didn't get the custom stamp.
+	dn_names = list(set(linked) | _source_dns_for_si(doc))
+
 	for name in linked:
 		frappe.db.set_value(
 			"Delivery Note",
@@ -188,8 +204,40 @@ def sales_invoice_on_cancel(doc, method=None):
 			},
 			update_modified=False,
 		)
+	if dn_names:
+		_refresh_dn_billing_status(dn_names)
 	if linked:
 		frappe.db.commit()
+
+
+def _source_dns_for_si(si_doc) -> set[str]:
+	names: set[str] = set()
+	for row in (si_doc.get("items") or []):
+		ref = (getattr(row, "delivery_note", None) or "").strip()
+		if ref:
+			names.add(ref)
+	return names
+
+
+def _refresh_dn_billing_status(dn_names):
+	"""Recompute per_billed + status on each DN.
+
+	Re-runs ERPNext's standard billing-status calculation for each DN by
+	loading the doc and calling `update_billing_status`. That writes
+	`per_billed` and the derived `status` (Completed / To Bill / etc.).
+	"""
+	for name in dn_names:
+		try:
+			dn = frappe.get_doc("Delivery Note", name)
+			# `update_billing_status` is on the SellingController parent.
+			# It iterates DN items, sums billed amount from linked SI rows,
+			# updates per_billed, and stamps status.
+			dn.update_billing_status(update_modified=False)
+		except Exception:
+			frappe.log_error(
+				frappe.get_traceback(),
+				f"rmax_custom: DN billing status refresh failed for {name}",
+			)
 
 
 # ---------------------------------------------------------------------------

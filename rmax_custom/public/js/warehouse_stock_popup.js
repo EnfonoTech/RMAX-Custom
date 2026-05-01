@@ -387,10 +387,12 @@ rmax_custom.create_material_request = function(frm, item_code, from_warehouse, f
 	dialog.show();
 };
 
-// Hook into item_code and warehouse onchange - Only for Sales Invoice for now
-// Can be extended to other doctypes in future by adding them to this array
+// Hook into item_code and warehouse onchange — wired for Sales Invoice +
+// Delivery Note item rows. Both surface the per-item warehouse stock
+// panel beneath the items grid.
 let item_doctypes = [
-	"Sales Invoice Item"
+	"Sales Invoice Item",
+	"Delivery Note Item"
 ];
 
 // Track currently selected row

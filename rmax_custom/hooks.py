@@ -192,7 +192,10 @@ doc_events = {
 			"rmax_custom.bnpl_uplift.apply_bnpl_uplift",
 		],
 		"validate": "rmax_custom.bnpl_uplift.validate_bnpl_uplift",
-		"on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+		"on_submit": [
+			"rmax_custom.inter_company.sales_invoice_on_submit",
+			"rmax_custom.inter_company_dn.sales_invoice_on_submit",
+		],
 		"on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 	},
 	"Purchase Invoice": {
