@@ -535,8 +535,9 @@ function setup_hide_stock_on_click_outside(frm) {
 	}
 }
 
-// Only enable for Sales Invoice for now
-// Can be extended to other doctypes in future by adding them here
+// Wire form-level refresh hooks for every doctype that should surface the
+// per-item stock panel. Listeners are wired on item_doctypes (child rows);
+// the form-level refresh hook below ensures setup runs on each parent doc.
 frappe.ui.form.on("Sales Invoice", {
 	refresh: function(frm) {
 		setup_item_code_field_listeners(frm);
@@ -544,6 +545,14 @@ frappe.ui.form.on("Sales Invoice", {
 		rmax_custom.hide_stock_display(frm);
 
 		// Hide stock when user clicks or focuses outside the items grid
+		setup_hide_stock_on_click_outside(frm);
+	}
+});
+
+frappe.ui.form.on("Delivery Note", {
+	refresh: function(frm) {
+		setup_item_code_field_listeners(frm);
+		rmax_custom.hide_stock_display(frm);
 		setup_hide_stock_on_click_outside(frm);
 	}
 });

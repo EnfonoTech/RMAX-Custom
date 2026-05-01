@@ -60,6 +60,14 @@ frappe.ui.form.on("Delivery Note", {
         _rmax_apply_inter_company_mode(frm);
         _rmax_dn_apply_warehouse_query(frm);
         _rmax_dn_hide_target_warehouse(frm);
+        // Re-hide after the grid finishes its first render.
+        setTimeout(() => _rmax_dn_hide_target_warehouse(frm), 250);
+    },
+    items_on_form_rendered: function (frm) {
+        _rmax_dn_hide_target_warehouse(frm);
+    },
+    is_internal_customer: function (frm) {
+        _rmax_dn_hide_target_warehouse(frm);
     },
     custom_is_inter_company: function (frm) {
         _rmax_apply_inter_company_mode(frm);
@@ -115,15 +123,33 @@ function _rmax_dn_hide_target_warehouse(frm) {
     const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
     if (!grid) return;
 
-    const should_hide = _rmax_dn_is_branch_restricted() ||
-        !frm.doc.is_internal_supplier_invoice;
+    // DN doesn't have is_internal_supplier_invoice; the equivalent flag is
+    // is_internal_customer (via the Customer master). Hide target_warehouse
+    // for branch users always, and for everyone else unless this DN is the
+    // inter-company / internal-customer flow.
+    const is_internal = !!frm.doc.is_internal_customer;
+    const should_hide = _rmax_dn_is_branch_restricted() || !is_internal;
+
     try {
+        // 1) Mutate the in-memory DocField so any subsequent render uses it.
         const df = frappe.meta.get_docfield("Delivery Note Item", "target_warehouse", frm.doc.name);
-        if (df) df.hidden = should_hide ? 1 : 0;
+        if (df) {
+            df.hidden = should_hide ? 1 : 0;
+            df.in_list_view = should_hide ? 0 : df.in_list_view;
+            df.reqd = 0;
+        }
+        // 2) v15 grid.toggle_display reliably hides the grid column header.
+        if (grid.toggle_display) {
+            grid.toggle_display("target_warehouse", !should_hide);
+        }
+        // 3) Belt-and-suspenders: flip via update_docfield_property too.
         if (grid.update_docfield_property) {
             grid.update_docfield_property("target_warehouse", "hidden", should_hide ? 1 : 0);
             grid.update_docfield_property("target_warehouse", "reqd", 0);
+            grid.update_docfield_property("target_warehouse", "in_list_view", should_hide ? 0 : 1);
         }
+        // 4) Force the visible_columns cache to recompute.
+        if (grid.visible_columns) grid.visible_columns = undefined;
         grid.refresh();
     } catch (e) {
         // grid may not be mounted yet on the very first refresh
