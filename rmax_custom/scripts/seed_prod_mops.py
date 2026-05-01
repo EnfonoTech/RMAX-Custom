@@ -12,13 +12,14 @@ import frappe
 COMPANY = "Clear Light Company"
 
 MOP_SEED = [
-    {"name": "Cash", "type": "Cash"},
-    {"name": "Bank Draft", "type": "Bank"},
-    {"name": "Bank Transfer", "type": "Bank"},
-    {"name": "Mada", "type": "Bank"},
-    {"name": "Visa Card", "type": "Bank"},
-    {"name": "Cheque", "type": "Bank"},
-    {"name": "Wire Transfer", "type": "Bank"},
+    # ZATCA payment-means codes (UN/EDIFACT 4461)
+    {"name": "Cash", "type": "Cash", "zatca_code": "10"},
+    {"name": "Bank Draft", "type": "Bank", "zatca_code": "42"},
+    {"name": "Bank Transfer", "type": "Bank", "zatca_code": "30"},
+    {"name": "Mada", "type": "Bank", "zatca_code": "48"},
+    {"name": "Visa Card", "type": "Bank", "zatca_code": "48"},
+    {"name": "Cheque", "type": "Bank", "zatca_code": "20"},
+    {"name": "Wire Transfer", "type": "Bank", "zatca_code": "31"},
 ]
 
 
@@ -30,17 +31,21 @@ def seed():
 
 
 def _ensure_modes_of_payment():
+    has_zatca = frappe.db.has_column("Mode of Payment", "custom_zatca_payment_means_code")
     for spec in MOP_SEED:
         if frappe.db.exists("Mode of Payment", spec["name"]):
             print(f"[skip] {spec['name']} (exists)")
             continue
         try:
-            frappe.get_doc({
+            doc = {
                 "doctype": "Mode of Payment",
                 "mode_of_payment": spec["name"],
                 "type": spec["type"],
                 "enabled": 1,
-            }).insert(ignore_permissions=True)
+            }
+            if has_zatca:
+                doc["custom_zatca_payment_means_code"] = spec.get("zatca_code", "1")
+            frappe.get_doc(doc).insert(ignore_permissions=True)
             print(f"[create] {spec['name']} ({spec['type']})")
         except Exception as e:
             print(f"[fail] {spec['name']}: {e}")
