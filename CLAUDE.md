@@ -179,6 +179,87 @@ Ships a reusable charge list and per-PR checklist so operators can track whether
 - **UX:** `purchase receipt.js` adds a dashboard indicator (grey / red / orange / green with `done/total`), a `Load LCV Template` dialog button, and a `Create LCV from Template` button that spawns a Draft LCV with only the still-pending charges (CBM-only batches switch to Distribute Manually + `custom_distribute_by_cbm = 1`).
 - **Whitelisted APIs:** `rmax_custom.lcv_template.load_template_into_pr`, `rmax_custom.lcv_template.create_lcv_from_template`.
 
+### BNPL (Tabby / Tamara) — Surcharge Uplift + Clearing Accounts + Balance Guard
+
+Three-part feature for BNPL ("Buy Now Pay Later") payment providers. Implemented across `rmax_custom/bnpl_uplift.py`, `bnpl_settlement_setup.py`, `bnpl_clearing_guard.py`.
+
+**Concept**
+- Tabby / Tamara absorb a fee (~8.6957%). To preserve margin, the customer pays an uplifted price.
+- Formula: `new_rate = original_rate * (1 + bnpl_portion_ratio * surcharge_pct / 100)`
+- The uplift is applied to **selling-side rate only**. COGS, Stock Ledger, and item valuation are NOT touched.
+- After settlement, BNPL deposits the gross-of-fee amount minus their commission to the Bank. The Clearing account holds the receivable until then.
+
+**Provisioning** (`bnpl_settlement_setup.setup_bnpl_accounts`, called from `setup.after_migrate`)
+- Per root Company creates: `Tabby Clearing - <abbr>` + `Tamara Clearing - <abbr>` (account_type=Bank, under Bank Accounts) and `BNPL Fee Expense - <abbr>` (under Indirect Expenses).
+- Sets `Company.custom_bnpl_fee_account` to the per-company fee account.
+- Mode of Payment records (`Tabby`, `Tamara`) are NOT auto-created or mutated — operator wires `custom_surcharge_percentage` + clearing account on the MoP form.
+
+**Custom Fields**
+- `Mode of Payment.custom_surcharge_percentage` — non-zero value flags the MoP as BNPL-type.
+- `Mode of Payment.custom_bnpl_clearing_account` — clearing account used for the BNPL receivable.
+- `Sales Invoice.custom_bnpl_portion_ratio`, `custom_bnpl_total_uplift`, `custom_payment_mode`, `custom_pos_payments_json`.
+- `Sales Invoice Item.custom_original_rate`, `custom_bnpl_uplift_amount` — pre-uplift selling rate stored alongside the uplifted rate.
+- `Quotation.custom_payment_mode` + `Quotation Item.custom_bnpl_uplift_amount` — same uplift applied at quotation time.
+- `Company.custom_bnpl_fee_account`.
+
+**Server-side hooks**
+- `Sales Invoice.before_validate` → `bnpl_uplift.apply_uplift` — recomputes per-item rates from the Payments table (or `custom_pos_payments_json` for POS) and stamps `custom_original_rate`.
+- `Sales Invoice.validate` → `bnpl_uplift.verify_uplift_invariants` — re-checks the formula post-ERPNext-calculation, blocks submit on drift > 0.01 SAR.
+- `Journal Entry.validate` → `bnpl_clearing_guard.warn_bnpl_clearing_overdraw` (chained BEFORE the inter-branch injector). Soft warning (`msgprint`, no throw) when a JE credits more than the live GL balance of a BNPL clearing account. Submission allowed — finance reviews and proceeds.
+- `bnpl_clearing_accounts(company)` returns the union of `default_account` values from `Mode of Payment Account` rows whose parent MoP has positive `custom_surcharge_percentage`.
+
+**Client-side**
+- `sales_invoice_doctype.js` mirrors the uplift formula for live recalculation in the form (POS + standard).
+- `sales_invoice_pos_total_popup.v2.js` handles POS payment popup; respects branch MoP allowlist (Phase 1 add-on `branch_defaults.override_payment_accounts_from_branch`).
+
+**Cancellation symmetry**
+- Cancelling a BNPL Sales Invoice reverses the uplift through ERPNext's standard SI cancel flow. The clearing-account credit reverses with it.
+
+**One-time migrations (already shipped)**
+- Removed Settlement-related DocTypes + reports (commits `02a9cf5`, `a007d74`, `628ef99`). The Settlement layer is no longer part of RMAX — settlement reconciliation happens via standard Bank Reconciliation against Tabby/Tamara clearing accounts.
+
+### Inter-Company Delivery Note → Consolidated Sales Invoice
+
+Implementation: `rmax_custom/inter_company_dn.py`. Operators batch multiple submitted Inter-Company DNs into a single Draft SI on the selling side; existing `inter_company.py::sales_invoice_on_submit` then auto-creates the matching PI on the buying side.
+
+**Trigger**
+- List action on Delivery Note: select 2+ DNs → "Create Inter-Company SI" → calls `create_si_from_multiple_dns(delivery_note_names)` (whitelisted).
+- No auto-creation on individual DN submit — consolidation is always explicit per client requirement.
+
+**Validation per batch**
+- Every selected DN must be: submitted (`docstatus=1`), `custom_is_inter_company=1`, share customer, `represents_company`, currency, `custom_inter_company_branch`.
+- None already linked to a non-cancelled SI via `custom_inter_company_si`.
+- Inter Company Branch master must exist and define source warehouse + cost center for the buying side's PI auto-creation.
+
+**Output SI**
+- Issued by the SELLING company (typically Head Office).
+- Inherits taxes from the first selected DN.
+- `cost_center` and `set_warehouse` come from the matching `Inter Company Branch` row for the selling Company.
+- `update_stock = 0` (DNs already moved stock; SI is purely the inter-company invoice).
+- Each row's `qty` and `rate` mirror the underlying DN row at the inter-company price (uses `Inter Company Price` Price List, auto-created by `setup_inter_company_price_list` in `after_migrate`).
+
+**DN stamping**
+- Each source DN gets `custom_inter_company_si = <SI.name>` and `custom_inter_company_status = "Consolidated"`.
+- Cancelling the SI (`sales_invoice_on_cancel` hook) clears those stamps so the DNs become eligible for a different SI batch.
+
+**Custom Fields on Delivery Note**
+- `custom_is_inter_company` (Check) — flags inter-company DN.
+- `custom_inter_company_branch` (Link → Inter Company Branch) — branch master row used for default warehouse + cost center.
+- `custom_inter_company_si` (Link → Sales Invoice) — backlink to the consolidated SI.
+- `custom_inter_company_status` (Select: Not Consolidated / Consolidated).
+
+**Inter Company Branch DocType** (RMAX custom)
+- Maps the relationship: which (Selling Company, Buying Company) pair → which Cost Center + Warehouse for auto-created PIs.
+- Child table `Inter Company Branch Cost Center` for per-buying-company cost center mapping.
+- DO NOT confuse with the new Phase 1 Inter-Branch R/P module (`inter_branch.py`) — that handles single-company multi-branch GL; Inter-Company DN handles cross-COMPANY transactions.
+
+**Hooks registered**
+- `Sales Invoice.on_submit` → `inter_company.sales_invoice_on_submit` (auto-creates PI on the buying side from the consolidated SI).
+- `Sales Invoice.on_cancel` → `inter_company_dn.sales_invoice_on_cancel` (clears DN stamps so DNs can be re-batched).
+
+**Client-side**
+- `delivery_note_doctype.js` exposes the "Create Inter-Company SI" list action.
+
 ### Damage Workflow
 
 **DocTypes:** Damage Slip (DS-#####), Damage Transfer (DT-#####, submittable)
