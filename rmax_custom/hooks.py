@@ -115,10 +115,10 @@ boot_session = "rmax_custom.boot.boot_session"
 # add methods and filters to jinja environment
 jinja = {
     "methods": [
-        "get_rmax_zatca_qr:rmax_custom.print_helpers.get_rmax_zatca_qr",
-        "get_rmax_company_bank_accounts:rmax_custom.print_helpers.get_rmax_company_bank_accounts",
-        "get_rmax_company_address:rmax_custom.print_helpers.get_rmax_company_address",
-        "get_rmax_customer_phone:rmax_custom.print_helpers.get_rmax_customer_phone",
+        "rmax_custom.print_helpers.get_rmax_zatca_qr",
+        "rmax_custom.print_helpers.get_rmax_company_bank_accounts",
+        "rmax_custom.print_helpers.get_rmax_company_address",
+        "rmax_custom.print_helpers.get_rmax_customer_phone",
     ]
 }
 
