@@ -190,6 +190,7 @@ override_doctype_class = {
 
 doc_events = {
 	"Sales Invoice": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": [
 			"rmax_custom.branch_defaults.override_cost_center_from_branch",
 			"rmax_custom.branch_defaults.override_payment_accounts_from_branch",
@@ -202,18 +203,28 @@ doc_events = {
 		],
 		"on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 	},
+	"Quotation": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
 	"Purchase Invoice": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
 	"Payment Entry": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
 	"Delivery Note": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
 	"Purchase Receipt": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.lcv_template.purchase_receipt_validate",
+	},
+	"Material Request": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 	},
 	"Landed Cost Voucher": {
 		"on_submit": "rmax_custom.lcv_template.landed_cost_voucher_on_submit",
@@ -399,6 +410,9 @@ fixtures = [
                     "Customer-custom_vat_registration_number",
                     "Customer-custom_allow_duplicate_vat",
                     "Customer-custom_duplicate_vat_reason",
+
+                    # Branch — naming-series prefix per branch (drives auto-pick)
+                    "Branch-custom_doc_prefix",
 
                     # Purchase Receipt LCV Checklist
                     "Purchase Receipt-custom_lcv_section",

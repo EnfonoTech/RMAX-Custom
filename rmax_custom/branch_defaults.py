@@ -288,3 +288,84 @@ def get_user_branch_accounts(user: str | None = None, company: str | None = None
         "cash": _hydrate(cash_mops),
         "bank": _hydrate(bank_mops),
     }
+
+
+# ---------------------------------------------------------------------------
+# Naming series auto-pick from user's Branch
+# ---------------------------------------------------------------------------
+
+
+def set_naming_series_from_branch(doc, method=None):
+    """Before insert: prefill `naming_series` based on the user's Branch
+    Configuration default branch's `custom_doc_prefix`.
+
+    Looks up the user's first Branch Configuration (per user record),
+    reads the configured Branch's prefix, and sets
+    naming_series = "<PREFIX>.YYYY.-.####" if the field is unset.
+
+    No-op for Administrator + Guest, for users without a Branch
+    Configuration row, or when the doc already has a naming_series.
+    """
+    user = frappe.session.user
+    if user in ("Administrator", "Guest"):
+        return
+    if doc.get("naming_series"):
+        return
+    if not doc.meta.get_field("naming_series"):
+        return
+
+    branch_name = _resolve_user_branch(
+        user,
+        company=doc.get("company"),
+        cost_center=doc.get("cost_center"),
+    )
+    if not branch_name:
+        return
+
+    prefix = (frappe.db.get_value("Branch", branch_name, "custom_doc_prefix") or "").strip()
+    if not prefix:
+        return
+
+    series = f"{prefix}.YYYY.-.####"
+
+    # Append the series to the field options if not already present so
+    # the value validates. `naming_series` field stores newline-delimited
+    # options at the doctype/Property Setter level.
+    try:
+        meta = frappe.get_meta(doc.doctype)
+        field = meta.get_field("naming_series")
+        opts = (field.options or "").split("\n") if field else []
+        if series not in opts:
+            new_opts = "\n".join([series] + [o for o in opts if o])
+            ps_name = frappe.db.get_value(
+                "Property Setter",
+                {
+                    "doc_type": doc.doctype,
+                    "field_name": "naming_series",
+                    "property": "options",
+                },
+                "name",
+            )
+            if ps_name:
+                frappe.db.set_value("Property Setter", ps_name, "value", new_opts)
+            else:
+                frappe.get_doc({
+                    "doctype": "Property Setter",
+                    "doctype_or_field": "DocField",
+                    "doc_type": doc.doctype,
+                    "field_name": "naming_series",
+                    "property": "options",
+                    "property_type": "Text",
+                    "value": new_opts,
+                }).insert(ignore_permissions=True)
+            frappe.clear_cache(doctype=doc.doctype)
+    except Exception:
+        # Don't block doc insert on a metadata-update failure; just leave
+        # naming_series empty and let the user pick manually.
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"rmax_custom: naming_series option append failed for {doc.doctype}",
+        )
+        return
+
+    doc.naming_series = series
