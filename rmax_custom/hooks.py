@@ -113,10 +113,14 @@ boot_session = "rmax_custom.boot.boot_session"
 # ----------
 
 # add methods and filters to jinja environment
-# jinja = {
-# 	"methods": "rmax_custom.utils.jinja_methods",
-# 	"filters": "rmax_custom.utils.jinja_filters"
-# }
+jinja = {
+    "methods": [
+        "get_rmax_zatca_qr:rmax_custom.print_helpers.get_rmax_zatca_qr",
+        "get_rmax_company_bank_accounts:rmax_custom.print_helpers.get_rmax_company_bank_accounts",
+        "get_rmax_company_address:rmax_custom.print_helpers.get_rmax_company_address",
+        "get_rmax_customer_phone:rmax_custom.print_helpers.get_rmax_customer_phone",
+    ]
+}
 
 # Installation
 # ------------
@@ -439,6 +443,14 @@ fixtures = [
                     # Journal Entry header — Inter-Branch source backlink (powers dashboards)
                     "Journal Entry-custom_source_doctype",
                     "Journal Entry-custom_source_docname",
+
+                    # Print formats — bilingual headers + branch labels + customer PO on Quotation
+                    "Company-custom_company_name_ar",
+                    "Company-custom_address_block_ar",
+                    "Company-custom_cr_number",
+                    "Company-custom_print_logo",
+                    "Branch-custom_branch_name_ar",
+                    "Quotation-custom_customer_po_no",
                 ]
             ]
         ]
@@ -500,6 +512,27 @@ fixtures = [
                     "Delivery Note-set_warehouse-ignore_user_permissions",
                     "Delivery Note Item-warehouse-ignore_user_permissions",
                     "Delivery Note Item-target_warehouse-ignore_user_permissions",
+
+                    # Default Print Format per doctype — RMAX bilingual / branded formats.
+                    "Sales Invoice-default_print_format",
+                    "Quotation-default_print_format",
+                    "Delivery Note-default_print_format",
+                    "Purchase Order-default_print_format",
+                ]
+            ]
+        ]
+    },
+    {
+        "dt": "Print Format",
+        "filters": [
+            [
+                "name",
+                "in",
+                [
+                    "RMAX Tax Invoice",
+                    "RMAX Quotation",
+                    "RMAX Delivery Note",
+                    "RMAX Purchase Order",
                 ]
             ]
         ]

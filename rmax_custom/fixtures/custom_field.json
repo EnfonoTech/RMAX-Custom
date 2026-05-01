@@ -2323,5 +2323,77 @@
   "translatable": 0,
   "unique": 0,
   "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 0, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Arabic display name shown on print formats.",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Company", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_company_name_ar", "fieldtype": "Data", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "company_name", "is_system_generated": 0, "is_virtual": 0, "label": "Company Name (Arabic)",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Company-custom_company_name_ar", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 0, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Multi-line Arabic address printed in the bilingual header (one line per row).",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Company", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_address_block_ar", "fieldtype": "Small Text", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "custom_company_name_ar", "is_system_generated": 0, "is_virtual": 0, "label": "Arabic Address Block",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Company-custom_address_block_ar", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 0, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Commercial Registration number printed on tax invoices.",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Company", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_cr_number", "fieldtype": "Data", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "tax_id", "is_system_generated": 0, "is_virtual": 0, "label": "C.R. Number",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Company-custom_cr_number", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 0, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Optional override logo used on RMAX print formats. Falls back to Company logo when blank.",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Company", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_print_logo", "fieldtype": "Attach Image", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "company_logo", "is_system_generated": 0, "is_virtual": 0, "label": "Print Logo",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Company-custom_print_logo", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 0, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Arabic name for this branch — printed alongside the Latin branch name.",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Branch", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_branch_name_ar", "fieldtype": "Data", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "branch", "is_system_generated": 0, "is_virtual": 0, "label": "Branch Name (Arabic)",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Branch-custom_branch_name_ar", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
+ },
+ {
+  "allow_in_quick_entry": 0, "allow_on_submit": 1, "bold": 0, "collapsible": 0, "collapsible_depends_on": null,
+  "columns": 0, "default": null, "depends_on": null, "description": "Customer Purchase Order reference printed on the quotation header.",
+  "docstatus": 0, "doctype": "Custom Field", "dt": "Quotation", "fetch_from": null, "fetch_if_empty": 0,
+  "fieldname": "custom_customer_po_no", "fieldtype": "Data", "hidden": 0, "hide_border": 0, "hide_days": 0, "hide_seconds": 0,
+  "ignore_user_permissions": 0, "ignore_xss_filter": 0, "in_global_search": 0, "in_list_view": 0, "in_preview": 0, "in_standard_filter": 0,
+  "insert_after": "order_type", "is_system_generated": 0, "is_virtual": 0, "label": "Customer P.O No",
+  "length": 0, "link_filters": null, "mandatory_depends_on": null, "modified": "2026-05-01 12:00:00.000000", "module": null,
+  "name": "Quotation-custom_customer_po_no", "no_copy": 0, "non_negative": 0, "options": null, "permlevel": 0, "placeholder": null,
+  "precision": "", "print_hide": 0, "print_hide_if_no_value": 1, "print_width": null, "read_only": 0, "read_only_depends_on": null,
+  "report_hide": 0, "reqd": 0, "search_index": 0, "show_dashboard": 0, "sort_options": 0, "translatable": 0, "unique": 0, "width": null
  }
 ]
