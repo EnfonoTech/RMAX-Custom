@@ -79,15 +79,38 @@ def _find_parent_group(company: str, root_type: str, fallback_label: str) -> str
     if frappe.db.exists("Account", candidate):
         return candidate
 
-    # Fallback: the company root for the matching root_type
-    root = frappe.db.get_value(
+    # CoA variants prefix the account_name with a number (e.g. "1100-1600
+    # - Current Assets - CL"). Match by account_name first.
+    by_account_name = frappe.db.get_value(
         "Account",
-        {"company": company, "root_type": root_type, "is_group": 1, "parent_account": ""},
+        {
+            "company": company,
+            "account_name": fallback_label,
+            "is_group": 1,
+            "root_type": root_type,
+        },
         "name",
     )
-    if not root:
-        frappe.throw(_("Cannot locate root {0} group for company {1}").format(root_type, company))
-    return root
+    if by_account_name:
+        return by_account_name
+
+    # Fallback: the company root for the matching root_type. ERPNext
+    # stores root accounts with parent_account = NULL, but some legacy
+    # rows use "" — accept either.
+    root = frappe.db.sql(
+        """
+        SELECT name FROM `tabAccount`
+        WHERE company = %s
+          AND root_type = %s
+          AND is_group = 1
+          AND (parent_account IS NULL OR parent_account = '')
+        LIMIT 1
+        """,
+        (company, root_type),
+    )
+    if root:
+        return root[0][0]
+    frappe.throw(_("Cannot locate root {0} group for company {1}").format(root_type, company))
 
 
 def _ensure_group_account(company: str, label: str, root_type: str, parent: str) -> str:
