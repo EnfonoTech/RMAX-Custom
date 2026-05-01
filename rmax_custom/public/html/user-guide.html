@@ -562,6 +562,8 @@
     <a href="#vat-validation"><span class="icon">&#9989;</span> VAT Validation</a>
     <a href="#scrap-sale"><span class="icon">&#9851;</span> Scrap Sale</a>
     <a href="#pi-nonstock"><span class="icon">&#128203;</span> PI Non-Stock Items</a>
+    <a href="#inter-company-dn"><span class="icon">&#128260;</span> Inter-Company DN &rarr; SI</a>
+    <a href="#damage-workflow"><span class="icon">&#9888;</span> Damage Workflow</a>
     <a href="#inter-branch-rp"><span class="icon">&#128202;</span> Inter-Branch R/P</a>
     <a href="#enter-nav"><span class="icon">&#9000;</span> Enter Key Navigation</a>
     <a href="#list-filtering"><span class="icon">&#128269;</span> List Filtering</a>
@@ -1342,6 +1344,132 @@
         <span class="callout-icon">&#128274;</span>
         <div>The <strong>"Branch"</strong> option is only visible to users with <strong>System Manager</strong> or <strong>Auditor</strong> roles. Regular users will not see it.</div>
       </div>
+    </div>
+  </section>
+
+  <!-- ─── INTER-COMPANY DN CONSOLIDATION ─── -->
+  <section class="section" id="inter-company-dn">
+    <h2>&#128260; Inter-Company Delivery Notes &rarr; Consolidated Sales Invoice <span class="badge">Accounts</span></h2>
+    <p>RMAX trades stock between sister Companies (e.g. Head Office &harr; Clearlight Munavar). Goods move via <strong>Delivery Notes</strong> first, then accounts batches multiple DNs into a single <strong>Sales Invoice</strong> on the selling side. The system auto-creates the matching Purchase Invoice on the buying side.</p>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128313;</span>
+      <div><strong>Difference from Inter-Branch R/P:</strong> This is cross-<em>Company</em> (different legal entities, separate books). Inter-Branch R/P is intra-Company (one company, multiple branches). Don&rsquo;t confuse the two.</div>
+    </div>
+
+    <div class="card">
+      <h3>Setup (one-time)</h3>
+      <ol class="steps">
+        <li>Open <strong>Inter Company Branch</strong> master &rarr; create one row per (Selling Company, Buying Company) pair. Set the cost center + warehouse the buying side will use when its PI is auto-created.</li>
+        <li>Ensure the <strong>Inter Company Price</strong> price list exists (auto-created by <code>after_migrate</code>) and item rates are loaded for inter-company prices.</li>
+        <li>Mark the customer record as <strong>Internal Customer</strong> + set <span class="field">Represents Company</span> on the customer for the buying side.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Daily Flow</h3>
+      <ol class="steps">
+        <li><strong>Branch creates Delivery Note(s)</strong> as usual. For inter-company DNs, tick <span class="field">Is Inter-Company</span> and set <span class="field">Inter-Company Branch</span> on the DN. Submit (stock leaves the selling company&rsquo;s warehouse).</li>
+        <li><strong>Accounts opens the Delivery Note list</strong>. Select 2+ submitted inter-company DNs that share the same Customer, Represents Company, Currency, and Inter-Company Branch.</li>
+        <li>Click the list action <strong>Create Inter-Company SI</strong>.</li>
+        <li>System builds one Draft Sales Invoice on the selling side:
+          <ul>
+            <li>Taxes inherited from the first selected DN.</li>
+            <li>Cost Center + Source Warehouse pulled from <strong>Inter Company Branch</strong> for the selling Company.</li>
+            <li><span class="field">Update Stock</span> = OFF (DNs already moved stock; this SI is purely the inter-company invoice).</li>
+            <li>Each row mirrors the underlying DN row at the inter-company Price List rate.</li>
+          </ul>
+        </li>
+        <li>Each source DN gets stamped: <span class="field">Inter-Company SI</span> = the new SI, <span class="field">Inter-Company Status</span> = <em>Consolidated</em>. They are now locked from being batched again.</li>
+        <li>Review the Draft SI &rarr; <strong>Submit</strong>. On submit:
+          <ul>
+            <li>System auto-creates the matching <strong>Purchase Invoice</strong> on the buying Company.</li>
+            <li>Buying side&rsquo;s PI uses the cost center + warehouse from Inter Company Branch.</li>
+            <li>If the SI is a return, the system links to the original PI and sets <span class="field">Is Return</span> on the PI side too.</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Cancel symmetry:</strong> Cancelling the consolidated SI clears the <em>Inter-Company SI</em> stamp on every source DN and resets <em>Inter-Company Status</em> to <em>Not Consolidated</em>. Those DNs become eligible for a fresh batch. The auto-created PI must be cancelled separately by accounts on the buying side.</div>
+    </div>
+
+    <div class="card">
+      <h3>Validation Rules</h3>
+      <ul>
+        <li>Selected DNs must be <strong>submitted</strong> (docstatus=1).</li>
+        <li>Each must have <span class="field">Is Inter-Company</span> ticked.</li>
+        <li>All must share the same <strong>Customer</strong>, <strong>Represents Company</strong>, <strong>Currency</strong>, and <strong>Inter-Company Branch</strong>.</li>
+        <li>None already linked to a non-cancelled SI via <span class="field">Inter-Company SI</span>.</li>
+        <li>Inter Company Branch master must have a row for the selling Company with valid Cost Center + Warehouse for the buying side.</li>
+      </ul>
+      <p>Any violation aborts the batch with a clear message.</p>
+    </div>
+  </section>
+
+  <!-- ─── DAMAGE WORKFLOW ─── -->
+  <section class="section" id="damage-workflow">
+    <h2>&#9888; Damage Workflow <span class="badge">Branch + Damage User</span></h2>
+    <p>Three-step process to move damaged stock out of branch warehouses, inspect, and write off the loss to a dedicated GL account. Tracks supplier code + photo evidence per item for audit.</p>
+
+    <div class="card">
+      <h3>Roles &amp; DocTypes</h3>
+      <table class="info-table">
+        <tr><th>DocType</th><th>Naming</th><th>Created by</th><th>Action</th></tr>
+        <tr><td>Damage Slip</td><td>DS-#####</td><td>Branch User</td><td>Records damaged items at the branch warehouse.</td></tr>
+        <tr><td>Damage Transfer</td><td>DT-#####</td><td>Damage User</td><td>Pulls in pending slips, inspects, posts Stock Entry to Damage warehouse.</td></tr>
+        <tr><td>Stock Entry (Material Issue)</td><td>auto-created</td><td>System / Admin</td><td>Write-off to <em>Damage Loss Account</em>.</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Step 1 &mdash; Branch User: Damage Slip</h3>
+      <ol class="steps">
+        <li>Open <strong>Damage Slip &rarr; New</strong>.</li>
+        <li>Pick <span class="field">Branch Warehouse</span> (the branch warehouse where the damaged stock currently sits).</li>
+        <li>Pick <span class="field">Damage Warehouse</span> (filtered to <em>Damage Jeddah - CNC</em> or <em>Damage Riyadh - CNC</em>).</li>
+        <li>Add item rows (item code + qty).</li>
+        <li>Save + Submit. Status flips to <em>Pending</em>.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Step 2 &mdash; Damage User: Damage Transfer (inspection)</h3>
+      <ol class="steps">
+        <li>Open <strong>Damage Transfer &rarr; New</strong>.</li>
+        <li>Pick the <span class="field">Damage Warehouse</span>.</li>
+        <li>Click <strong>Get Pending Slips</strong> &mdash; pulls in submitted Damage Slips for that warehouse.</li>
+        <li>For each item row: attach <strong>at least one image</strong> (proof of damage) and pick the <span class="field">Supplier Code</span> (Clear Desk / Clear Light / RMAX / Clear Desk USD).</li>
+        <li>Save + Submit. The system auto-creates a <strong>Stock Entry (Material Transfer)</strong> moving items from the branch warehouse &rarr; Damage warehouse.</li>
+        <li>Linked Damage Slips switch from <em>Pending</em> to <em>Transferred</em>.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#9888;</span>
+      <div><strong>Photo + Supplier Code mandatory:</strong> Submission is rejected if any item row is missing either. Inspection is the audit trail &mdash; do not skip.</div>
+    </div>
+
+    <div class="card">
+      <h3>Step 3 &mdash; Admin: Write Off</h3>
+      <ol class="steps">
+        <li>Open the submitted Damage Transfer.</li>
+        <li>Click <strong>Write Off</strong> (top-right action button).</li>
+        <li>System creates a <strong>Stock Entry (Material Issue)</strong>: <em>Dr Damage / Loss Account</em>, <em>Cr Stock In Hand</em>. Quantity leaves the Damage warehouse permanently.</li>
+        <li>Damage Transfer status &rarr; <em>Written Off</em>.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128313;</span>
+      <div><strong>Configuration check:</strong> Each Company must have <span class="field">Damage Loss Account</span> set on its Company record before Write Off works. If unset, the Write Off button throws an error.</div>
+    </div>
+
+    <div class="card">
+      <h3>Selling Damaged Stock as Scrap</h3>
+      <p>If damaged items still have salvage value (e.g. metal scrap, returnable shells), see the <a href="#scrap-sale">Scrap Sale</a> section. Sell from the Damage warehouse (where items sit after Damage Transfer) instead of writing them off &mdash; preserves the recoverable value as scrap revenue.</p>
     </div>
   </section>
 
