@@ -562,6 +562,7 @@
     <a href="#vat-validation"><span class="icon">&#9989;</span> VAT Validation</a>
     <a href="#scrap-sale"><span class="icon">&#9851;</span> Scrap Sale</a>
     <a href="#pi-nonstock"><span class="icon">&#128203;</span> PI Non-Stock Items</a>
+    <a href="#inter-branch-rp"><span class="icon">&#128202;</span> Inter-Branch R/P</a>
     <a href="#enter-nav"><span class="icon">&#9000;</span> Enter Key Navigation</a>
     <a href="#list-filtering"><span class="icon">&#128269;</span> List Filtering</a>
   </div>
@@ -1341,6 +1342,84 @@
         <span class="callout-icon">&#128274;</span>
         <div>The <strong>"Branch"</strong> option is only visible to users with <strong>System Manager</strong> or <strong>Auditor</strong> roles. Regular users will not see it.</div>
       </div>
+    </div>
+  </section>
+
+  <!-- ─── INTER-BRANCH R/P ─── -->
+  <section class="section" id="inter-branch-rp">
+    <h2>&#128202; Inter-Branch Receivables &amp; Payables <span class="badge">Accounts</span></h2>
+    <p>When a single Company runs multiple branches (Head Office, Riyadh, Jeddah, Snowlite, Malaz, Bahra&hellip;), every cross-branch transaction must show in <strong>each branch&rsquo;s own books</strong> even though the consolidated company books stay balanced. This module captures those obligations automatically &mdash; you record the actual business event, the system adds the matching <em>Due-from</em> / <em>Due-to</em> legs in the background.</p>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#128274;</span>
+      <div><strong>Activation gate:</strong> The auto-injector is <strong>disabled</strong> until <span class="field">Inter-Branch Cut-Over Date</span> is set on the Company. Until then, every Journal Entry posts unchanged. Set this only when the inter-branch account heads are reviewed and ready.</div>
+    </div>
+
+    <div class="card">
+      <h3>One-Time Setup</h3>
+      <ol class="steps">
+        <li>Foundation accounts (<strong>Inter-Branch Receivable</strong> &mdash; Asset, group, under Current Assets &mdash; and <strong>Inter-Branch Payable</strong> &mdash; Liability, group, under Current Liabilities) are created automatically per root Company by <code>after_migrate</code>.</li>
+        <li>Per-counterparty leaf accounts (<strong>Due from &lt;Branch&gt;</strong>, <strong>Due to &lt;Branch&gt;</strong>) are created lazily the first time they&rsquo;re needed, plus immediately when a new Branch is added.</li>
+        <li>Open <strong>Company</strong> &rarr; pick the Company &rarr; set <span class="field">Inter-Branch Cut-Over Date</span>. Auto-injector is now ON for entries on/after this date.</li>
+        <li>For <strong>multi-branch (3+)</strong> Journal Entries, set <span class="field">Inter-Branch Bridge Branch</span> on the Company. Every other branch in the JE pairs against the bridge.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Scenario A &mdash; HO pays rent for Branch Riyadh</h3>
+      <ol class="steps">
+        <li>Open <strong>Accounting &rarr; Journal Entry &rarr; New</strong>.</li>
+        <li>Pick Posting Date and Company.</li>
+        <li>Add line 1: <code>Rent Expense</code>, <strong>Debit 1,000</strong>, Branch = <em>Riyadh</em>.</li>
+        <li>Add line 2: <code>HO Bank Account</code>, <strong>Credit 1,000</strong>, Branch = <em>HO</em>.</li>
+        <li>Save.</li>
+      </ol>
+      <p>The system auto-adds:</p>
+      <table class="info-table">
+        <tr><th>Account</th><th>Branch</th><th>Dr</th><th>Cr</th></tr>
+        <tr><td>Rent Expense</td><td>Riyadh</td><td>1000</td><td></td></tr>
+        <tr><td>HO Bank Account</td><td>HO</td><td></td><td>1000</td></tr>
+        <tr><td>Due to HO</td><td>Riyadh</td><td></td><td>1000</td></tr>
+        <tr><td>Due from Riyadh</td><td>HO</td><td>1000</td><td></td></tr>
+      </table>
+      <p>Submit the JE. Each branch&rsquo;s books balance independently; consolidated still nets to zero.</p>
+    </div>
+
+    <div class="card">
+      <h3>Scenario B &mdash; Cash transfer HO &rarr; Branch</h3>
+      <p>Same flow as A: enter Riyadh Bank Dr 5000, HO Bank Cr 5000. System adds the Due-from/Due-to legs.</p>
+    </div>
+
+    <div class="card">
+      <h3>Scenario C &mdash; Stock transfer between branches (automatic)</h3>
+      <p>Two routes, identical accounting:</p>
+      <ul>
+        <li><strong>Stock Transfer workflow</strong> (preferred for branch users): Material Request &rarr; Stock Transfer &rarr; Approval. On approval, the system creates the Stock Entry as usual. If source warehouse and target warehouse belong to different branches, a companion Journal Entry records the inter-branch obligation at valuation cost. Source DocType = <code>Stock Transfer</code>.</li>
+        <li><strong>Direct Stock Entry (Material Transfer)</strong>: Stock Manager opens Stock Entry directly. On submit the system resolves each warehouse &rarr; Branch via Branch Configuration. Same-branch warehouse pair (e.g. WH-HO-1 &harr; WH-HO-2 both under HO) &mdash; no companion JE. Cross-branch &mdash; system re-tags the SE&rsquo;s own GL legs by branch and creates the companion JE. Source DocType = <code>Stock Entry</code>.</li>
+      </ul>
+      <p>Cancelling the source document (Stock Transfer or Stock Entry) auto-cancels the companion JE.</p>
+    </div>
+
+    <div class="callout callout-info">
+      <span class="callout-icon">&#128270;</span>
+      <div><strong>Auto-inserted line markers:</strong> every auto-generated JE Account row carries <span class="field">Auto-Inserted (Inter-Branch)</span> ticked, <span class="field">Source DocType</span> = the originating doctype, <span class="field">Source Document</span> = the originating doc name. Read-only; for traceability and audit.</div>
+    </div>
+
+    <div class="card">
+      <h3>Multi-Branch (3+) JEs &mdash; Bridge Mode</h3>
+      <p>If a single JE involves 3 or more branches, the system needs an explicit pivot to know how to pair Due-from/Due-to legs. Set <span class="field">Inter-Branch Bridge Branch</span> on the Company (typically <em>HO</em>) and ensure the bridge is one of the branches in the JE. Every non-bridge branch is then paired against the bridge.</p>
+      <p>Without a bridge configured, the system rejects 3+ branch JEs with a clear error so you don&rsquo;t accidentally post unbalanced per-branch books.</p>
+    </div>
+
+    <div class="card">
+      <h3>Reconciliation Report</h3>
+      <p>Open <strong>Reports &rarr; Inter-Branch Reconciliation</strong>. Matrix view: rows = <em>from branch</em>, columns = <em>to branch</em>, cells = net Due balance for the period. Health check: every (A&rarr;B + B&rarr;A) pair must sum to zero &mdash; non-zero rows flag missing reversals or unmatched legs.</p>
+      <p>Roles: Accounts Manager, Accounts User, Auditor, System Manager.</p>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#128313;</span>
+      <div><strong>Out of scope (Phase 1):</strong> Settlement / clearing; salary, expense claim, vendor-on-behalf flows; branch-wise TB / P&amp;L / BS reports beyond reconciliation; HO overhead allocation; historical restate. Coming in later phases.</div>
     </div>
   </section>
 
