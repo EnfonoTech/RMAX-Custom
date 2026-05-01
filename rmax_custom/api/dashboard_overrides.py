@@ -21,10 +21,36 @@ def material_request_dashboard(data):
 
 
 def stock_transfer_dashboard(data):
-    """Show Material Request in Stock Transfer connections.
-    We don't set fieldname or internal_links here — the MR side already
-    uses non_standard_fieldnames to find STs. On the ST form itself, the
-    material_request Link field in the Reference section is enough for
-    users to navigate to the MR.
+    """Show Inter-Branch companion JE in the Stock Transfer Connections sidebar.
+
+    The Inter-Branch companion JE created by `Stock Transfer.on_submit` carries
+    `custom_source_docname = ST.name` on its header (Phase 2). The dashboard
+    looks up Journal Entries via that field.
     """
+    data["non_standard_fieldnames"] = data.get("non_standard_fieldnames", {})
+    data["non_standard_fieldnames"]["Journal Entry"] = "custom_source_docname"
+
+    data.setdefault("transactions", [])
+    data["transactions"].append({
+        "label": _("Inter-Branch"),
+        "items": ["Journal Entry"],
+    })
+    return data
+
+
+def stock_entry_dashboard(data):
+    """Show Inter-Branch companion JE on the Stock Entry Connections sidebar.
+
+    Phase 2's `Stock Entry.on_submit` hook creates a Journal Entry with
+    `custom_source_doctype = "Stock Entry"` and `custom_source_docname = SE.name`
+    (header-level fields). Frappe's dashboard finder uses those to surface the JE.
+    """
+    data["non_standard_fieldnames"] = data.get("non_standard_fieldnames", {})
+    data["non_standard_fieldnames"]["Journal Entry"] = "custom_source_docname"
+
+    data.setdefault("transactions", [])
+    data["transactions"].append({
+        "label": _("Inter-Branch"),
+        "items": ["Journal Entry"],
+    })
     return data

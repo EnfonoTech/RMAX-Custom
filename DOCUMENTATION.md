@@ -22,6 +22,9 @@
 9. [Fixtures](#9-fixtures)
 10. [Architecture Diagram](#10-architecture-diagram)
 11. [Session 2026-04-22 Additions](#11-session-2026-04-22-additions)
+12. [Inter-Branch Receivables & Payables](#12-inter-branch-receivables--payables-phase-1--15--2)
+13. [BNPL — Tabby / Tamara Surcharge Uplift](#13-bnpl--tabby--tamara-surcharge-uplift)
+14. [Inter-Company Delivery Note → Consolidated Sales Invoice](#14-inter-company-delivery-note--consolidated-sales-invoice)
 
 ---
 
@@ -511,7 +514,7 @@ fixtures = [
 | `Sales Invoice-custom_payment_mode` | Cash/Credit selector |
 | `Sales Invoice-custom_inter_company_branch` | Branch link for inter-company PI |
 | `Sales Invoice-custom_pos_payments_json` | Long Text — captures pre-uplift POS payment snapshot for BNPL surcharge reconciliation |
-| `Sales Invoice-custom_bnpl_portion_ratio` / `custom_bnpl_total_uplift` / `custom_bnpl_settled` / `custom_bnpl_settlement` | BNPL uplift bookkeeping |
+| `Sales Invoice-custom_bnpl_portion_ratio` / `custom_bnpl_total_uplift` | BNPL uplift bookkeeping (settlement-link fields removed Apr 2026 — settlement now via plain Journal Entry; see §13 BNPL Clearing Guard) |
 | `Sales Invoice Item-total_vat_linewise` / `custom_original_rate` / `custom_bnpl_uplift_amount` | Per-line VAT + BNPL pre-uplift fields |
 | `Mode of Payment-custom_surcharge_percentage` | Non-zero flags MoP as BNPL-type |
 | `Mode of Payment-custom_bnpl_clearing_account` | Clearing account for BNPL receivable |
@@ -781,3 +784,338 @@ Freight Sea/Air (USD, CBM), Duty (SAR, Value), DO Charges, Port Charges, Mawani,
 | rmax-uat2.enfonoerp.com | AQRAR (185.193.19.184) | `3beb2d91-86d1-4d2d-ba0b-30955992455c` |
 
 Always deploy to both. UAT `bench migrate` is currently blocked by missing ERPNext patch `v11_1.rename_depends_on_lwp`; use `bench execute rmax_custom.setup.after_migrate` for non-schema changes and `bench execute frappe.reload_doc` + `frappe.custom.doctype.custom_field.custom_field.create_custom_fields` for new DocTypes / Custom Fields.
+
+---
+
+## 12. Inter-Branch Receivables & Payables (Phase 1 + 1.5 + 2)
+
+Single-company multi-branch GL. Implementation in `rmax_custom/inter_branch.py`.
+
+**Status:** deployed on `feature/inter-branch-rp-phase1` to `rmax_dev2` only. Not yet on `main`. Not on UAT.
+
+**Plan:** [docs/superpowers/plans/2026-04-28-inter-branch-rp-foundation.md](docs/superpowers/plans/2026-04-28-inter-branch-rp-foundation.md)
+**User guide:** [docs/user-guides/inter-branch-receivables-payables.md](docs/user-guides/inter-branch-receivables-payables.md)
+
+### 12.1 Custom Fields
+
+| DocType | Field | Type | Purpose |
+|---------|-------|------|---------|
+| Journal Entry Account | `custom_auto_inserted` | Check | Flag for auto-injected legs (read-only) |
+| Journal Entry Account | `custom_source_doctype` | Link → DocType | Source traceability (child) |
+| Journal Entry Account | `custom_source_docname` | Dynamic Link | Source doc name (child) |
+| Journal Entry | `custom_source_doctype` | Link → DocType | Header mirror; powers Connections sidebar finder |
+| Journal Entry | `custom_source_docname` | Dynamic Link | Header mirror; finder lookup field for `non_standard_fieldnames` |
+| Company | `custom_inter_branch_cut_over_date` | Date | Activation gate; entries before this date are not auto-injected |
+| Company | `custom_inter_branch_bridge_branch` | Link → Branch | Implicit counterparty for 3+ branch JEs (Phase 1.5) |
+
+### 12.2 Chart of Accounts (auto-managed)
+
+For every root Company (`parent_company` IS NULL/empty):
+- `Inter-Branch Receivable - <abbr>` — Group, root_type=Asset, parent=Current Assets
+- `Inter-Branch Payable - <abbr>` — Group, root_type=Liability, parent=Current Liabilities
+
+Lazy leaves on demand: `Due from <Branch> - <abbr>` (Asset) and `Due to <Branch> - <abbr>` (Liability), created the first time a JE references the counterparty. ERPNext auto-syncs to child companies when the root creates the parent group.
+
+`Branch.after_insert` hook (`on_branch_insert`) creates leaves both directions for every existing Branch when a new Branch is inserted.
+
+### 12.3 Auto-Injector (`auto_inject_inter_branch_legs`)
+
+Hook: `Journal Entry.validate` (chained AFTER `bnpl_clearing_guard.warn_bnpl_clearing_overdraw`).
+
+Computes per-branch (debit − credit) imbalance.
+- 0 or 1 branch → no-op.
+- 2 branches → infer counterparty from imbalance signs; inject 2 legs.
+- 3+ branches → require `Company.custom_inter_branch_bridge_branch`; bridge must appear in JE; pair every non-bridge against bridge (2 × (N−1) injected legs).
+
+Idempotent: strips existing auto-injected rows before recomputing.
+Final guard: re-checks per-branch balance after injection; throws if any branch still off.
+
+Skip conditions: doctype mismatch, `flags.skip_inter_branch_injection`, no company, JE dated before Company cut-over.
+
+### 12.4 Stock Movement Integration
+
+Two paths produce identical accounting:
+
+**Path A — Stock Transfer wrapper (existing custom workflow)**
+- `Stock Transfer.on_submit` calls `create_companion_inter_branch_je_for_stock_transfer(self)` after creating the Stock Entry
+- Sets `flags.from_stock_transfer = True` on the SE so Path B short-circuits
+- Companion JE source = `Stock Transfer / ST-XXXX`
+
+**Path B — Direct Stock Entry (Material Transfer)**
+- `Stock Entry.on_submit` → `on_stock_entry_submit`
+- Resolves source/target warehouse → branch via `resolve_warehouse_branch()` (Branch Configuration → Warehouse mapping)
+- Same-branch pair (e.g. WH-HO-1 ↔ WH-HO-2 both under HO) → no companion JE; standard SE GL is sufficient
+- Cross-branch single-pair → re-tags SE GL Entries per leg via `_retag_se_gl_entries`, then creates companion JE
+- Multi-pair (different src/tgt across rows) → logs hint to Error Log and skips
+- `Stock Entry.on_cancel` → `on_stock_entry_cancel` cancels JEs sourced from this SE
+
+Skip conditions on Path B: `flags.from_stock_transfer`, purpose ≠ `Material Transfer`, no company, idempotent JE-already-exists check.
+
+### 12.5 Reconciliation Report
+
+Path: `rmax_custom/rmax_custom/report/inter_branch_reconciliation/`
+- Frappe Script Report. Matrix: rows = from_branch, cols = to_branch.
+- Health check: every pair (A→B + B→A) must net to zero. Non-zero pairs flag missing counterparty tags, unbalanced manual JEs, or timing differences.
+- Roles: Accounts Manager / Accounts User / Auditor / System Manager.
+- Debug helper: `rmax_custom.inter_branch.print_reconciliation(company, from_date, to_date)` — whitelisted, prints to stdout via `bench execute`.
+
+### 12.6 Hooks Registered
+
+```python
+"Journal Entry": {
+    "validate": [
+        "rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+        "rmax_custom.inter_branch.auto_inject_inter_branch_legs",
+    ],
+},
+"Branch": {
+    "after_insert": "rmax_custom.inter_branch.on_branch_insert",
+},
+"Stock Entry": {
+    "validate":  "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+    "on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
+    "on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
+},
+"Stock Reconciliation": {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Receipt":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Delivery Note":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Invoice":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Sales Invoice":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+```
+
+```python
+override_doctype_dashboards = {
+    "Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+    "Stock Transfer":   "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+    "Stock Entry":      "rmax_custom.api.dashboard_overrides.stock_entry_dashboard",
+}
+
+doctype_js = {
+    # ...,
+    "Stock Entry": "public/js/stock_entry_inter_branch.js",
+}
+```
+
+### 12.6a Branch Auto-Fill (`auto_set_branch_from_warehouse`)
+
+Hook target: stock-side doctypes whose item rows carry a warehouse field (or `s_warehouse` / `t_warehouse` for Stock Entry).
+
+Behaviour:
+- Iterates `doc.items`. For each row with empty `branch`, looks up via `resolve_warehouse_branch(warehouse | s_warehouse | t_warehouse)` and writes the result to `item.branch`.
+- Header `branch` is set to the first row that resolves successfully (operator override is preserved).
+- A row whose warehouse has no Branch Configuration mapping is left untouched — ERPNext will throw the standard *"Accounting Dimension Branch is required for 'Balance Sheet' account..."* on submit. Map the warehouse to fix.
+
+This avoids the per-Company `mandatory_for_bs` rejection on Stock Reconciliation, opening stock, and routine Purchase Receipt / Delivery Note / Invoice flows.
+
+### 12.6b UI Surfacing — Companion JE on Stock Entry / Stock Transfer
+
+Two paths surface the linked JE (both backed by the JE header `custom_source_doctype` + `custom_source_docname` denormalisation):
+
+**Server-side dashboard (Connections sidebar)** — `rmax_custom/api/dashboard_overrides.py`:
+- `stock_transfer_dashboard(data)` and `stock_entry_dashboard(data)` add a `Journal Entry` connection card under an "Inter-Branch" section.
+- Both set `non_standard_fieldnames["Journal Entry"] = "custom_source_docname"` so Frappe's connection finder filters JEs by `custom_source_docname = <SE/ST.name>`.
+
+**Client-side button + sidebar** — `rmax_custom/public/js/stock_entry_inter_branch.js`:
+- Triggers on submitted `Stock Entry` with `purpose = Material Transfer`.
+- Queries `Journal Entry Account` rows with `custom_source_doctype = "Stock Entry"` AND `custom_source_docname = SE.name` AND `docstatus = 1`.
+- For each parent JE found: adds a custom button labelled `Inter-Branch JE → ACC-JV-...` and a sidebar badge that navigates to the JE on click.
+
+The JS path uses the JE Account child rows (not header) so it works against pre-Phase-2 JEs that haven't been backfilled yet.
+
+### 12.6c Backfill Helper
+
+`rmax_custom.inter_branch.backfill_je_header_source()` — whitelisted.
+
+Populates the new `custom_source_doctype` + `custom_source_docname` fields on JE header for already-submitted companion JEs created before the dashboard work landed.
+- Idempotent. Only updates JEs whose header is empty AND whose child auto-injected rows agree on a single source.
+- Run: `bench --site rmax_dev2 execute rmax_custom.inter_branch.backfill_je_header_source`
+- Returns the number of JEs updated.
+
+### 12.7 Activation Per Company
+
+1. Set `Inter-Branch Cut-Over Date` on the Company (auto-injector OFF until set).
+2. Set `Inter-Branch Bridge Branch` on the Company if multi-branch (3+) JEs are needed.
+3. Foundation runs from `setup.after_migrate` (`setup_inter_branch_foundation`) — idempotent, tolerant.
+
+### 12.8 Out of Scope (Deferred)
+
+- Settlement / Clearing
+- Salary / Expense Claim / Vendor-on-behalf
+- Branch-wise TB/P&L/BS reports beyond reconciliation
+- HO overhead allocation
+- Historical restate
+
+### 12.9 Deployed Bug History
+
+1. `setup_inter_branch_foundation` originally iterated all companies including ERPNext children → `validate_root_company_and_sync_account_to_children` rejected. Fix: filter to `parent_company in ("", None)`.
+2. Auto-injected JE Account rows had only `*_in_account_currency` fields — ERPNext's `make_gl_entries` skipped them because company-currency `debit/credit` were 0. Fix: also set `account_currency`, `exchange_rate=1`, and company-currency `debit/credit`.
+3. Direct Stock Entry between mapped + unmapped warehouse pair (e.g. Malaz → Damage Riyadh) silently skipped companion JE creation — `_stock_entry_branch_pair` returned `(None, None, 0.0)` because the unmapped target had no branch. By design, but operationally surprising. Fix is policy-side: map all stock-bearing warehouses (including Damage WHs) in Branch Configuration.
+4. Stock Reconciliation / opening stock submission rejected with *"Accounting Dimension Branch is required for 'Balance Sheet' account Stock In Hand - CNC"* because the user did not pick Branch on item rows. Fix: `auto_set_branch_from_warehouse` validate hook on Stock Reconciliation / Purchase Receipt / Delivery Note / Purchase Invoice / Sales Invoice / Stock Entry — auto-fills `branch` from each item's warehouse mapping.
+5. Companion JE not visible from the source Stock Entry / Stock Transfer form — Frappe's standard dashboard cannot follow via-child-table dynamic-link references. Fix: denormalise `custom_source_doctype` + `custom_source_docname` to JE header (new Custom Fields), register dashboard overrides for SE + ST, add `stock_entry_inter_branch.js` for top-bar button + sidebar badges. Backfill helper updates pre-existing companion JE headers.
+
+### 12.10 Operational Notes
+
+**Warehouse mapping requirement.** Every leaf warehouse on a Company that posts to GL must appear in at least one `Branch Configuration → Warehouses` child table row. Without the mapping:
+- Stock-side documents fail with the dimension error (auto-fill cannot resolve)
+- Direct Stock Entry inter-branch hook silently skips companion JE creation
+- Reconciliation report under-counts the unmapped warehouse's GL on the from-branch row
+
+**Damage warehouses (RMAX policy decision).** Damage warehouses (`Damage Jeddah - CNC`, `Damage Riyadh - CNC`) need branch assignment. Three policy options, one must be picked before damage transfers post correctly:
+- Per-city: `Damage Jeddah → Jeddah branch`, `Damage Riyadh → Riyadh branch`. Damage write-off stays branch-local; cross-branch damage transfer becomes inter-branch obligation.
+- Centralized: all damage WHs → HO. Any branch → its city's Damage WH = inter-branch obligation to HO.
+- Dedicated: all damage WHs → a `Damage` branch. Cleanest separation if damage P&L is its own center.
+
+**Valuation passthrough.** The companion JE inherits the source SE's valuation (`item.basic_amount` or `qty * basic_rate`) which comes from ERPNext's Bin valuation. Inter-branch is NOT the source of truth for valuation. If a JE looks "wildly wrong", trace via `Stock Ledger Entry` filtered by item + warehouse → identify the offending Purchase Receipt / Stock Reconciliation / LCV → cancel + re-post → cancel + re-create the SE/ST.
+
+**Cancel reversal.** Cancelling Stock Entry or Stock Transfer auto-cancels the linked companion JE through the `on_cancel` hook. Reversal posts cancelling GL Entries.
+
+**Multi-pair Stock Entry.** Phase 1 supports single-pair only. SEs with rows moving across multiple branch pairs are logged to Error Log as *"Inter-Branch SE skipped (multi-pair)"* and the companion JE is not created. Operations splits multi-pair SEs into one Material Transfer per pair.
+
+---
+
+## 13. BNPL — Tabby / Tamara Surcharge Uplift
+
+Three-part feature for BNPL ("Buy Now Pay Later") payment providers. Implementation across `rmax_custom/bnpl_uplift.py`, `bnpl_settlement_setup.py`, `bnpl_clearing_guard.py`.
+
+### 13.1 Concept
+
+BNPL providers absorb a fee (~8.6957%). To preserve margin, the customer pays an uplifted price computed from:
+
+```
+new_rate = original_rate * (1 + bnpl_portion_ratio * surcharge_pct / 100)
+```
+
+The uplift modifies the selling-side rate ONLY. COGS, Stock Ledger, and item valuation are not touched — margin is preserved by passing the surcharge through to the customer.
+
+After settlement, BNPL deposits the gross-of-fee amount minus their commission to the Bank. The Clearing account holds the receivable until then; reconciliation against Bank statement uses standard ERPNext Bank Reconciliation.
+
+### 13.2 Provisioning (`bnpl_settlement_setup.setup_bnpl_accounts`)
+
+Idempotent. Called from `setup.after_migrate`. Per root Company creates:
+
+| Account | Type | Parent |
+|---|---|---|
+| `Tabby Clearing - <abbr>` | Bank | Bank Accounts |
+| `Tamara Clearing - <abbr>` | Bank | Bank Accounts |
+| `BNPL Fee Expense - <abbr>` | Expense | Indirect Expenses |
+
+Sets `Company.custom_bnpl_fee_account` to the per-Company fee account.
+
+Mode of Payment records (`Tabby`, `Tamara`) are NOT auto-created or mutated — operator wires `custom_surcharge_percentage` + clearing account on the Mode of Payment form.
+
+### 13.3 Custom Fields
+
+| DocType | Field | Type | Purpose |
+|---|---|---|---|
+| Mode of Payment | `custom_surcharge_percentage` | Float | Non-zero flags MoP as BNPL |
+| Mode of Payment | `custom_bnpl_clearing_account` | Link → Account | BNPL receivable account |
+| Sales Invoice | `custom_bnpl_portion_ratio` | Float | Portion of total paid via BNPL (0..1) |
+| Sales Invoice | `custom_bnpl_total_uplift` | Currency | Sum of per-item uplifts |
+| Sales Invoice | `custom_payment_mode` | Link → Mode of Payment | Quick-pick payment mode (POS) |
+| Sales Invoice | `custom_pos_payments_json` | Long Text | POS payment breakdown (used when Payments table is empty) |
+| Sales Invoice Item | `custom_original_rate` | Currency | Pre-uplift selling rate |
+| Sales Invoice Item | `custom_bnpl_uplift_amount` | Currency | This row's uplift in SAR |
+| Quotation | `custom_payment_mode` | Link → Mode of Payment | Same uplift logic at quotation time |
+| Quotation Item | `custom_bnpl_uplift_amount` | Currency | Per-line uplift |
+| Company | `custom_bnpl_fee_account` | Link → Account | Per-Company BNPL fee expense |
+
+### 13.4 Server-Side Hooks
+
+**`Sales Invoice.before_validate` → `bnpl_uplift.apply_uplift`**
+- Reads payment breakdown from one of (priority order): Payments child table, `custom_pos_payments_json`, `custom_payment_mode`.
+- For each row whose Mode of Payment has non-zero `custom_surcharge_percentage`, computes per-item uplift and stamps `custom_original_rate` + new `rate`.
+
+**`Sales Invoice.validate` → `bnpl_uplift.verify_uplift_invariants`**
+- Re-checks `new_rate ≈ original_rate * (1 + ratio * pct / 100)` after ERPNext's own calculations.
+- Tolerance: 0.01 SAR per row.
+- Throws on drift to block submit.
+
+**`Journal Entry.validate` → `bnpl_clearing_guard.warn_bnpl_clearing_overdraw`**
+- Chained BEFORE the inter-branch auto-injector.
+- Soft warning (`msgprint`, no throw) when a JE credits more than the live GL balance of a BNPL clearing account.
+- Submission allowed — finance reviews the message and proceeds.
+- The set of "BNPL clearing accounts" = union of `default_account` values from `Mode of Payment Account` rows whose parent MoP has positive `custom_surcharge_percentage` (scoped per Company).
+
+### 13.5 Client-Side
+
+- `sales_invoice_doctype.js` mirrors the uplift formula for live recalculation in the form (POS + standard).
+- `sales_invoice_pos_total_popup.v2.js` handles POS payment popup. Respects branch MoP allowlist via `branch_defaults.override_payment_accounts_from_branch` (server-side hook strips/migrates MoPs not in the branch's allowed list).
+
+### 13.6 Cancellation
+
+Cancelling a BNPL Sales Invoice reverses the uplift through ERPNext's standard SI cancel flow. The clearing-account credit reverses with it.
+
+### 13.7 One-Time Migrations Already Shipped
+
+Removed Settlement-related DocTypes + reports (commits `02a9cf5`, `a007d74`, `628ef99`). The Settlement layer is no longer part of RMAX — settlement reconciliation happens via standard Bank Reconciliation against Tabby/Tamara clearing accounts.
+
+---
+
+## 14. Inter-Company Delivery Note → Consolidated Sales Invoice
+
+Implementation: `rmax_custom/inter_company_dn.py`.
+
+> **Naming caution.** This is for ERPNext **multi-COMPANY** flows (separate companies, distinct ledgers). Distinct from the Phase 1 **Inter-BRANCH** R/P module (`inter_branch.py`) which handles single-company multi-branch GL.
+
+### 14.1 Trigger
+
+List action on Delivery Note: select 2+ submitted inter-company DNs → "Create Inter-Company SI" → calls whitelisted `inter_company_dn.create_si_from_multiple_dns(delivery_note_names)`.
+
+No auto-creation on individual DN submit — consolidation is always explicit per client requirement.
+
+### 14.2 Validation Per Batch
+
+Every selected DN must satisfy:
+- `docstatus = 1` (submitted)
+- `custom_is_inter_company = 1`
+- Share `customer`
+- Share `represents_company`
+- Share `currency`
+- Share `custom_inter_company_branch`
+- Not already linked to a non-cancelled SI via `custom_inter_company_si`
+
+The Inter Company Branch master must exist and define the source warehouse + cost center for the buying side's PI auto-creation.
+
+### 14.3 Output SI
+
+- Issued by the SELLING company (typically Head Office).
+- Inherits taxes from the FIRST selected DN.
+- `cost_center` and `set_warehouse` come from the matching `Inter Company Branch` row for the selling Company.
+- `update_stock = 0` (DNs already moved stock; SI is purely the inter-company invoice).
+- Each row mirrors the underlying DN line at the inter-company price (uses the `Inter Company Price` Price List, auto-created by `setup_inter_company_price_list` from `after_migrate`).
+
+### 14.4 DN Stamping
+
+After SI insertion, each source DN is stamped:
+- `custom_inter_company_si = <SI.name>` (Link to the consolidated SI)
+- `custom_inter_company_status = "Consolidated"` (Select)
+
+Cancelling the SI (`sales_invoice_on_cancel` hook) clears those stamps so the DNs become eligible for a different SI batch.
+
+### 14.5 Custom Fields on Delivery Note
+
+| Field | Type | Purpose |
+|---|---|---|
+| `custom_is_inter_company` | Check | Flags the DN as inter-company; restricts customer dropdown to inter-company entities |
+| `custom_inter_company_branch` | Link → Inter Company Branch | Branch master row used for default warehouse + cost center |
+| `custom_inter_company_si` | Link → Sales Invoice | Backlink to the consolidated SI |
+| `custom_inter_company_status` | Select | Not Consolidated / Consolidated |
+
+### 14.6 Inter Company Branch DocType (RMAX Custom)
+
+- Maps the relationship: which (Selling Company, Buying Company) pair → which Cost Center + Warehouse for auto-created PIs.
+- Child table: `Inter Company Branch Cost Center` for per-buying-company cost center mapping.
+- Used by `inter_company.sales_invoice_on_submit` to auto-create the buying-side PI from a submitted inter-company SI.
+
+### 14.7 Hooks Registered
+
+```python
+"Sales Invoice": {
+    "on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+    "on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
+}
+```
+
+### 14.8 Client-Side
+
+`delivery_note_doctype.js` exposes the "Create Inter-Company SI" list action via `frappe.listview_settings`. Validates selection count + submission status before calling the whitelisted endpoint.

@@ -69,7 +69,8 @@ doctype_js = {
     ],
     "Purchase Invoice": "public/js/purchase_invoice_doctype.js",
     "Delivery Note": "public/js/delivery_note_doctype.js",
-    "Journal Entry": "public/js/journal_entry_bnpl_template.js"
+    "Journal Entry": "public/js/journal_entry_bnpl_template.js",
+    "Stock Entry": "public/js/stock_entry_inter_branch.js"
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
@@ -215,7 +216,33 @@ doc_events = {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
 	},
 	"Journal Entry": {
-		"validate": "rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+		"validate": [
+			"rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+			"rmax_custom.inter_branch.auto_inject_inter_branch_legs",
+		],
+	},
+	"Branch": {
+		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
+	},
+	"Stock Entry": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
+		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
+	},
+	"Stock Reconciliation": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Purchase Receipt": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Delivery Note": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Purchase Invoice": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+	},
+	"Sales Invoice": {
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 }
 
@@ -257,6 +284,8 @@ doc_events = {
 # along with any modifications made in other Frappe apps
 override_doctype_dashboards = {
 	"Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+	"Stock Transfer": "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+	"Stock Entry": "rmax_custom.api.dashboard_overrides.stock_entry_dashboard",
 }
 
 # exempt linked doctypes from being automatically cancelled
@@ -394,6 +423,19 @@ fixtures = [
                     "Company-custom_damage_warehouse",
                     "Company-custom_damage_loss_account",
                     "Company-custom_bnpl_fee_account",
+
+                    # Journal Entry Account — Inter-Branch auto-injected legs
+                    "Journal Entry Account-custom_auto_inserted",
+                    "Journal Entry Account-custom_source_doctype",
+                    "Journal Entry Account-custom_source_docname",
+
+                    # Company — Inter-Branch cut-over date + bridge branch
+                    "Company-custom_inter_branch_cut_over_date",
+                    "Company-custom_inter_branch_bridge_branch",
+
+                    # Journal Entry header — Inter-Branch source backlink (powers dashboards)
+                    "Journal Entry-custom_source_doctype",
+                    "Journal Entry-custom_source_docname",
                 ]
             ]
         ]

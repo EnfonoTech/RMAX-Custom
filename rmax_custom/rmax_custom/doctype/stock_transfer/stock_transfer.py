@@ -132,6 +132,18 @@ class StockTransfer(Document):
 		self.create_stock_entry()
 		self._update_material_request_status()
 
+		# Inter-Branch companion JE — only when source and target branches differ
+		from rmax_custom import inter_branch
+		try:
+			inter_branch.create_companion_inter_branch_je_for_stock_transfer(self)
+		except Exception:
+			frappe.log_error(
+				title="Inter-Branch companion JE failed",
+				message=frappe.get_traceback(),
+			)
+			# Re-raise so operator sees the error and the Stock Transfer rolls back.
+			raise
+
 	def _validate_stock_availability(self):
 		"""Check stock availability for all items before creating Stock Entry.
 		Throws a clear error listing all insufficient items."""
@@ -192,9 +204,13 @@ class StockTransfer(Document):
 					"s_warehouse": self.set_source_warehouse,
 					"t_warehouse": self.set_target_warehouse
 				})
+		# Mark the SE so the inter-branch SE submit hook skips this one — the
+		# Stock Transfer's own on_submit drives the companion JE creation.
+		se.flags.from_stock_transfer = True
 		se.insert()
 		self.stock_entry = se.name
 		self.stock_entry_created = 1
+		se.flags.from_stock_transfer = True
 		se.submit()
 		frappe.msgprint(
 			f'Stock Entry Created: <a href="/app/stock-entry/{se.name}">{se.name}</a>',
@@ -204,7 +220,31 @@ class StockTransfer(Document):
 
 
 	def on_cancel(self):
-		"""Update MR status when ST is cancelled."""
+		"""Run only when document is cancelled (docstatus = 2)"""
+		# Cancel any inter-branch companion JE created on submit
+		try:
+			companion_je_names = frappe.db.sql_list(
+				"""
+				SELECT DISTINCT je.name
+				FROM `tabJournal Entry` je
+				INNER JOIN `tabJournal Entry Account` jea ON jea.parent = je.name
+				WHERE jea.custom_source_doctype = 'Stock Transfer'
+				  AND jea.custom_source_docname = %s
+				  AND je.docstatus = 1
+				""",
+				(self.name,),
+			)
+			for je_name in companion_je_names:
+				je_doc = frappe.get_doc("Journal Entry", je_name)
+				je_doc.flags.skip_inter_branch_injection = True
+				je_doc.cancel()
+		except Exception:
+			frappe.log_error(
+				title="Inter-Branch companion JE cancel failed",
+				message=frappe.get_traceback(),
+			)
+			raise
+
 		self._update_material_request_status()
 
 	def _update_material_request_status(self):
