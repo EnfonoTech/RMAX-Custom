@@ -685,8 +685,10 @@ Single-company multi-branch GL. Implementation in `rmax_custom/inter_branch.py`.
 | DocType | Field | Type | Purpose |
 |---------|-------|------|---------|
 | Journal Entry Account | `custom_auto_inserted` | Check | Flag for auto-injected legs (read-only) |
-| Journal Entry Account | `custom_source_doctype` | Link → DocType | Source traceability |
-| Journal Entry Account | `custom_source_docname` | Dynamic Link | Source doc name |
+| Journal Entry Account | `custom_source_doctype` | Link → DocType | Source traceability (child) |
+| Journal Entry Account | `custom_source_docname` | Dynamic Link | Source doc name (child) |
+| Journal Entry | `custom_source_doctype` | Link → DocType | Header mirror; powers Connections sidebar finder |
+| Journal Entry | `custom_source_docname` | Dynamic Link | Header mirror; finder lookup field for `non_standard_fieldnames` |
 | Company | `custom_inter_branch_cut_over_date` | Date | Activation gate; entries before this date are not auto-injected |
 | Company | `custom_inter_branch_bridge_branch` | Link → Branch | Implicit counterparty for 3+ branch JEs (Phase 1.5) |
 
@@ -754,10 +756,64 @@ Path: `rmax_custom/rmax_custom/report/inter_branch_reconciliation/`
     "after_insert": "rmax_custom.inter_branch.on_branch_insert",
 },
 "Stock Entry": {
+    "validate":  "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
     "on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
     "on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
 },
+"Stock Reconciliation": {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Receipt":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Delivery Note":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Invoice":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Sales Invoice":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
 ```
+
+```python
+override_doctype_dashboards = {
+    "Material Request": "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+    "Stock Transfer":   "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+    "Stock Entry":      "rmax_custom.api.dashboard_overrides.stock_entry_dashboard",
+}
+
+doctype_js = {
+    # ...,
+    "Stock Entry": "public/js/stock_entry_inter_branch.js",
+}
+```
+
+### 12.6a Branch Auto-Fill (`auto_set_branch_from_warehouse`)
+
+Hook target: stock-side doctypes whose item rows carry a warehouse field (or `s_warehouse` / `t_warehouse` for Stock Entry).
+
+Behaviour:
+- Iterates `doc.items`. For each row with empty `branch`, looks up via `resolve_warehouse_branch(warehouse | s_warehouse | t_warehouse)` and writes the result to `item.branch`.
+- Header `branch` is set to the first row that resolves successfully (operator override is preserved).
+- A row whose warehouse has no Branch Configuration mapping is left untouched — ERPNext will throw the standard *"Accounting Dimension Branch is required for 'Balance Sheet' account..."* on submit. Map the warehouse to fix.
+
+This avoids the per-Company `mandatory_for_bs` rejection on Stock Reconciliation, opening stock, and routine Purchase Receipt / Delivery Note / Invoice flows.
+
+### 12.6b UI Surfacing — Companion JE on Stock Entry / Stock Transfer
+
+Two paths surface the linked JE (both backed by the JE header `custom_source_doctype` + `custom_source_docname` denormalisation):
+
+**Server-side dashboard (Connections sidebar)** — `rmax_custom/api/dashboard_overrides.py`:
+- `stock_transfer_dashboard(data)` and `stock_entry_dashboard(data)` add a `Journal Entry` connection card under an "Inter-Branch" section.
+- Both set `non_standard_fieldnames["Journal Entry"] = "custom_source_docname"` so Frappe's connection finder filters JEs by `custom_source_docname = <SE/ST.name>`.
+
+**Client-side button + sidebar** — `rmax_custom/public/js/stock_entry_inter_branch.js`:
+- Triggers on submitted `Stock Entry` with `purpose = Material Transfer`.
+- Queries `Journal Entry Account` rows with `custom_source_doctype = "Stock Entry"` AND `custom_source_docname = SE.name` AND `docstatus = 1`.
+- For each parent JE found: adds a custom button labelled `Inter-Branch JE → ACC-JV-...` and a sidebar badge that navigates to the JE on click.
+
+The JS path uses the JE Account child rows (not header) so it works against pre-Phase-2 JEs that haven't been backfilled yet.
+
+### 12.6c Backfill Helper
+
+`rmax_custom.inter_branch.backfill_je_header_source()` — whitelisted.
+
+Populates the new `custom_source_doctype` + `custom_source_docname` fields on JE header for already-submitted companion JEs created before the dashboard work landed.
+- Idempotent. Only updates JEs whose header is empty AND whose child auto-injected rows agree on a single source.
+- Run: `bench --site rmax_dev2 execute rmax_custom.inter_branch.backfill_je_header_source`
+- Returns the number of JEs updated.
 
 ### 12.7 Activation Per Company
 
@@ -773,7 +829,28 @@ Path: `rmax_custom/rmax_custom/report/inter_branch_reconciliation/`
 - HO overhead allocation
 - Historical restate
 
-### 12.9 Deployed Bug History (Phase 1)
+### 12.9 Deployed Bug History
 
 1. `setup_inter_branch_foundation` originally iterated all companies including ERPNext children → `validate_root_company_and_sync_account_to_children` rejected. Fix: filter to `parent_company in ("", None)`.
 2. Auto-injected JE Account rows had only `*_in_account_currency` fields — ERPNext's `make_gl_entries` skipped them because company-currency `debit/credit` were 0. Fix: also set `account_currency`, `exchange_rate=1`, and company-currency `debit/credit`.
+3. Direct Stock Entry between mapped + unmapped warehouse pair (e.g. Malaz → Damage Riyadh) silently skipped companion JE creation — `_stock_entry_branch_pair` returned `(None, None, 0.0)` because the unmapped target had no branch. By design, but operationally surprising. Fix is policy-side: map all stock-bearing warehouses (including Damage WHs) in Branch Configuration.
+4. Stock Reconciliation / opening stock submission rejected with *"Accounting Dimension Branch is required for 'Balance Sheet' account Stock In Hand - CNC"* because the user did not pick Branch on item rows. Fix: `auto_set_branch_from_warehouse` validate hook on Stock Reconciliation / Purchase Receipt / Delivery Note / Purchase Invoice / Sales Invoice / Stock Entry — auto-fills `branch` from each item's warehouse mapping.
+5. Companion JE not visible from the source Stock Entry / Stock Transfer form — Frappe's standard dashboard cannot follow via-child-table dynamic-link references. Fix: denormalise `custom_source_doctype` + `custom_source_docname` to JE header (new Custom Fields), register dashboard overrides for SE + ST, add `stock_entry_inter_branch.js` for top-bar button + sidebar badges. Backfill helper updates pre-existing companion JE headers.
+
+### 12.10 Operational Notes
+
+**Warehouse mapping requirement.** Every leaf warehouse on a Company that posts to GL must appear in at least one `Branch Configuration → Warehouses` child table row. Without the mapping:
+- Stock-side documents fail with the dimension error (auto-fill cannot resolve)
+- Direct Stock Entry inter-branch hook silently skips companion JE creation
+- Reconciliation report under-counts the unmapped warehouse's GL on the from-branch row
+
+**Damage warehouses (RMAX policy decision).** Damage warehouses (`Damage Jeddah - CNC`, `Damage Riyadh - CNC`) need branch assignment. Three policy options, one must be picked before damage transfers post correctly:
+- Per-city: `Damage Jeddah → Jeddah branch`, `Damage Riyadh → Riyadh branch`. Damage write-off stays branch-local; cross-branch damage transfer becomes inter-branch obligation.
+- Centralized: all damage WHs → HO. Any branch → its city's Damage WH = inter-branch obligation to HO.
+- Dedicated: all damage WHs → a `Damage` branch. Cleanest separation if damage P&L is its own center.
+
+**Valuation passthrough.** The companion JE inherits the source SE's valuation (`item.basic_amount` or `qty * basic_rate`) which comes from ERPNext's Bin valuation. Inter-branch is NOT the source of truth for valuation. If a JE looks "wildly wrong", trace via `Stock Ledger Entry` filtered by item + warehouse → identify the offending Purchase Receipt / Stock Reconciliation / LCV → cancel + re-post → cancel + re-create the SE/ST.
+
+**Cancel reversal.** Cancelling Stock Entry or Stock Transfer auto-cancels the linked companion JE through the `on_cancel` hook. Reversal posts cancelling GL Entries.
+
+**Multi-pair Stock Entry.** Phase 1 supports single-pair only. SEs with rows moving across multiple branch pairs are logged to Error Log as *"Inter-Branch SE skipped (multi-pair)"* and the companion JE is not created. Operations splits multi-pair SEs into one Material Transfer per pair.

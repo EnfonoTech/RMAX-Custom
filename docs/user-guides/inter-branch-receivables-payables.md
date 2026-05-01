@@ -169,6 +169,57 @@ Investigate and fix any non-zero diagonal pairs before period-end.
 3. The new branch automatically gets `Due from <each existing branch>` and `Due to <each existing branch>` accounts created in the COA, AND every existing branch gets `Due from <new>` and `Due to <new>` accounts.
 4. No further setup needed.
 
+## Branch auto-fill on stock-side documents
+
+ERPNext rejects any GL posting whose Branch dimension is empty (per-Company `mandatory_for_bs` / `mandatory_for_pl` flags set during activation). To prevent operators from hitting this on every Purchase Receipt / Stock Reconciliation / Stock Entry / etc., a `validate` hook auto-fills the Branch field from each item row's warehouse → branch mapping.
+
+**Hook coverage:**
+- Stock Entry
+- Stock Reconciliation (including opening stock)
+- Purchase Receipt
+- Delivery Note
+- Purchase Invoice
+- Sales Invoice
+
+**Behaviour:**
+- For each item row with no `branch`, the warehouse → branch mapping is looked up and the field is filled.
+- Header `branch` is set to the first row that resolves successfully — operator can override.
+- If a row's warehouse has no branch mapping (e.g. Damage warehouses before they're added to Branch Configuration), `branch` stays empty for that row → ERPNext throws the standard *"Accounting Dimension Branch is required for 'Balance Sheet' account..."* error. Map the warehouse via Branch Configuration to fix.
+
+## Warehouse → Branch mapping (operational requirement)
+
+Every leaf warehouse on the Company that posts to GL must appear in at least one **Branch Configuration → Warehouses** child table row. Without the mapping:
+- Stock-side documents fail with the dimension error
+- Direct Stock Entry inter-branch hook silently skips companion JE creation (one warehouse unresolvable)
+- Reconciliation report cannot place that warehouse's GL on any branch row
+
+**Special cases on RMAX:**
+- **Damage warehouses** (`Damage Jeddah - CNC`, `Damage Riyadh - CNC`) — pick one of:
+  - Map per city (Damage Jeddah → Jeddah, Damage Riyadh → Riyadh) — damage write-off stays branch-local
+  - Map all under HO — centralized damage handling; any branch → its city's Damage WH = inter-branch obligation to HO
+  - Map under a dedicated `Damage` branch — cleanest separation if damage P&L is its own center
+
+## Cancelling Stock Entry / Stock Transfer
+
+Cancelling either document automatically cancels its companion JE (mirror hook on `on_cancel` for both source documents). The reversal posts canceling GL Entries.
+
+If the underlying issue is a wrong **valuation rate** at the source warehouse (Bin's `valuation_rate` inflated by a previous bad PR / Stock Reconciliation / LCV), the inter-branch JE faithfully copies that bad number — the module is NOT the source of truth for valuation. Fix the upstream stock data (cancel the offending PR / reconcile / LCV), then re-create the SE/ST.
+
+## Viewing the companion JE from a Stock Entry / Stock Transfer
+
+Two paths surface the linked JE:
+
+1. **Top button bar** — the SE/ST form shows a custom button labelled `Inter-Branch JE → ACC-JV-...` for each linked JE. Click to navigate.
+2. **Connections sidebar** — the standard Connections panel lists "Journal Entry" under an "Inter-Branch" section.
+
+Both rely on the JE header fields `Inter-Branch Source DocType` (= "Stock Entry" or "Stock Transfer") and `Inter-Branch Source Document` (= source doc name). These fields are read-only — set automatically by the hooks at injection time.
+
+For pre-Phase-2 JEs that lack the header fields, run the backfill helper (admin only):
+```
+bench --site rmax_dev2 execute rmax_custom.inter_branch.backfill_je_header_source
+```
+Idempotent — only updates JEs whose header is empty AND whose child rows agree on a single source.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
@@ -179,18 +230,29 @@ Investigate and fix any non-zero diagonal pairs before period-end.
 | Branch has no Inter-Branch leaves in COA | Branch was created before this feature was deployed | Re-save the Branch master OR run `bench execute rmax_custom.inter_branch.on_branch_insert` for that Branch (admin only) |
 | Reconciliation report shows non-zero diagonal pair | Manual JE was unbalanced per-branch, OR a Stock Transfer's companion JE wasn't created (warehouse not mapped to a branch via Branch Configuration) | Check Branch Configuration → Warehouses mapping; investigate the offending JE |
 | Stock Transfer submission fails with "Inter-Branch companion JE failed" | Either source or target warehouse isn't mapped to a Branch via Branch Configuration, or the company has no `default_currency` set | Map the warehouse to its Branch in Branch Configuration; ensure Company default currency is set |
+| Stock Entry submitted but no companion JE created | At least one warehouse on the SE has no Branch Configuration mapping (e.g. Damage WH) — hook silently skipped | Map the warehouse via Branch Configuration → Warehouses, then re-submit the SE (cancel + recreate) |
+| "Accounting Dimension Branch is required for 'Balance Sheet' account..." on Stock Reconciliation / opening stock / Purchase Receipt | Item row's warehouse has no Branch mapping, OR a row has no warehouse at all | Map every warehouse in Branch Configuration; the validate hook auto-fills branch from warehouse mapping |
+| Companion JE amount looks wildly wrong | Source warehouse's Bin `valuation_rate` is inflated/incorrect (bad past Purchase Receipt / Stock Reconciliation / LCV) | Trace via Stock Ledger Entry → fix offending upstream document → cancel + re-submit the SE |
+| "Could not find Row #1: Source Document: SE-..." on JE insert | Stub / test fixture with a non-existent source doc name | Use a real submitted Stock Entry / Stock Transfer name (Dynamic Link is validated by Frappe at insert) |
+| Multi-pair Stock Entry produces no JE and an Error Log entry | One SE moves stock across multiple branch pairs (Phase 1 supports single-pair only) | Split the SE — one Material Transfer per branch pair |
 
 ## What changed in this release
 
 | Component | Change |
 |---|---|
-| Custom Fields on Journal Entry Account | Added `Auto-Inserted (Inter-Branch)`, `Source DocType`, `Source Document` |
-| Custom Field on Company | Added `Inter-Branch Cut-Over Date` |
-| Chart of Accounts | Added `Inter-Branch Receivable` (Asset, group) + `Inter-Branch Payable` (Liability, group) per root Company |
-| Branch master | New `after_insert` hook auto-creates leaf accounts |
-| Journal Entry | New `validate` hook auto-injects balancing inter-branch legs (chained after the BNPL clearing guard) |
+| Custom Fields on Journal Entry Account | `Auto-Inserted (Inter-Branch)`, `Source DocType`, `Source Document` |
+| Custom Fields on Journal Entry header | `Inter-Branch Source DocType`, `Inter-Branch Source Document` (mirror of child fields, powers Connections sidebar) |
+| Custom Fields on Company | `Inter-Branch Cut-Over Date`, `Inter-Branch Bridge Branch` |
+| Chart of Accounts | `Inter-Branch Receivable` (Asset, group) + `Inter-Branch Payable` (Liability, group) per root Company; lazy `Due from / Due to <Branch>` leaves on demand |
+| Branch master | `after_insert` hook auto-creates leaf accounts both directions |
+| Journal Entry | `validate` hook auto-injects balancing inter-branch legs (chained after the BNPL clearing guard); supports 2-branch direct mode + 3+ branch bridge mode |
 | Stock Transfer | `on_submit` triggers companion JE; `on_cancel` reverses it |
-| Reports | New script report "Inter-Branch Reconciliation" |
+| Stock Entry (direct path) | `on_submit` creates companion JE for cross-branch Material Transfer (skips when `flags.from_stock_transfer`); `on_cancel` reverses |
+| Stock-side validate hook | Auto-fills `branch` from item warehouse on Stock Entry, Stock Reconciliation, Purchase Receipt, Delivery Note, Purchase Invoice, Sales Invoice |
+| Connections sidebar | Stock Entry + Stock Transfer dashboards show linked Inter-Branch JE |
+| JS — Stock Entry form | Top-bar button + sidebar badges for linked JE on submitted Material Transfer SEs |
+| Reports | Script Report "Inter-Branch Reconciliation" with health check |
+| Backfill helper | `rmax_custom.inter_branch.backfill_je_header_source` populates header source fields on pre-Phase-2 companion JEs |
 
 ## Out of scope (deferred to Phase 2+)
 

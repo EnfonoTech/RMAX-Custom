@@ -245,8 +245,10 @@ Implementation: `rmax_custom/inter_branch.py`. Branch on the new build is treate
 
 **Custom Fields**
 - `Journal Entry Account.custom_auto_inserted` (Check, read-only) — flag for auto-injected legs
-- `Journal Entry Account.custom_source_doctype` (Link → DocType) — source traceability
-- `Journal Entry Account.custom_source_docname` (Dynamic Link → custom_source_doctype)
+- `Journal Entry Account.custom_source_doctype` (Link → DocType) — source traceability (child)
+- `Journal Entry Account.custom_source_docname` (Dynamic Link → custom_source_doctype) — source traceability (child)
+- `Journal Entry.custom_source_doctype` (Link → DocType, header) — denormalised mirror; powers Connections sidebar finder
+- `Journal Entry.custom_source_docname` (Dynamic Link, header) — denormalised mirror; finder lookup field
 - `Company.custom_inter_branch_cut_over_date` (Date) — injector skips entries dated before this. Empty = injector disabled for that company.
 - `Company.custom_inter_branch_bridge_branch` (Link → Branch) — required for 3+ branch JEs; bridge branch becomes implicit counterparty for every other branch in the entry.
 
@@ -288,6 +290,22 @@ _Path 2 — Direct Stock Entry (Material Transfer):_
 - Roles: Accounts Manager / Accounts User / Auditor / System Manager
 - Debug helper: `rmax_custom.inter_branch.print_reconciliation(company, from_date, to_date)` — whitelisted, prints to stdout via `bench execute`
 
+**Branch auto-fill on stock-side validate** (`auto_set_branch_from_warehouse`)
+- Hook target: Stock Entry / Stock Reconciliation / Purchase Receipt / Delivery Note / Purchase Invoice / Sales Invoice (all `validate`)
+- Iterates each item row; if `branch` empty, looks up via `resolve_warehouse_branch(item.warehouse|s_warehouse|t_warehouse)` and sets it
+- Header `branch` set to first row that resolves (operator override stays)
+- Prevents the per-Company `mandatory_for_bs` GL rejection on opening stock and routine stock movements
+- For Material Transfer SEs the source-side branch is filled via `s_warehouse`; the target-side branch on each GL leg is corrected post-submit by `_retag_se_gl_entries`
+
+**UI surfacing — companion JE on Stock Entry / Stock Transfer**
+- Server-side: `override_doctype_dashboards` registers `stock_transfer_dashboard` + `stock_entry_dashboard` (in `rmax_custom/api/dashboard_overrides.py`). Both add a "Journal Entry" connection card under "Inter-Branch" via `non_standard_fieldnames["Journal Entry"] = "custom_source_docname"`. Requires the JE header-level Custom Fields.
+- Client-side: `rmax_custom/public/js/stock_entry_inter_branch.js` (registered as `doctype_js["Stock Entry"]`). On submitted Material Transfer SEs: queries `Journal Entry Account` rows with `custom_source_doctype=Stock Entry + custom_source_docname=SE.name`, adds an `Inter-Branch JE → ACC-JV-...` button per JE, and renders a sidebar "Inter-Branch" card with click-to-navigate badges.
+
+**Backfill helper** (`rmax_custom.inter_branch.backfill_je_header_source`)
+- Whitelisted. Populates `custom_source_doctype` + `custom_source_docname` on JE header for already-submitted companion JEs created before the Phase 2 dashboard work.
+- Idempotent. Only updates JEs whose header is empty AND whose child auto-injected rows agree on a single source.
+- Run: `bench --site rmax_dev2 execute rmax_custom.inter_branch.backfill_je_header_source`
+
 **Hooks registered (`hooks.py`)**
 ```
 "Journal Entry": {
@@ -300,9 +318,28 @@ _Path 2 — Direct Stock Entry (Material Transfer):_
     "after_insert": "rmax_custom.inter_branch.on_branch_insert",
 },
 "Stock Entry": {
+    "validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
     "on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
     "on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
 },
+"Stock Reconciliation": {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Receipt":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Delivery Note":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Purchase Invoice":     {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+"Sales Invoice":        {"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse"},
+```
+
+```
+override_doctype_dashboards = {
+    "Material Request":  "rmax_custom.api.dashboard_overrides.material_request_dashboard",
+    "Stock Transfer":    "rmax_custom.api.dashboard_overrides.stock_transfer_dashboard",
+    "Stock Entry":       "rmax_custom.api.dashboard_overrides.stock_entry_dashboard",
+}
+
+doctype_js = {
+    ...,
+    "Stock Entry": "public/js/stock_entry_inter_branch.js",
+}
 ```
 
 **Activation steps (per Company)**
@@ -345,6 +382,9 @@ _Path 2 — Direct Stock Entry (Material Transfer):_
 18. **`flags.skip_inter_branch_injection` is needed on auto-built balanced JEs.** Stock Transfer + direct Stock Entry companion JEs are intentionally one-sided per branch but globally balanced. Set `je.flags.skip_inter_branch_injection = True` BEFORE `je.insert()` so the validate hook doesn't try to add more legs.
 19. **`flags.from_stock_transfer` prevents double-posting on SE.** Stock Transfer's `create_stock_entry` sets this on the new Stock Entry doc. The Stock Entry submit hook short-circuits when the flag is set so the ST hook owns companion-JE creation. Without the flag, both hooks would post duplicate companion JEs.
 20. **`custom_source_docname` is a Dynamic Link** with `options = "custom_source_doctype"`. Frappe validates that the referenced document exists. Test stubs that reference non-existent docnames will raise `LinkValidationError` at JE insert. Real flows always pass a real doc name.
+21. **Unmapped warehouses silently skip the inter-branch SE hook.** When ANY item row's `s_warehouse` or `t_warehouse` doesn't resolve via `resolve_warehouse_branch()`, `_stock_entry_branch_pair` returns `(None, None, 0.0)` and the companion JE is not created. The SE itself submits successfully. RMAX's Damage warehouses (`Damage Jeddah - CNC`, `Damage Riyadh - CNC`) need explicit Branch Configuration mapping. Operational policy must be set: per-city (Damage Jeddah → Jeddah branch) vs centralized (all damage WHs → HO) vs dedicated (all damage WHs → Damage branch). Without a mapping, branch-to-damage transfers do not create inter-branch obligations and reconciliation reports will under-count those movements.
+22. **Companion JE inherits source valuation as-is.** `create_companion_inter_branch_je_for_stock_entry` and `_for_stock_transfer` use the source SE's `basic_amount` (or `qty * basic_rate` fallback). If the source warehouse Bin's `valuation_rate` is wrong (inflated by a bad PR / Stock Reconciliation / LCV), the JE faithfully posts that wrong number. Inter-branch is NOT the source of truth for valuation. Trace via Stock Ledger Entry → fix the upstream document → cancel + re-create the SE/ST.
+23. **`auto_set_branch_from_warehouse` handles Stock Entry rows that have BOTH `s_warehouse` and `t_warehouse`.** Lookup priority is `warehouse → s_warehouse → t_warehouse`. For Material Transfer rows the source-side `s_warehouse` is selected, so the row's branch reflects the SOURCE branch. The target-side branch on the GL Entry rows is corrected post-submit by `_retag_se_gl_entries` (which queries each GL row's `account.warehouse` and sets `branch` per leg).
 
 ---
 
