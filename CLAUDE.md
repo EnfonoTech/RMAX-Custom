@@ -66,7 +66,8 @@ curl -s -X POST \
 | `boot.py` | `boot_session`: restricts Branch/Stock/Damage users to `rmax-dashboard`, sets allowed modules/workspaces |
 | `branch_defaults.py` | `before_validate` hook: overrides cost center on SI/PI/PE/DN/PR for branch users |
 | `branch_filters.py` | `permission_query_conditions`: filters list views by branch warehouses |
-| `inter_company.py` | `on_submit` hook: auto-creates Purchase Invoice from inter-company Sales Invoice |
+| `inter_company.py` | `on_submit` hook: auto-creates Purchase Invoice from inter-company Sales Invoice (ERPNext multi-company — distinct from inter-branch below) |
+| `inter_branch.py` | Inter-Branch R/P module: branch dimension setup, COA groups + lazy leaves, JE auto-injector (Journal Entry.validate), Stock Entry hooks (on_submit / on_cancel), Stock Transfer companion JE, reconciliation report helper |
 | `hr_defaults.py` | Employee Grades + Salary Components + `RMAX Sponsorship KSA` salary structure per company |
 | `lcv_template.py` | LCV Charge Template setup, PR checklist auto-populate, LCV on_submit status rollup, load/create APIs |
 | `landed_cost.py` | Helper: `get_based_on_field` for standard Qty/Amount distribution |
@@ -232,6 +233,96 @@ Both use `frappe.call` to fetch permitted WHs then filter with `name: ["in", per
 
 ---
 
+### Inter-Branch Receivables & Payables (single-company multi-branch GL)
+
+Implementation: `rmax_custom/inter_branch.py`. Branch on the new build is treated as an Accounting Dimension enforced per Company at the GL-posting layer.
+
+**Branch:** `feature/inter-branch-rp-phase1` (deployed on `rmax_dev2`, NOT yet merged to `main`, NOT on UAT).
+
+**Plan + user guide**
+- Plan: `docs/superpowers/plans/2026-04-28-inter-branch-rp-foundation.md`
+- User guide: `docs/user-guides/inter-branch-receivables-payables.md`
+
+**Custom Fields**
+- `Journal Entry Account.custom_auto_inserted` (Check, read-only) — flag for auto-injected legs
+- `Journal Entry Account.custom_source_doctype` (Link → DocType) — source traceability
+- `Journal Entry Account.custom_source_docname` (Dynamic Link → custom_source_doctype)
+- `Company.custom_inter_branch_cut_over_date` (Date) — injector skips entries dated before this. Empty = injector disabled for that company.
+- `Company.custom_inter_branch_bridge_branch` (Link → Branch) — required for 3+ branch JEs; bridge branch becomes implicit counterparty for every other branch in the entry.
+
+**Chart of Accounts**
+- Per root Company: `Inter-Branch Receivable` (Asset, group, under Current Assets) + `Inter-Branch Payable` (Liability, group, under Current Liabilities). Created by `setup_inter_branch_foundation()` from `setup.after_migrate`. Only iterates root companies — ERPNext's `validate_root_company_and_sync_account_to_children` propagates to children.
+- Lazy leaves per counterparty: `Due from <Branch>` (under Receivable group) + `Due to <Branch>` (under Payable group). Created on demand by `get_or_create_inter_branch_account()`.
+- New Branch's `after_insert` hook creates leaves both directions for every existing Branch (via `on_branch_insert`).
+
+**Auto-injector** (`auto_inject_inter_branch_legs`)
+- Hook: `Journal Entry.validate` (chained AFTER `bnpl_clearing_guard.warn_bnpl_clearing_overdraw`)
+- Skipped when: doctype mismatch / `flags.skip_inter_branch_injection` / no company / pre cut-over
+- Strips prior auto-injected rows then recomputes per-branch imbalance (idempotent on re-validate)
+- Two-branch path: counterparty inferred from imbalance signs
+- Three+ branch path: requires `Company.custom_inter_branch_bridge_branch` configured AND bridge present in JE; pairs every non-bridge branch against bridge. Otherwise rejects with clear error.
+- Final guard: re-checks per-branch balance after injection; throws `Inter-Branch Auto-Injection Error` if any branch still imbalanced.
+
+**Stock movement integration (two paths, both produce same accounting)**
+
+_Path 1 — Stock Transfer wrapper (existing custom workflow):_
+- `Stock Transfer.on_submit` calls `create_companion_inter_branch_je_for_stock_transfer(self)` AFTER `create_stock_entry()`
+- ST sets `flags.from_stock_transfer = True` on the SE so Path 2's hook short-circuits
+- Companion JE source = `Stock Transfer / ST-XXXX`
+- `Stock Transfer.on_cancel` queries and cancels JEs with `custom_source_docname = ST.name`
+
+_Path 2 — Direct Stock Entry (Material Transfer):_
+- Hook: `Stock Entry.on_submit` → `on_stock_entry_submit`
+- Skipped when: `flags.from_stock_transfer` / purpose ≠ Material Transfer / no company / existing JE for SE name
+- Resolves each item row's `s_warehouse` + `t_warehouse` via `resolve_warehouse_branch()` (looks up Branch Configuration Warehouse mapping)
+- Same-branch warehouse pair (e.g. WH-HO-1 ↔ WH-HO-2 both under HO) → no companion JE; standard SE GL is sufficient
+- Cross-branch single-pair: re-tags SE's GL Entries per leg via `_retag_se_gl_entries` (source warehouse legs → branch=src; target legs → branch=tgt) + creates companion JE
+- Multi-pair SE (different src/tgt across rows): logs hint to Error Log and skips (Phase 1 ops splits into one-pair-per-doc)
+- Companion JE source = `Stock Entry / MAT-STE-XXXX`
+- `Stock Entry.on_cancel` mirrors ST cancel
+
+**Reconciliation report**
+- Path: `rmax_custom/rmax_custom/report/inter_branch_reconciliation/`
+- Frappe Script Report: matrix view rows=from_branch × cols=to_branch
+- Health check: each pair (A→B + B→A) must sum to zero
+- Roles: Accounts Manager / Accounts User / Auditor / System Manager
+- Debug helper: `rmax_custom.inter_branch.print_reconciliation(company, from_date, to_date)` — whitelisted, prints to stdout via `bench execute`
+
+**Hooks registered (`hooks.py`)**
+```
+"Journal Entry": {
+    "validate": [
+        "rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
+        "rmax_custom.inter_branch.auto_inject_inter_branch_legs",
+    ],
+},
+"Branch": {
+    "after_insert": "rmax_custom.inter_branch.on_branch_insert",
+},
+"Stock Entry": {
+    "on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
+    "on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
+},
+```
+
+**Activation steps (per Company)**
+1. Set `Inter-Branch Cut-Over Date` on the Company (auto-injector OFF until set).
+2. Set `Inter-Branch Bridge Branch` on the Company if multi-branch (3+) JEs are needed.
+3. (Auto by `after_migrate`) two parent groups + dimension config.
+
+**Out of scope (deferred)**
+- Settlement / Clearing
+- Salary / Expense Claim / Vendor-on-behalf
+- Branch-wise TB/P&L/BS reports beyond reconciliation
+- HO overhead allocation
+- Historical restate
+
+**Bug history (deployed and fixed on dev)**
+1. Initial `setup_inter_branch_foundation` iterated all companies including ERPNext children → `validate_root_company_and_sync_account_to_children` rejected. Fix: filter to `parent_company in ("", None)`.
+2. Auto-injected JE Account rows had only `*_in_account_currency` fields — ERPNext's `make_gl_entries` skipped them because company-currency `debit/credit` were 0. Fix: also set `account_currency`, `exchange_rate=1`, and company-currency `debit/credit`.
+
+---
+
 ## Known Issues & Gotchas
 
 1. **bench build required** for `app_include_js` and `app_include_css` changes. Use `doctype_js` for immediate effect. RMAX's `app_include_js` entries point at `/assets/rmax_custom/js/*.js` which are served directly — no rebuild needed.
@@ -249,6 +340,11 @@ Both use `frappe.call` to fetch permitted WHs then filter with `name: ["in", per
 13. **LCV "Only one Applicable Charges" under Distribute Manually.** Our override skips that guard only when `custom_distribute_by_cbm = 1`. For standard Distribute Manually flows the ERPNext rule still applies (single tax row).
 14. **Child table DocTypes need a controller .py** on v15 even when `istable = 1`. Frappe tries to import the controller during migrate and raises `Module import failed` if it is missing.
 15. **bench execute eval vs method names.** Kwargs use the parameter names of the target callable; `frappe.db.get_all` wants `doctype` but `frappe.db.set_value` wants `dt` / `dn` / `field` / `val`.
+16. **Inter-Branch leaves only on root companies.** `setup_inter_branch_foundation` filters `Company` by `parent_company in ("", None)`. ERPNext rejects accounts created directly on child companies via `validate_root_company_and_sync_account_to_children` and propagates the new account to children automatically.
+17. **Auto-injected JE rows must carry company-currency `debit`/`credit`.** Setting only `debit_in_account_currency` / `credit_in_account_currency` on programmatically-appended JE Account rows leaves company-currency totals at 0, and ERPNext's `make_gl_entries` skips zero-amount rows. Always set `account_currency`, `exchange_rate`, AND the company-currency fields when injecting rows.
+18. **`flags.skip_inter_branch_injection` is needed on auto-built balanced JEs.** Stock Transfer + direct Stock Entry companion JEs are intentionally one-sided per branch but globally balanced. Set `je.flags.skip_inter_branch_injection = True` BEFORE `je.insert()` so the validate hook doesn't try to add more legs.
+19. **`flags.from_stock_transfer` prevents double-posting on SE.** Stock Transfer's `create_stock_entry` sets this on the new Stock Entry doc. The Stock Entry submit hook short-circuits when the flag is set so the ST hook owns companion-JE creation. Without the flag, both hooks would post duplicate companion JEs.
+20. **`custom_source_docname` is a Dynamic Link** with `options = "custom_source_doctype"`. Frappe validates that the referenced document exists. Test stubs that reference non-existent docnames will raise `LinkValidationError` at JE insert. Real flows always pass a real doc name.
 
 ---
 
