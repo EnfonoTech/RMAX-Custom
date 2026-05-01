@@ -77,9 +77,11 @@ curl -s -X POST \
 | `api/dashboard.py` | `get_dashboard_data` for `rmax-dashboard` page (branch/stock/damage views) |
 | `branch_configuration.py` | Core: auto-manages User Permissions, upgrades Website→System user, role assignment, company default CC |
 | `stock_transfer.py` | Workflow validation: branch-based approval, self-approval prevention |
+| `api/sales_invoice_payment.py` | `get_payment_modes_with_account` (branch MoP allowlist filter) + `create_pos_payments_for_invoice` |
+| `rmax_custom/doctype/no_vat_sale/no_vat_sale.py` | NVS controller — branch-warehouse guard, approval workflow APIs, JE + SE creation |
 | `material_request_doctype.js` | doctype_js: hide standard buttons, add Stock Transfer button |
 | `purchase receipt.js` | doctype_js (note the space): Final GRN button + LCV Checklist buttons + dashboard indicator |
-| `sales_invoice_doctype.js` | doctype_js: update_stock defaults + warehouse prefill + Branch User lock, credit-note auto-negate qty |
+| `sales_invoice_doctype.js` | doctype_js: update_stock defaults + warehouse prefill + Branch User lock, credit-note auto-negate qty, branch MoP swap on payment rows |
 | `warehouse_pick_list.py` / `.js` | Warehouse Pick List: get_pending_items API, mark_completed, available qty color-coding |
 
 ### Permission System (5 Layers)
@@ -100,6 +102,10 @@ These are CRITICAL — without them, Frappe blocks opening documents that refere
 - `Stock Transfer`: set_source_warehouse, set_target_warehouse (in DocType JSON)
 - `Stock Entry`: from_warehouse, to_warehouse
 - `Stock Entry Detail`: s_warehouse, t_warehouse, cost_center
+- `Quotation`: set_warehouse
+- `Quotation Item`: warehouse
+- `Delivery Note`: set_warehouse
+- `Delivery Note Item`: warehouse, target_warehouse
 
 ### Branch Configuration Auto-Actions
 
@@ -112,6 +118,60 @@ When saved, creates per user:
 - Role assignment (Branch User / Stock User / Stock Manager per dropdown)
 
 Multi-branch: second branch gets is_default=0 (no duplicate default error).
+
+### Branch Configuration — Modes of Payment (Cash/Bank allowlist)
+
+New child table `Branch Configuration Mode of Payment` (istable=1, fields: `mode_of_payment` Link + `type` fetched from `Mode of Payment.type`). Replaces the earlier `cash_account` / `bank_account` Link fields. Multiple Cash + Bank rows allowed per branch. Form filter on the child Link constrains entries to MoPs of `type` Cash or Bank.
+
+**Behaviour for Branch Users (only)**:
+- Sales Invoice POS popup `get_payment_modes_with_account` post-filters: Cash MoPs constrained to branch's cash list; Bank MoPs to branch's bank list. BNPL / General / Phone pass through unfiltered (BNPL is common to every branch).
+- `before_validate` hook `branch_defaults.override_payment_accounts_from_branch` walks `payments[*]`:
+  - Cash row, MoP in branch list → keep, resync `account` from `Mode of Payment Account` for SI company.
+  - Cash row, MoP NOT in branch list, branch HAS cash MoPs → swap to first allowed; resync.
+  - Cash row, branch has zero cash MoPs → drop the row.
+  - Same logic for Bank. Other types untouched.
+- "Opt-out" rule: if branch has NO Cash AND NO Bank rows configured at all, the filter / hook are no-ops (legacy behaviour).
+- Bypass roles: System Manager, Sales Manager, Sales Master Manager, Stock Manager, Administrator.
+
+Whitelisted helper: `rmax_custom.branch_defaults.get_user_branch_accounts(user, company)` returns `{branch, cash:[{mop,account},...], bank:[{mop,account},...]}` for the JS popup.
+
+### No VAT Sale — Sales Manager-only + Approval Workflow
+
+Doctype: `No VAT Sale` (submittable). Posts a Journal Entry + Stock Entry on submit (cash receipt against Naseef account + COGS against `Damage Written Off (N)`).
+
+**Access (post Apr-2026)**
+- Standard DocPerm (`no_vat_sale.json`) keeps only `System Manager` + `Sales Manager`. Branch User / Stock User / Sales User / Accounts Manager all dropped.
+- `setup.restrict_no_vat_sale_to_sales_manager()` runs every `after_migrate` and deletes any leftover Custom DocPerm rows on the doctype (cleanup of older deploys).
+- `branch_filters.no_vat_sale_permission_query` bypasses for `Sales Manager` + `System Manager`; everyone else gets the standard branch warehouse filter.
+
+**Approval workflow (desk, no PWA)**
+- New field `approval_status` (Select: Draft / Pending Approval / Approved / Rejected) — read-only on the form, default Draft.
+- `before_insert` forces Draft; `before_submit` blocks if status ≠ Approved (protects against direct `frappe.client.submit`).
+- `on_update` notifies the named `approved_by` user when status flips to Pending Approval — uses `frappe.desk.form.assign_to.add` (ToDo + email); falls back to manual ToDo + `frappe.sendmail` on error.
+- `on_submit` closes any open ToDos for the doc.
+
+Whitelisted APIs:
+- `submit_for_approval(name)` — Draft → Pending Approval; throws if `approved_by` empty.
+- `approve_no_vat_sale(name, remarks)` — verifies caller is `approved_by` (or Sales Manager / System Manager); sets status=Approved, calls `submit()` with `flags.ignore_permissions = True` (role gate already passed).
+- `reject_no_vat_sale(name, remarks)` — sets status=Rejected, keeps Draft, closes open ToDos.
+- `get_branch_warehouses(branch)` — returns warehouses listed under the Branch Configuration's Warehouse child table; powers the `set_query` on `warehouse` and the server-side `_validate_branch_warehouse_match` guard.
+
+**Branch warehouse filter**
+- `_validate_branch_warehouse_match` checks Company match AND that `warehouse` is in `Branch Configuration Warehouse` rows for the selected `branch`. Throws if not.
+- Form filter (`no_vat_sale.js`) re-pulls allowed warehouses on `branch` change; clears the picker if the existing warehouse falls out of scope.
+
+**Form UI buttons (under "Approval" group)**
+- `Send for Approval` (creator, Draft / Rejected): calls `submit_for_approval`.
+- `Approve & Submit` (named approver only, Pending Approval): dialog with optional remarks → `approve_no_vat_sale`.
+- `Reject` (named approver only, Pending Approval): dialog with mandatory reason → `reject_no_vat_sale`.
+
+### Branch User Dashboard (rmax-dashboard) — quick action whitelist
+
+Custom Page: `rmax_custom/page/rmax_dashboard/`. Branch User landing page configured via `role_home_page`. Accessible doctypes for restricted users gate-kept by `public/js/branch_user_restrict.js` `ALLOWED_DOCTYPES`. When adding a new dashboard tile, BOTH must be updated:
+1. `rmax_dashboard.js` — add `action_card(...)` in `render_branch_dashboard` / `render_stock_dashboard`.
+2. `branch_user_restrict.js` — add the doctype to `ALLOWED_DOCTYPES` or the navigation will bounce restricted users back to `rmax-dashboard`.
+
+Current branch tile order (sales): Sales Invoice → Quotation → **Delivery Note** → Customer → Payment Entry → Purchase Receipt → Purchase Invoice → Material Request → Stock Transfer → Sales Return → Purchase Return → Report Damage → Damage Transfer.
 
 ### Workflow: Stock Transfer
 
@@ -249,6 +309,11 @@ Both use `frappe.call` to fetch permitted WHs then filter with `name: ["in", per
 13. **LCV "Only one Applicable Charges" under Distribute Manually.** Our override skips that guard only when `custom_distribute_by_cbm = 1`. For standard Distribute Manually flows the ERPNext rule still applies (single tax row).
 14. **Child table DocTypes need a controller .py** on v15 even when `istable = 1`. Frappe tries to import the controller during migrate and raises `Module import failed` if it is missing.
 15. **bench execute eval vs method names.** Kwargs use the parameter names of the target callable; `frappe.db.get_all` wants `doctype` but `frappe.db.set_value` wants `dt` / `dn` / `field` / `val`.
+16. **Frappe controller class names use raw `replace(" ","")` — NOT title-case.** For "Branch Configuration Mode of Payment" the expected class is `BranchConfigurationModeofPayment` (lowercase 'of'). Same convention as ERPNext's `ModeofPayment` controller. Mismatch raises `ImportError: <doctype>` on every save.
+17. **`bench migrate` orphan-deletes new doctype rows when the doctype-walk runs before pull.** When adding a new doctype on a fresh deploy, `migrate` may detect it as an "orphan" and delete the `tabDocType` row even though the JSON exists on disk. Re-run `bench --site <s> execute frappe.reload_doc --kwargs '{"module":"Rmax Custom","dt":"doctype","dn":"<dn_snake>","force":1}'` to recreate the row. Symptom: MySQL table exists (`tab<DocType>`) but `SELECT name FROM tabDocType` shows no row.
+18. **UAT Custom Field installation requires `bench execute frappe.utils.fixtures.sync_fixtures`.** UAT migrate is blocked by the v11 ERPNext patch, so the fixture-sync step that normally adds Custom Field rows + the underlying MySQL columns never runs. Symptoms: "Field not permitted in query: <fieldname>" on filter widgets, `Unknown column 'custom_*' in 'SET'` on whitelisted endpoints. Fix: `sudo -u v15 bench --site rmax-uat2.enfonoerp.com execute frappe.utils.fixtures.sync_fixtures`.
+19. **Adding a Branch User dashboard tile is two-file change.** `rmax_dashboard.js` adds the `action_card`; `branch_user_restrict.js` whitelist must include the destination doctype too, otherwise restricted users get redirected back to rmax-dashboard the moment they click.
+20. **Quotation / Delivery Note open errors for Branch Users** are usually the global `set_warehouse` default ("Stores") triggering User Permission rejection. Fix is `ignore_user_permissions=1` Property Setters on header `set_warehouse` and item `warehouse` / `target_warehouse`. List filtering (owner-only / branch warehouse) still works because it's enforced at `permission_query_conditions`.
 
 ---
 

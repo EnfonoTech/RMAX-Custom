@@ -52,7 +52,9 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `branch` | Link → Branch | The branch this config belongs to |
+| `branch` | Link → Branch | The branch this config belongs to (autoname) |
+| `company` | Link → Company | Company the branch belongs to |
+| `mode_of_payment` | Table → Branch Configuration Mode of Payment | Cash + Bank Modes of Payment allowed for this branch (Sales Invoice constraint) |
 | `user` | Table → Branch Configuration User | Users assigned to this branch |
 | `warehouse` | Table → Branch Configuration Warehouse | Warehouses for this branch |
 | `cost_center` | Table → Branch Configuration Cost Center | Cost centers for this branch |
@@ -63,9 +65,28 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 - Permissions are set with `apply_to_all_doctypes = 1`.
 
 **Child Tables:**
-- **Branch Configuration User** — fields: `user` (Link → User)
+- **Branch Configuration User** — fields: `user` (Link → User), `role` (Select)
 - **Branch Configuration Warehouse** — fields: `warehouse` (Link → Warehouse)
 - **Branch Configuration Cost Center** — fields: `cost_center` (Link → Cost Center)
+- **Branch Configuration Mode of Payment** (`istable=1`) — fields: `mode_of_payment` (Link → Mode of Payment, filtered to type=Cash/Bank), `type` (Data, fetched from `mode_of_payment.type`, read-only)
+
+**Sales Invoice integration (Branch Users only):**
+
+When a Branch User saves an SI, `branch_defaults.override_payment_accounts_from_branch` (before_validate) walks `payments[*]`:
+
+| Row state | Action |
+|-----------|--------|
+| MoP type=Cash, MoP listed in branch | keep MoP, resync `account` from `Mode of Payment Account` for SI company |
+| MoP type=Cash, MoP NOT listed, branch HAS cash MoPs | swap to first cash MoP in branch list, resync account |
+| MoP type=Cash, branch has zero cash MoPs configured | drop the row |
+| Same for type=Bank | as above |
+| All other types (BNPL/General/Phone) | untouched |
+
+Opt-out: if the branch has zero Cash AND zero Bank rows in the table, the hook is a no-op (legacy fallback).
+
+Bypass roles: System Manager, Sales Manager, Sales Master Manager, Stock Manager, Administrator.
+
+The matching POS popup endpoint `rmax_custom.api.sales_invoice_payment.get_payment_modes_with_account` applies the same filter to the dropdown so Branch Users only see allowed Cash/Bank MoPs alongside all enabled BNPL/General/Phone MoPs.
 
 ---
 
@@ -90,7 +111,53 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 
 ---
 
-### 2.3 Stock Transfer
+### 2.3 No VAT Sale (`No VAT Sale`)
+
+Submittable doctype that books a non-VAT-able cash sale. On submit it posts a Journal Entry (cash receipt) + Stock Entry (Material Issue against `Damage Written Off (N)`).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `branch` | Link → Branch | Selects which Branch Configuration drives the warehouse filter |
+| `company` | Link → Company | |
+| `warehouse` | Link → Warehouse | Filtered to warehouses listed in `Branch Configuration Warehouse` for the chosen branch (server + JS guard) |
+| `customer_name` | Data | Walk-in customer name (no Customer record created) |
+| `mode_of_payment` | Link → Mode of Payment | Drives `cash_account` prefill |
+| `naseef_account` / `cogs_account` / `cash_account` | Link → Account | Auto-prefilled per company defaults |
+| `items` | Table → No VAT Sale Item | `item_code, qty, rate, amount, valuation_rate, cost_amount` |
+| `total_selling_value` / `total_cost_value` | Currency | Computed |
+| `approval_status` | Select | Draft / Pending Approval / Approved / Rejected (read-only on form) |
+| `approved_by` | Link → User | Required to send for approval |
+| `approval_remarks` | Small Text | Free text — set on Approve / Reject |
+| `journal_entry` / `stock_entry` | Link (read-only) | Backlinks created on submit |
+
+**Permissions (post Apr-2026)**
+- Standard DocPerm in `no_vat_sale.json` keeps only `System Manager` + `Sales Manager`.
+- `setup.restrict_no_vat_sale_to_sales_manager()` runs every `after_migrate` and deletes leftover Custom DocPerm rows on the doctype (cleanup of older deploys with Branch User / Stock User / Sales User / Accounts Manager).
+- `branch_filters.no_vat_sale_permission_query` bypasses for Sales Manager + System Manager.
+
+**Approval workflow (desk only — no PWA yet)**
+- `before_insert` forces `approval_status = "Draft"`.
+- `before_submit` blocks submit if status ≠ Approved (defends against direct `frappe.client.submit`).
+- `on_update` notifies `approved_by` via `frappe.desk.form.assign_to.add` (ToDo + email; falls back to manual ToDo + `frappe.sendmail`) when status flips to Pending Approval.
+- `on_submit` closes any open ToDos for the doc.
+
+**Whitelisted APIs (`rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale`)**
+- `submit_for_approval(name)` — Draft → Pending Approval; throws if `approved_by` empty.
+- `approve_no_vat_sale(name, remarks)` — verifies caller is the named approver (or Sales Manager / System Manager), sets status=Approved, calls `submit()` with `flags.ignore_permissions = True`.
+- `reject_no_vat_sale(name, remarks)` — sets status=Rejected, keeps Draft, closes open ToDos.
+- `get_branch_warehouses(branch)` — returns the branch's warehouse allowlist; powers `set_query` on `warehouse` and the server-side `_validate_branch_warehouse_match` guard.
+
+**Form UI (`no_vat_sale.js`)**
+- Status indicator pill (Draft grey / Pending orange / Approved green / Rejected red).
+- Buttons under "Approval" group:
+  - `Send for Approval` (creator, Draft / Rejected) → `submit_for_approval`.
+  - `Approve & Submit` (named approver, Pending Approval) → `approve_no_vat_sale` with optional remarks.
+  - `Reject` (named approver, Pending Approval) → `reject_no_vat_sale` with mandatory reason.
+- Branch change resets `warehouse` if the existing pick falls out of scope.
+
+---
+
+### 2.4 Stock Transfer
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -133,6 +200,8 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 | Landed Cost Voucher | `custom_distribute_by_cbm` | Check | Distribute by CBM | Enables CBM-ratio charge distribution |
 | Landed Cost Item | `custom_cbm` | Float | CBM | Cubic meter value per item line |
 
+(See section 2.3 for No VAT Sale schema fields including `approval_status`, `approved_by`, `approval_remarks`.)
+
 ### 3.2 Property Setters
 
 | DocType | Field | Property | Value | Purpose |
@@ -146,6 +215,11 @@ RMAX Custom is a Frappe/ERPNext custom app built for RMAX's trading and distribu
 | Material Request Item | `warehouse` | hidden | 1 | Simplify transfer UI |
 | Landed Cost Item | `qty` | columns | 1 | Show qty in grid |
 | Customer | `customer_type` | options | Company\nIndividual\nPartnership\nBranch | Added "Branch" type |
+| Quotation | `set_warehouse` | ignore_user_permissions | 1 | Branch User can open quotes referencing global default "Stores" |
+| Quotation Item | `warehouse` | ignore_user_permissions | 1 | Same as above for per-item warehouse |
+| Delivery Note | `set_warehouse` | ignore_user_permissions | 1 | Branch User can open DNs with cross-branch source warehouse |
+| Delivery Note Item | `warehouse` | ignore_user_permissions | 1 | Same for per-item warehouse |
+| Delivery Note Item | `target_warehouse` | ignore_user_permissions | 1 | Same for per-item target warehouse |
 
 ---
 
@@ -317,7 +391,7 @@ When approved and submitted, the Stock Transfer auto-creates a Stock Entry.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `rmax_custom.api.sales_invoice_payment.get_payment_modes_with_account` | Whitelisted | Returns enabled Mode of Payment names that have a default account for the company. Optionally filters by a provided list (from POS Profile). |
+| `rmax_custom.api.sales_invoice_payment.get_payment_modes_with_account` | Whitelisted | Returns enabled Mode of Payment names that have a default account for the company. Optionally filters by a provided list (from POS Profile). For Branch Users (no override role), Cash + Bank type MoPs are restricted to the user's `Branch Configuration Mode of Payment` allowlist; BNPL / General / Phone pass through. Branches with zero Cash+Bank rows opt out (no filter). |
 | `rmax_custom.api.sales_invoice_payment.create_pos_payments_for_invoice` | Whitelisted | Creates and submits Payment Entry records for a submitted Sales Invoice. One PE per mode of payment. Validates outstanding amounts. |
 
 ### 7.3 Warehouse Stock API (`api/warehouse_stock.py`)
@@ -349,6 +423,24 @@ When approved and submitted, the Stock Transfer auto-creates a Stock Entry.
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `rmax_custom.rmax_custom.doctype.stock_transfer.stock_transfer.get_item_uom_conversion` | Whitelisted | Returns UOM conversion factor for an item. |
+
+### 7.8 No VAT Sale APIs (`rmax_custom/doctype/no_vat_sale/no_vat_sale.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.get_branch_warehouses` | Whitelisted | Returns the Warehouse names listed under a given Branch's `Branch Configuration Warehouse` child table. Powers the warehouse `set_query` and the server-side `_validate_branch_warehouse_match` guard. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.submit_for_approval` | Whitelisted | Draft → Pending Approval. Throws if `approved_by` is empty. Triggers ToDo + email assignment via `frappe.desk.form.assign_to.add`. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.approve_no_vat_sale` | Whitelisted | Verifies caller is the named approver (or Sales/System Manager); sets status=Approved; calls `submit()` with `flags.ignore_permissions=True` (role gate already passed). Optional remarks. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.reject_no_vat_sale` | Whitelisted | Verifies approver, sets status=Rejected, keeps Draft, closes any open ToDos. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.get_default_accounts` | Whitelisted | Returns `{naseef_account, cogs_account, cash_account}` from Company defaults + Mode of Payment Account. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.get_item_rate` | Whitelisted | Returns the No VAT Price list rate for an item. |
+| `rmax_custom.rmax_custom.doctype.no_vat_sale.no_vat_sale.get_item_valuation` | Whitelisted | Returns the warehouse-specific valuation rate from `Bin` (falls back to Item.valuation_rate). |
+
+### 7.9 Branch Defaults APIs (`branch_defaults.py`)
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `rmax_custom.branch_defaults.get_user_branch_accounts` | Whitelisted | Returns `{branch, cash:[{mop, account}, …], bank:[{mop, account}, …]}` for the user's resolved Branch Configuration. Account values are derived from `Mode of Payment Account` for the SI's company. Used by `sales_invoice_doctype.js` to constrain payment rows on `mode_of_payment` change and `before_save`. |
 
 ---
 
@@ -384,10 +476,17 @@ override_doctype_class = {
     "Landed Cost Voucher": "rmax_custom.overrides.landed_cost_voucher.LandedCostVoucher"
 }
 
-# Document events
+# Document events (excerpt — full list in hooks.py)
 doc_events = {
     "Sales Invoice": {
+        "before_validate": [
+            "rmax_custom.branch_defaults.override_cost_center_from_branch",
+            "rmax_custom.branch_defaults.override_payment_accounts_from_branch",
+            "rmax_custom.bnpl_uplift.apply_bnpl_uplift",
+        ],
+        "validate": "rmax_custom.bnpl_uplift.validate_bnpl_uplift",
         "on_submit": "rmax_custom.inter_company.sales_invoice_on_submit",
+        "on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
     },
 }
 
@@ -411,16 +510,31 @@ fixtures = [
 |------|---------|
 | `Sales Invoice-custom_payment_mode` | Cash/Credit selector |
 | `Sales Invoice-custom_inter_company_branch` | Branch link for inter-company PI |
-| `Sales Invoice Item-total_vat_linewise` | Per-line VAT total |
+| `Sales Invoice-custom_pos_payments_json` | Long Text — captures pre-uplift POS payment snapshot for BNPL surcharge reconciliation |
+| `Sales Invoice-custom_bnpl_portion_ratio` / `custom_bnpl_total_uplift` / `custom_bnpl_settled` / `custom_bnpl_settlement` | BNPL uplift bookkeeping |
+| `Sales Invoice Item-total_vat_linewise` / `custom_original_rate` / `custom_bnpl_uplift_amount` | Per-line VAT + BNPL pre-uplift fields |
+| `Mode of Payment-custom_surcharge_percentage` | Non-zero flags MoP as BNPL-type |
+| `Mode of Payment-custom_bnpl_clearing_account` | Clearing account for BNPL receivable |
 | `Quotation-custom_payment_mode` | Payment mode on quotation |
 | `Quotation Item-total_vat_linewise` | Per-line VAT total |
 | `Landed Cost Voucher-custom_distribute_by_cbm` | CBM distribution toggle |
 | `Landed Cost Item-custom_cbm` | CBM value per item |
-| `Customer-custom_vat_registration_number` | Saudi VAT number |
+| `Customer-custom_vat_registration_number` / `custom_allow_duplicate_vat` / `custom_duplicate_vat_reason` | Saudi VAT number + duplicate override |
+| `Purchase Receipt-custom_lcv_*` | LCV checklist machinery |
+| `Delivery Note-custom_is_inter_company` / `custom_inter_company_branch` / `custom_inter_company_si` / `custom_inter_company_status` | Inter-Company DN consolidation |
+| `Company-custom_novat_naseef_account` / `custom_novat_cogs_account` | No VAT Sale GL accounts |
+| `Company-custom_damage_warehouse` / `custom_damage_loss_account` / `custom_bnpl_fee_account` | Damage workflow + BNPL fee posting |
+| `Material Request-custom_is_urgent` / `Material Request Item-custom_is_urgent` | Urgent flag for branch dashboard |
+| `Material Request Item-custom_source_available_qty` / `custom_target_available_qty` | Available qty widgets on MR form |
 
 ### Property Setters Exported
 
-Material Request fields simplified for transfer workflow. Customer type extended with "Branch". Landed Cost Item qty column shown.
+- Material Request fields simplified for transfer workflow.
+- Customer type extended with "Branch".
+- Landed Cost Item qty column shown.
+- `ignore_user_permissions=1` on warehouse fields for: Item Default, Material Request, Material Request Item, Stock Entry, Stock Entry Detail, **Quotation, Quotation Item, Delivery Note, Delivery Note Item** (Phase 2 add-ons letting Branch Users open docs that reference cross-branch warehouses).
+- Sales Invoice list-view standard filters: `grand_total`, `total_qty`, `contact_mobile`.
+- Customer global search fields: `customer_name,mobile_no,custom_vat_registration_number`.
 
 ---
 

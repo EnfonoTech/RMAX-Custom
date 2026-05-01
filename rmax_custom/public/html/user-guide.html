@@ -550,6 +550,7 @@
     <a href="#bnpl-invoice"><span class="icon">&#128176;</span> BNPL on Sales Invoice</a>
     <a href="#bnpl-settlement"><span class="icon">&#128181;</span> BNPL Settlement</a>
     <a href="#bnpl-reports"><span class="icon">&#128202;</span> BNPL Reports</a>
+    <a href="#no-vat-sale"><span class="icon">&#128274;</span> No VAT Sale</a>
     <a href="#create-customer"><span class="icon">&#128100;</span> Create Customer</a>
     <a href="#warehouse-stock"><span class="icon">&#128230;</span> Warehouse Stock</a>
     <a href="#material-request"><span class="icon">&#128666;</span> Material Request</a>
@@ -636,11 +637,17 @@
         <li>Go to the search bar and type <strong>Branch Configuration</strong>, then click <strong>+ Add Branch Configuration</strong>.</li>
         <li>Select the <strong class="field">Branch</strong> (e.g. "Jeddah").</li>
         <li>Select the <strong class="field">Company</strong> this branch belongs to (e.g. "Clearlight New Co."). This is required.</li>
+        <li>In the <strong>Modes of Payment</strong> table, add the Cash and Bank Modes of Payment that branch users may collect against (e.g. <strong>Cash</strong>, <strong>Mada</strong>, <strong>Bank Transfer - HSBC</strong>). Only MoPs with type <em>Cash</em> or <em>Bank</em> appear in the picker. BNPL providers (Tabby/Tamara) are NOT added here &mdash; they are common to every branch.</li>
         <li>In the <strong>Warehouse</strong> table, add the warehouses for this branch. They will be filtered to show only warehouses from the selected company. The <strong>first warehouse</strong> becomes the user's default.</li>
         <li>In the <strong>Cost Center</strong> table, add cost centers. They are also filtered by company. The <strong>first cost center</strong> becomes the default.</li>
         <li>In the <strong>User</strong> table, add all users who work in this branch (e.g. shameel@rmax.com, naseef@rmaxled.com).</li>
         <li>Click <strong>Save</strong>.</li>
       </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#128176;</span>
+      <div><strong>Modes of Payment behaviour:</strong> When a Branch User saves a Sales Invoice, payment rows whose Mode of Payment type is <em>Cash</em> or <em>Bank</em> are constrained to this list. If the user picks a Cash MoP not in the list, the system swaps to the first allowed Cash row and re-syncs the GL account from the Mode of Payment&rsquo;s company-specific row. Same for Bank. <strong>BNPL rows are never touched.</strong> If the table is left empty, no filtering is applied (legacy behaviour).</div>
     </div>
 
     <div class="callout callout-tip">
@@ -700,6 +707,8 @@
         <tr><td>Item</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
         <tr><td>Price List</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
         <tr><td>Stock Entry</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
+        <tr><td>Inter Company Branch</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
+        <tr><td>No VAT Sale</td><td colspan="5"><strong>No access</strong> &mdash; Sales Manager only (changed Apr 2026).</td></tr>
       </table>
     </div>
 
@@ -1045,6 +1054,57 @@
       <h3>BNPL Pending Settlement</h3>
       <p>Lists submitted BNPL invoices not yet settled. Shows expected bank credit and expected provider fee per invoice.</p>
       <p><strong>Filters:</strong> From Date, To Date, Company, Mode of Payment.</p>
+    </div>
+  </section>
+
+  <!-- ─── NO VAT SALE ─── -->
+  <section class="section" id="no-vat-sale">
+    <h2>&#128274; No VAT Sale <span class="badge">Sales Manager</span></h2>
+    <p>The <strong>No VAT Sale</strong> doctype books a non-VAT-able cash sale. On submit it posts a Journal Entry (cash receipt) and a Stock Entry (Material Issue) against the company&rsquo;s Naseef &amp; Damage Written Off accounts.</p>
+
+    <div class="callout callout-warning">
+      <span class="callout-icon">&#128274;</span>
+      <div><strong>Access restricted:</strong> Only <strong>System Manager</strong> and <strong>Sales Manager</strong> can read, write, submit, or cancel No VAT Sales. Branch User / Stock User / Sales User / Accounts Manager were removed from this doctype as of Apr 2026.</div>
+    </div>
+
+    <div class="card">
+      <h3>Approval Workflow</h3>
+      <p>Every No VAT Sale moves through a four-state workflow before it submits:</p>
+      <table class="info-table">
+        <tr><th>Status</th><th>Who acts</th><th>What happens</th></tr>
+        <tr><td>Draft</td><td>Creator</td><td>Fill items, pick branch + warehouse + approver, click <strong>Send for Approval</strong>.</td></tr>
+        <tr><td>Pending Approval</td><td>Named approver</td><td>Receives a ToDo + email assignment. Clicks <strong>Approve &amp; Submit</strong> (with optional remarks) or <strong>Reject</strong> (mandatory reason).</td></tr>
+        <tr><td>Approved</td><td>System</td><td>Doc is submitted. JE + SE post automatically.</td></tr>
+        <tr><td>Rejected</td><td>Creator</td><td>Doc stays Draft with reason. Creator edits and resends.</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step (Creator)</h3>
+      <ol class="steps">
+        <li>Open <strong>No VAT Sale</strong> &rarr; <strong>+ New</strong>.</li>
+        <li>Pick <span class="field">Branch</span>. The <span class="field">Warehouse</span> dropdown is now restricted to that branch&rsquo;s configured warehouses.</li>
+        <li>Pick <span class="field">Warehouse</span>, customer name, mode of payment.</li>
+        <li>Add item rows. <em>Selling rate</em> auto-fetches from <strong>No VAT Price</strong> price list, <em>valuation rate</em> from the Bin.</li>
+        <li>Pick <span class="field">Approved By</span>. Required.</li>
+        <li>Save the draft.</li>
+        <li>Click <strong>Approval &rarr; Send for Approval</strong>. Status flips to <em>Pending Approval</em> and the approver gets notified.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h3>Step-by-Step (Approver)</h3>
+      <ol class="steps">
+        <li>Open the ToDo or click the email link.</li>
+        <li>Review items, totals, and warehouse.</li>
+        <li>Click <strong>Approval &rarr; Approve &amp; Submit</strong>. Optional remarks dialog. Doc is submitted; JE + SE post.</li>
+        <li>Or click <strong>Approval &rarr; Reject</strong>. Mandatory reason. Doc stays Draft, creator can edit + resend.</li>
+      </ol>
+    </div>
+
+    <div class="callout callout-tip">
+      <span class="callout-icon">&#128313;</span>
+      <div><strong>Sales Manager / System Manager</strong> can act as approver on any No VAT Sale even if they are not the named <em>Approved By</em> user.</div>
     </div>
   </section>
 
