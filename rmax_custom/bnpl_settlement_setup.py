@@ -127,7 +127,11 @@ def _wire_company_default_fee_account(company: str, fee_account: Optional[str]):
 
 
 def _find_bank_parent(company: str, abbr: str) -> Optional[str]:
-	"""Locate the standard Bank Accounts group; fallback to Current Assets."""
+	"""Locate the standard Bank Accounts group; fallback to Current Assets.
+
+	Handles numbered CoAs (e.g. `1200 - Bank Accounts - CL`) by matching
+	on `account_name` after the literal-name lookup misses.
+	"""
 	candidates = [
 		f"Bank Accounts - {abbr}",
 		f"Current Assets - {abbr}",
@@ -136,13 +140,27 @@ def _find_bank_parent(company: str, abbr: str) -> Optional[str]:
 		if frappe.db.exists("Account", {"name": name, "company": company, "is_group": 1}):
 			return name
 
-	# As a final fallback, find any group account under root Asset.
-	asset_root = frappe.db.get_value(
-		"Account",
-		{"company": company, "root_type": "Asset", "is_group": 1, "parent_account": ["in", ["", None]]},
-		"name",
+	# Numbered-CoA variants — match on account_name regardless of prefix.
+	for label in ("Bank Accounts", "Current Assets"):
+		row = frappe.db.get_value(
+			"Account",
+			{"company": company, "account_name": label, "is_group": 1, "root_type": "Asset"},
+			"name",
+		)
+		if row:
+			return row
+
+	# Final fallback: company root for Asset (NULL parent_account safe).
+	root = frappe.db.sql(
+		"""
+		SELECT name FROM `tabAccount`
+		WHERE company = %s AND root_type = 'Asset' AND is_group = 1
+		  AND (parent_account IS NULL OR parent_account = '')
+		LIMIT 1
+		""",
+		(company,),
 	)
-	return asset_root
+	return root[0][0] if root else None
 
 
 def wire_bnpl_modes_of_payment(surcharge_percentage: float = 8.6957):
@@ -235,14 +253,15 @@ def _find_indirect_expenses_parent(company: str) -> Optional[str]:
 	)
 	if parent:
 		return parent
-	# Fallback to the Expense root.
-	return frappe.db.get_value(
-		"Account",
-		{
-			"company": company,
-			"root_type": "Expense",
-			"is_group": 1,
-			"parent_account": ["in", ["", None]],
-		},
-		"name",
+	# Fallback to the Expense root (raw SQL — Frappe's ["in", [None]]
+	# generates `IN (NULL)` which is always FALSE).
+	row = frappe.db.sql(
+		"""
+		SELECT name FROM `tabAccount`
+		WHERE company = %s AND root_type = 'Expense' AND is_group = 1
+		  AND (parent_account IS NULL OR parent_account = '')
+		LIMIT 1
+		""",
+		(company,),
 	)
+	return row[0][0] if row else None
