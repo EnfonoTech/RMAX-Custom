@@ -277,7 +277,16 @@ class NoVATSale(Document):
 	# -- Sub-document creation -------------------------------------------
 
 	def _create_journal_entry(self) -> str:
-		"""Dr Cash  /  Cr Naseef — records cash inflow and sales value."""
+		"""Dr Cash / Cr Naseef — records cash inflow and sales value.
+
+		Stamps `branch` on every leg + populates the company-currency
+		debit/credit columns so ERPNext's `make_gl_entries` doesn't drop
+		non-base-currency rows; sets `flags.skip_inter_branch_injection`
+		so the auto-injector treats the JE as already balanced per branch.
+		"""
+		amount = flt(self.total_selling_value)
+		company_currency = frappe.get_cached_value("Company", self.company, "default_currency")
+
 		je = frappe.new_doc("Journal Entry")
 		je.voucher_type = "Cash Entry"
 		je.company = self.company
@@ -285,17 +294,31 @@ class NoVATSale(Document):
 		je.cheque_no = self.name
 		je.cheque_date = self.posting_date
 		je.user_remark = f"NO VAT Sale {self.name} — {self.branch}"
+
 		je.append("accounts", {
 			"account": self.cash_account,
-			"debit_in_account_currency": flt(self.total_selling_value),
+			"branch": self.branch,
+			"account_currency": company_currency,
+			"exchange_rate": 1,
+			"debit_in_account_currency": amount,
 			"credit_in_account_currency": 0,
+			"debit": amount,
+			"credit": 0,
 		})
 		je.append("accounts", {
 			"account": self.naseef_account,
+			"branch": self.branch,
+			"account_currency": company_currency,
+			"exchange_rate": 1,
 			"debit_in_account_currency": 0,
-			"credit_in_account_currency": flt(self.total_selling_value),
+			"credit_in_account_currency": amount,
+			"debit": 0,
+			"credit": amount,
 		})
 		je.custom_no_vat_sale = self.name
+		# Both legs already share the same branch, so the JE is per-branch
+		# balanced — skip the inter-branch injector to avoid spurious legs.
+		je.flags.skip_inter_branch_injection = True
 		je.flags.ignore_permissions = True
 		je.insert()
 		je.submit()
@@ -325,9 +348,15 @@ class NoVATSale(Document):
 				"basic_rate": flt(row.valuation_rate),
 				"expense_account": self.cogs_account,
 				"cost_center": company_cost_center,
+				"branch": self.branch,
 			})
 
 		se.custom_no_vat_sale = self.name
+		# SE writes its own GL via `make_gl_entries`; the inter_branch
+		# `auto_set_branch_from_warehouse` validate-hook will tag the
+		# branch on each row from `s_warehouse` lookup, but stamp here
+		# explicitly so a branch-less Bin row doesn't lose tagging.
+		se.flags.skip_inter_branch_injection = True
 		se.flags.ignore_permissions = True
 		se.insert()
 		se.submit()

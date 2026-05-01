@@ -562,13 +562,35 @@ def setup_inter_branch_foundation() -> None:
 
 
 def _stock_transfer_total_value(stock_transfer) -> float:
-    """Sum the basic_amount across items; falls back to qty * basic_rate when needed."""
+    """Sum item value (qty x source-warehouse valuation rate) across the
+    Stock Transfer items table.
+
+    The custom Stock Transfer Item DocType deliberately does NOT carry
+    basic_amount / basic_rate / valuation_rate columns (it's a request
+    document, not a stock-posting document). The valuation that the
+    underlying Stock Entry will book is read live from each item's Bin
+    row at the source warehouse. Falls back to Item.valuation_rate when
+    the Bin row doesn't exist yet.
+    """
+    source_wh = getattr(stock_transfer, "set_source_warehouse", None)
+    if not source_wh:
+        return 0.0
+
     total = 0.0
     for item in stock_transfer.items or []:
-        amt = flt(getattr(item, "basic_amount", 0))
-        if not amt:
-            amt = flt(getattr(item, "qty", 0)) * flt(getattr(item, "basic_rate", 0))
-        total += amt
+        qty = flt(getattr(item, "quantity", 0)) or flt(getattr(item, "qty", 0))
+        if qty <= 0 or not getattr(item, "item_code", None):
+            continue
+        rate = flt(
+            frappe.db.get_value(
+                "Bin",
+                {"item_code": item.item_code, "warehouse": source_wh},
+                "valuation_rate",
+            )
+        )
+        if not rate:
+            rate = flt(frappe.db.get_value("Item", item.item_code, "valuation_rate"))
+        total += qty * rate
     return round(total, 2)
 
 

@@ -188,6 +188,11 @@ override_doctype_class = {
 # ---------------
 # Hook on document methods and events
 
+# NOTE: Each doctype key MUST appear exactly ONCE. Python dict literals
+# silently drop earlier values when a key repeats — that bug previously
+# wiped out BNPL uplift / cost-center override / naming-series / inter-
+# company hooks on Sales Invoice, Purchase Invoice, Delivery Note, and
+# Purchase Receipt.
 doc_events = {
 	"Sales Invoice": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
@@ -196,7 +201,10 @@ doc_events = {
 			"rmax_custom.branch_defaults.override_payment_accounts_from_branch",
 			"rmax_custom.bnpl_uplift.apply_bnpl_uplift",
 		],
-		"validate": "rmax_custom.bnpl_uplift.validate_bnpl_uplift",
+		"validate": [
+			"rmax_custom.bnpl_uplift.validate_bnpl_uplift",
+			"rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+		],
 		"on_submit": [
 			"rmax_custom.inter_company.sales_invoice_on_submit",
 			"rmax_custom.inter_company_dn.sales_invoice_on_submit",
@@ -209,6 +217,7 @@ doc_events = {
 	"Purchase Invoice": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 	"Payment Entry": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
@@ -217,11 +226,15 @@ doc_events = {
 	"Delivery Note": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 	"Purchase Receipt": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
-		"validate": "rmax_custom.lcv_template.purchase_receipt_validate",
+		"validate": [
+			"rmax_custom.lcv_template.purchase_receipt_validate",
+			"rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+		],
 	},
 	"Material Request": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
@@ -248,18 +261,6 @@ doc_events = {
 		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
 	},
 	"Stock Reconciliation": {
-		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
-	},
-	"Purchase Receipt": {
-		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
-	},
-	"Delivery Note": {
-		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
-	},
-	"Purchase Invoice": {
-		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
-	},
-	"Sales Invoice": {
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 }

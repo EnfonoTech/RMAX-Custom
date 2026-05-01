@@ -82,7 +82,7 @@ def sales_invoice_on_submit(doc, method=None):
 					for item in pi.items:
 						if hasattr(item, "warehouse"):
 							item.warehouse = None
-					branch_name = doc.get("inter_company_branch") or ""
+					branch_name = doc.get("custom_inter_company_branch") or ""
 					frappe.throw(
 						_(
 							"Configure Warehouse in Inter Company Branch {0} for company {1} to create Purchase Invoice with stock update."
@@ -142,7 +142,7 @@ def _get_branch_data(doc, buying_company: str) -> dict:
 	import erpnext
 
 	result = {}
-	branch = doc.get("inter_company_branch")
+	branch = doc.get("custom_inter_company_branch")
 	if branch and buying_company:
 		row = frappe.db.get_value(
 			"Inter Company Branch Cost Center",
