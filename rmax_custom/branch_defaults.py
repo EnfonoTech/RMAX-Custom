@@ -310,16 +310,52 @@ def get_user_branch_accounts(user: str | None = None, company: str | None = None
 # ---------------------------------------------------------------------------
 
 
+def _branch_series_override(branch_name: str, doctype: str, is_return: bool) -> str | None:
+    """Return the per-doctype series configured on `Branch.custom_naming_series_table`.
+
+    Resolution:
+      * Match `parent_doctype == doctype` first.
+      * If `is_return=True` AND a row with `use_for_return=1` exists, prefer that row.
+      * Otherwise fall back to a row with `use_for_return=0`.
+      * Return None when no row matches.
+    """
+    if not branch_name:
+        return None
+    rows = frappe.get_all(
+        "Branch Naming Series",
+        filters={
+            "parent": branch_name,
+            "parenttype": "Branch",
+            "parent_doctype": doctype,
+        },
+        fields=["naming_series", "use_for_return"],
+        order_by="idx asc",
+    )
+    if not rows:
+        return None
+
+    if is_return:
+        for r in rows:
+            if r.use_for_return:
+                return (r.naming_series or "").strip() or None
+    for r in rows:
+        if not r.use_for_return:
+            return (r.naming_series or "").strip() or None
+    # Last resort — any row, even one tagged for return when the doc is non-return.
+    return (rows[0].naming_series or "").strip() or None
+
+
 def set_naming_series_from_branch(doc, method=None):
-    """Before insert: prefill `naming_series` based on the user's Branch
-    Configuration default branch's `custom_doc_prefix`.
+    """Before insert: prefill `naming_series` based on the user's Branch.
 
-    Looks up the user's first Branch Configuration (per user record),
-    reads the configured Branch's prefix, and sets
-    naming_series = "<PREFIX>.YYYY.-.####" if the field is unset.
+    Resolution:
+      1. Branch's per-doctype `custom_naming_series_table` row matching
+         `doc.doctype` and (if applicable) `doc.is_return`.
+      2. Branch's `custom_doc_prefix` -> "<PREFIX>.YYYY.-.####".
 
-    No-op for Administrator + Guest, for users without a Branch
-    Configuration row, or when the doc already has a naming_series.
+    No-op for Administrator + Guest, for users with no resolvable
+    branch, when the doctype has no naming_series field, or when the
+    doc already has a naming_series.
     """
     user = frappe.session.user
     if user in ("Administrator", "Guest"):
@@ -337,11 +373,13 @@ def set_naming_series_from_branch(doc, method=None):
     if not branch_name:
         return
 
-    prefix = (frappe.db.get_value("Branch", branch_name, "custom_doc_prefix") or "").strip()
-    if not prefix:
-        return
-
-    series = f"{prefix}.YYYY.-.####"
+    is_return = bool(doc.get("is_return"))
+    series = _branch_series_override(branch_name, doc.doctype, is_return)
+    if not series:
+        prefix = (frappe.db.get_value("Branch", branch_name, "custom_doc_prefix") or "").strip()
+        if not prefix:
+            return
+        series = f"{prefix}.YYYY.-.####"
 
     # Append the series to the field options if not already present so
     # the value validates. `naming_series` field stores newline-delimited
@@ -422,3 +460,59 @@ def clear_rejected_warehouse_when_no_rejection(doc, method=None):
     for row in items:
         if getattr(row, "rejected_warehouse", None):
             row.rejected_warehouse = None
+
+
+# ---------------------------------------------------------------------------
+# Letter Head auto-set from Branch
+# ---------------------------------------------------------------------------
+
+
+def set_letter_head_from_branch(doc, method=None):
+    """Before insert: prefill `letter_head` based on the user's Branch.
+
+    Reads `Branch.custom_letter_head` for the resolved branch and sets
+    it on the doc only when the field is empty. Lets a user explicitly
+    pick a different letter head before save without being overridden.
+    """
+    user = frappe.session.user
+    if user in ("Administrator", "Guest"):
+        return
+    if doc.get("letter_head"):
+        return
+    if not doc.meta.get_field("letter_head"):
+        return
+
+    branch_name = _resolve_user_branch(
+        user,
+        company=doc.get("company"),
+        cost_center=doc.get("cost_center"),
+    )
+    if not branch_name:
+        return
+
+    letter_head = frappe.db.get_value("Branch", branch_name, "custom_letter_head")
+    if letter_head:
+        doc.letter_head = letter_head
+
+
+# ---------------------------------------------------------------------------
+# Prepared By auto-fill
+# ---------------------------------------------------------------------------
+
+
+def set_prepared_by_to_owner(doc, method=None):
+    """Before insert: stamp the creator on `custom_prepared_by`.
+
+    Auto-populates the field with `frappe.session.user` so the printed
+    invoice's "Prepared By" line shows who created the document.
+    Bypassed for Administrator + Guest. Idempotent — does not overwrite
+    an already-filled value.
+    """
+    user = frappe.session.user
+    if user in ("Administrator", "Guest"):
+        return
+    if not doc.meta.get_field("custom_prepared_by"):
+        return
+    if doc.get("custom_prepared_by"):
+        return
+    doc.custom_prepared_by = user

@@ -196,7 +196,11 @@ override_doctype_class = {
 # Purchase Receipt.
 doc_events = {
 	"Sales Invoice": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_prepared_by_to_owner",
+		],
 		"before_validate": [
 			"rmax_custom.branch_defaults.override_cost_center_from_branch",
 			"rmax_custom.branch_defaults.override_payment_accounts_from_branch",
@@ -213,24 +217,39 @@ doc_events = {
 		"on_cancel": "rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 	},
 	"Quotation": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Purchase Invoice": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 	"Payment Entry": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
 	"Delivery Note": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 	},
 	"Purchase Receipt": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"before_validate": [
 			"rmax_custom.branch_defaults.override_cost_center_from_branch",
 			"rmax_custom.branch_defaults.clear_rejected_warehouse_when_no_rejection",
@@ -241,28 +260,52 @@ doc_events = {
 		],
 	},
 	"Material Request": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Sales Order": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Purchase Order": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"POS Invoice": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"No VAT Sale": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Damage Slip": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Damage Transfer": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Stock Transfer": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 	},
 	"Landed Cost Voucher": {
 		"on_submit": "rmax_custom.lcv_template.landed_cost_voucher_on_submit",
@@ -272,7 +315,10 @@ doc_events = {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
 	},
 	"Journal Entry": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"validate": [
 			"rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
 			"rmax_custom.inter_branch.auto_inject_inter_branch_legs",
@@ -282,7 +328,10 @@ doc_events = {
 		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
 	},
 	"Stock Entry": {
-		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+		"before_insert": [
+			"rmax_custom.branch_defaults.set_naming_series_from_branch",
+			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+		],
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
 		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",
@@ -441,6 +490,15 @@ fixtures = [
 
                     # Branch — naming-series prefix per branch (drives auto-pick)
                     "Branch-custom_doc_prefix",
+                    "Branch-custom_letter_head",
+                    "Branch-custom_naming_series_table",
+
+                    # Sales Invoice — prepared-by / approved-by stamps for the bilingual print format
+                    "Sales Invoice-custom_prepared_by",
+                    "Sales Invoice-custom_approved_by",
+
+                    # Delivery Note — return SI backlink (multi-DN return flow)
+                    "Delivery Note-custom_return_si",
 
                     # Purchase Receipt LCV Checklist
                     "Purchase Receipt-custom_lcv_section",
