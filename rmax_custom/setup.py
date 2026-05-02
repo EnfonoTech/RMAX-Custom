@@ -265,6 +265,17 @@ def after_migrate():
         )
         # Do not raise — after_migrate must be tolerant so other setup runs.
 
+    # Master Letter Head + Branch backfill
+    try:
+        from rmax_custom.setup_letter_heads import setup_master_letter_head
+
+        setup_master_letter_head()
+    except Exception:
+        frappe.log_error(
+            title="rmax_custom: master letter head setup failed",
+            message=frappe.get_traceback(),
+        )
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")

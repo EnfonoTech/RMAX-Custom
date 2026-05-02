@@ -651,6 +651,7 @@ fixtures = [
                 "in",
                 [
                     "RMAX Tax Invoice",
+                    "RMAX Tax Invoice ZATCA",
                     "RMAX Quotation",
                     "RMAX Delivery Note",
                     "RMAX Purchase Order",
