@@ -188,6 +188,8 @@ function render_stock_dashboard(data) {
 	html += '<div class="action-grid">';
 	html += action_card('clipboard', 'New Pick List', 'Create pick list', 'new', 'Warehouse Pick List');
 	html += action_card('clipboard', 'Pick Lists', 'View all pick lists', 'list', 'Warehouse Pick List');
+	html += action_card('send', 'New Delivery Note', 'Create delivery note', 'new', 'Delivery Note');
+	html += action_card('list', 'Delivery Notes', 'View delivery notes', 'list', 'Delivery Note');
 	html += action_card('shuffle', 'Stock Transfer', 'Create new transfer', 'new', 'Stock Transfer');
 	html += action_card('truck', 'New Material Request', 'Create request', 'new', 'Material Request');
 	html += action_card('list', 'Material Requests', 'View all requests', 'list', 'Material Request');
