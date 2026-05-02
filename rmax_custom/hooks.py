@@ -231,7 +231,10 @@ doc_events = {
 	},
 	"Purchase Receipt": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
-		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
+		"before_validate": [
+			"rmax_custom.branch_defaults.override_cost_center_from_branch",
+			"rmax_custom.branch_defaults.clear_rejected_warehouse_when_no_rejection",
+		],
 		"validate": [
 			"rmax_custom.lcv_template.purchase_receipt_validate",
 			"rmax_custom.inter_branch.auto_set_branch_from_warehouse",
@@ -530,19 +533,18 @@ fixtures = [
                     "Delivery Note Item-target_warehouse-ignore_user_permissions",
 
                     # Sales Invoice / Purchase Invoice / Purchase Receipt —
-                    # mirror Quotation/DN: Branch Users open docs whose
-                    # default header set_warehouse is "Stores - <abbr>"
-                    # without User Permission rejection.
+                    # ONLY the header set_warehouse field. Item-level
+                    # warehouse / cost_center / rejected_warehouse keep
+                    # default User Permission filtering so a Branch /
+                    # Stock User's picker stays scoped to their assigned
+                    # warehouses. Adding ignore_user_permissions=1 there
+                    # broke Stock User restriction on prod and (combined
+                    # with Frappe's single-UP auto-fill) caused the
+                    # "Accepted Warehouse and Rejected Warehouse cannot
+                    # be same" error to fire on every PR.
                     "Sales Invoice-set_warehouse-ignore_user_permissions",
-                    "Sales Invoice Item-warehouse-ignore_user_permissions",
-                    "Sales Invoice Item-cost_center-ignore_user_permissions",
                     "Purchase Invoice-set_warehouse-ignore_user_permissions",
-                    "Purchase Invoice Item-warehouse-ignore_user_permissions",
-                    "Purchase Invoice Item-cost_center-ignore_user_permissions",
                     "Purchase Receipt-set_warehouse-ignore_user_permissions",
-                    "Purchase Receipt Item-warehouse-ignore_user_permissions",
-                    "Purchase Receipt Item-cost_center-ignore_user_permissions",
-                    "Purchase Receipt Item-rejected_warehouse-ignore_user_permissions",
 
                     # Default Print Format per doctype — RMAX bilingual / branded formats.
                     "Sales Invoice-default_print_format",

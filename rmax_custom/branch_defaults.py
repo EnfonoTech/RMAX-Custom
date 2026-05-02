@@ -369,3 +369,41 @@ def set_naming_series_from_branch(doc, method=None):
         return
 
     doc.naming_series = series
+
+
+# ---------------------------------------------------------------------------
+# Suppress auto-filled rejected_warehouse on Purchase Receipt
+# ---------------------------------------------------------------------------
+
+
+def clear_rejected_warehouse_when_no_rejection(doc, method=None):
+    """Before validate: if no row has rejected_qty > 0, clear every
+    rejected_warehouse field (header + each item row).
+
+    Why: when a user has a single Warehouse User Permission, Frappe's
+    `frappe.defaults.get_user_defaults("Warehouse")` returns that
+    single value and autofills EVERY Warehouse Link field on form load,
+    including `rejected_warehouse`. ERPNext's BuyingController then
+    cascades the header value onto each item row via
+    `reset_default_field_value`. Result: every row ends up with
+    `warehouse == rejected_warehouse`. ERPNext's subcontracting
+    validation (called via the Purchase Receipt save chain) throws:
+    "Row #0: Accepted Warehouse and Rejected Warehouse cannot be same".
+
+    The user is not running a rejection workflow — they accept full
+    qty. Clearing rejected_warehouse when no row has `rejected_qty > 0`
+    is the safest fix.
+    """
+    items = doc.get("items") or []
+    has_rejection = any(
+        cint(getattr(row, "rejected_qty", 0)) > 0 for row in items
+    )
+    if has_rejection:
+        return
+
+    # Only act when the user did NOT explicitly enter rejection
+    if doc.get("rejected_warehouse"):
+        doc.rejected_warehouse = None
+    for row in items:
+        if getattr(row, "rejected_warehouse", None):
+            row.rejected_warehouse = None
