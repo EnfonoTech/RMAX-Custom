@@ -521,6 +521,15 @@ fixtures = [
                     # Customer — make mobile_no part of the global search fields
                     "Customer-main-search_fields",
 
+                    # Material Request — branch field ignore_user_permissions
+                    # so target / source branch users can OPEN cross-branch
+                    # MRs. List visibility is gated by
+                    # branch_filters.material_request_permission_query
+                    # (set_warehouse OR set_from_warehouse OR owner) which
+                    # already restricts to their branch.
+                    "Material Request-branch-ignore_user_permissions",
+                    "Material Request Item-branch-ignore_user_permissions",
+
                     # Quotation — ignore user permissions on warehouse fields
                     # so Branch Users can open quotes referencing warehouses
                     # outside their branch (e.g. global default "Stores").

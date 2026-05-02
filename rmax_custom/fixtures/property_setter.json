@@ -494,6 +494,8 @@
   "row_name": null,
   "value": "1"
  },
+ {"default_value": null, "doc_type": "Material Request", "docstatus": 0, "doctype": "Property Setter", "doctype_or_field": "DocField", "field_name": "branch", "is_system_generated": 0, "modified": "2026-05-02 09:00:00.000000", "module": null, "name": "Material Request-branch-ignore_user_permissions", "property": "ignore_user_permissions", "property_type": "Check", "row_name": null, "value": "1"},
+ {"default_value": null, "doc_type": "Material Request Item", "docstatus": 0, "doctype": "Property Setter", "doctype_or_field": "DocField", "field_name": "branch", "is_system_generated": 0, "modified": "2026-05-02 09:00:00.000000", "module": null, "name": "Material Request Item-branch-ignore_user_permissions", "property": "ignore_user_permissions", "property_type": "Check", "row_name": null, "value": "1"},
  {
   "default_value": null, "doc_type": "Sales Invoice", "docstatus": 0, "doctype": "Property Setter",
   "doctype_or_field": "DocType", "field_name": null, "is_system_generated": 0,
