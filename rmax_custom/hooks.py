@@ -243,6 +243,27 @@ doc_events = {
 	"Material Request": {
 		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 	},
+	"Sales Order": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"Purchase Order": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"POS Invoice": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"No VAT Sale": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"Damage Slip": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"Damage Transfer": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
+	"Stock Transfer": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
+	},
 	"Landed Cost Voucher": {
 		"on_submit": "rmax_custom.lcv_template.landed_cost_voucher_on_submit",
 		"on_cancel": "rmax_custom.lcv_template.landed_cost_voucher_on_cancel",
@@ -251,6 +272,7 @@ doc_events = {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
 	},
 	"Journal Entry": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"validate": [
 			"rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
 			"rmax_custom.inter_branch.auto_inject_inter_branch_legs",
@@ -260,6 +282,7 @@ doc_events = {
 		"after_insert": "rmax_custom.inter_branch.on_branch_insert",
 	},
 	"Stock Entry": {
+		"before_insert": "rmax_custom.branch_defaults.set_naming_series_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",
 		"on_cancel": "rmax_custom.inter_branch.on_stock_entry_cancel",

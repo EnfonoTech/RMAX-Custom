@@ -89,41 +89,56 @@ def _user_has_cost_center_access(cost_center):
 
 
 def _resolve_user_branch(user, company=None, cost_center=None):
-    """Pick the most relevant Branch Configuration for the user.
+    """Pick the most relevant Branch for the user.
 
-    Resolution order:
-      1. Branch whose company matches the doc and whose cost_center child
-         table contains the doc's cost_center.
-      2. Branch whose company matches the doc.
-      3. First branch the user belongs to.
-    Returns the Branch Configuration name (== branch name) or None.
+    Resolution cascade (first match wins):
+      1. Branch Configuration whose company matches the doc and whose
+         cost_center child table contains the doc's cost_center.
+      2. Branch Configuration whose company matches the doc.
+      3. First Branch Configuration the user belongs to (any company).
+      4. First User Permission with allow=Branch (fallback when the user
+         was wired via standard Frappe permissions but never added to a
+         Branch Configuration User row).
+    Returns the Branch name or None.
     """
     branches = frappe.get_all(
         "Branch Configuration User",
         filters={"user": user},
         pluck="parent",
     )
-    if not branches:
-        return None
 
-    if company:
-        same_company = frappe.get_all(
-            "Branch Configuration",
-            filters={"name": ["in", branches], "company": company},
-            pluck="name",
-        )
-        if same_company:
-            if cost_center:
-                with_cc = frappe.get_all(
-                    "Branch Configuration Cost Center",
-                    filters={"parent": ["in", same_company], "cost_center": cost_center},
-                    pluck="parent",
-                )
-                if with_cc:
-                    return with_cc[0]
-            return same_company[0]
+    if branches:
+        if company:
+            same_company = frappe.get_all(
+                "Branch Configuration",
+                filters={"name": ["in", branches], "company": company},
+                pluck="name",
+            )
+            if same_company:
+                if cost_center:
+                    with_cc = frappe.get_all(
+                        "Branch Configuration Cost Center",
+                        filters={"parent": ["in", same_company], "cost_center": cost_center},
+                        pluck="parent",
+                    )
+                    if with_cc:
+                        return with_cc[0]
+                return same_company[0]
+        return branches[0]
 
-    return branches[0]
+    # Fallback: User Permission allow=Branch. Catches users who have
+    # been granted branch access via the standard Frappe permission UI
+    # but were never added to a Branch Configuration User row.
+    up_branches = frappe.get_all(
+        "User Permission",
+        filters={"user": user, "allow": "Branch"},
+        pluck="for_value",
+        order_by="is_default desc, modified desc",
+    )
+    if up_branches:
+        return up_branches[0]
+
+    return None
 
 
 def _branch_mops_by_type(branch_name):
