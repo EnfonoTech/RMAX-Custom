@@ -102,6 +102,10 @@ def get_dashboard_data():
         )
 
         # Outstanding credits
+        # NOTE: pass tuple(wh_params) unconditionally — passing `None` to
+        # frappe.db.sql triggers a pymysql `not all arguments converted`
+        # error in v15 even when the query has zero %s placeholders.
+        # An empty tuple `()` is safe.
         data["credits_outstanding"] = (
             frappe.db.sql(
                 f"""
@@ -109,7 +113,7 @@ def get_dashboard_data():
                 FROM `tabSales Invoice` si
                 WHERE si.docstatus = 1 AND si.outstanding_amount > 0 {wh_filter}
             """,
-                tuple(wh_params) if wh_params else None,
+                tuple(wh_params),
             )[0][0]
             or 0
         )
@@ -143,7 +147,7 @@ def get_dashboard_data():
             ORDER BY transaction_date DESC
             LIMIT 10
         """,
-            tuple(st_params) if st_params else None,
+            tuple(st_params),
             as_dict=True,
         )
 
@@ -169,7 +173,7 @@ def get_dashboard_data():
             ORDER BY mr.custom_is_urgent DESC, mr.transaction_date DESC
             LIMIT 10
         """,
-            tuple(mr_params) if mr_params else None,
+            tuple(mr_params),
             as_dict=True,
         )
 
