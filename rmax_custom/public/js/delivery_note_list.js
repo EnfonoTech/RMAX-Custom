@@ -38,6 +38,12 @@ frappe.listview_settings["Delivery Note"] = Object.assign(
                         _rmax_create_inter_company_si(listview);
                     }
                 );
+                listview.page.add_actions_menu_item(
+                    __("Create Return Invoice"),
+                    function () {
+                        _rmax_create_return_si(listview);
+                    }
+                );
             } catch (e) {
                 console.warn("rmax_custom: Delivery Note list action wiring failed", e);
             }
@@ -65,6 +71,42 @@ function _rmax_create_inter_company_si(listview) {
                 },
                 freeze: true,
                 freeze_message: __("Building Sales Invoice..."),
+                callback: function (r) {
+                    if (r.message) {
+                        frappe.show_alert({
+                            message: __("Created {0}", [r.message]),
+                            indicator: "green",
+                        });
+                        frappe.set_route("Form", "Sales Invoice", r.message);
+                    }
+                },
+            });
+        }
+    );
+}
+
+function _rmax_create_return_si(listview) {
+    const selected = listview.get_checked_items().map((row) => row.name);
+    if (!selected.length) {
+        frappe.msgprint(__("Select at least one Delivery Note first."));
+        return;
+    }
+
+    frappe.confirm(
+        __(
+            "Build a single Draft Return Sales Invoice (is_return=1, update_stock=1) " +
+            "from the selected {0} Delivery Note(s)? All must share customer, company, " +
+            "currency, and branch.",
+            [selected.length]
+        ),
+        function () {
+            frappe.call({
+                method: "rmax_custom.api.delivery_note.create_return_si_from_multiple_dns",
+                args: {
+                    delivery_note_names: selected,
+                },
+                freeze: true,
+                freeze_message: __("Building Return Sales Invoice..."),
                 callback: function (r) {
                     if (r.message) {
                         frappe.show_alert({
