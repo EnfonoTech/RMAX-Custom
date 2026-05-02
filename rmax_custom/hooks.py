@@ -532,19 +532,17 @@ fixtures = [
                     "Delivery Note Item-warehouse-ignore_user_permissions",
                     "Delivery Note Item-target_warehouse-ignore_user_permissions",
 
-                    # Sales Invoice / Purchase Invoice / Purchase Receipt —
-                    # ONLY the header set_warehouse field. Item-level
-                    # warehouse / cost_center / rejected_warehouse keep
-                    # default User Permission filtering so a Branch /
-                    # Stock User's picker stays scoped to their assigned
-                    # warehouses. Adding ignore_user_permissions=1 there
-                    # broke Stock User restriction on prod and (combined
-                    # with Frappe's single-UP auto-fill) caused the
-                    # "Accepted Warehouse and Rejected Warehouse cannot
-                    # be same" error to fire on every PR.
-                    "Sales Invoice-set_warehouse-ignore_user_permissions",
-                    "Purchase Invoice-set_warehouse-ignore_user_permissions",
-                    "Purchase Receipt-set_warehouse-ignore_user_permissions",
+                    # Sales Invoice / Purchase Invoice / Purchase Receipt
+                    # warehouse fields intentionally do NOT carry
+                    # ignore_user_permissions Property Setters — they
+                    # broke Stock User picker restriction on prod (the
+                    # header set_warehouse picker was showing every
+                    # company warehouse, and the user's choice cascaded
+                    # to item rows where the server-side UP check then
+                    # rejected the save). Quotation / Delivery Note keep
+                    # the header PS because a Sales Manager occasionally
+                    # opens a cross-branch quote / DN handed off by
+                    # another branch.
 
                     # Default Print Format per doctype — RMAX bilingual / branded formats.
                     "Sales Invoice-default_print_format",
