@@ -199,6 +199,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 			"rmax_custom.branch_defaults.set_prepared_by_to_owner",
 		],
 		"before_validate": [
@@ -223,12 +224,14 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Purchase Invoice": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
@@ -237,6 +240,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 	},
@@ -244,6 +248,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
@@ -252,6 +257,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"before_validate": [
 			"rmax_custom.branch_defaults.override_cost_center_from_branch",
@@ -266,48 +272,56 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Sales Order": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Purchase Order": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"POS Invoice": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"No VAT Sale": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Damage Slip": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Damage Transfer": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Stock Transfer": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 	},
 	"Landed Cost Voucher": {
@@ -321,6 +335,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"validate": [
 			"rmax_custom.bnpl_clearing_guard.warn_bnpl_clearing_overdraw",
@@ -334,6 +349,7 @@ doc_events = {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
+			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
 		"on_submit": "rmax_custom.inter_branch.on_stock_entry_submit",

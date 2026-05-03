@@ -538,3 +538,69 @@ def set_prepared_by_to_owner(doc, method=None):
     if doc.get("custom_prepared_by"):
         return
     doc.custom_prepared_by = user
+
+
+# ---------------------------------------------------------------------------
+# Source warehouse auto-fill from Branch
+# ---------------------------------------------------------------------------
+
+
+def _branch_default_warehouse(branch_name: str) -> str | None:
+    """First Warehouse listed on the Branch's Branch Configuration row.
+
+    The warehouse row order (`idx`) on Branch Configuration Warehouse is
+    the source of truth for "default warehouse for this branch".
+    """
+    if not branch_name:
+        return None
+    rows = frappe.get_all(
+        "Branch Configuration Warehouse",
+        filters={"parent": branch_name, "parenttype": "Branch Configuration"},
+        fields=["warehouse"],
+        order_by="idx asc",
+        limit=1,
+    )
+    if rows and rows[0].warehouse:
+        return rows[0].warehouse
+    return None
+
+
+def set_warehouse_from_branch(doc, method=None):
+    """Before insert: prefill `set_warehouse` from the doc's branch's first
+    configured warehouse.
+
+    Resolution:
+      * doc.branch must already be set (Phase A's set_letter_head hook
+        runs before this, but branch field is independent — operator
+        usually picks branch first OR it's stamped by their default).
+      * If not set, resolve via the user's Branch Configuration mapping.
+      * Read first row of Branch Configuration Warehouse for that
+        branch — that's the implicit default warehouse.
+
+    No-op when:
+      * Doctype has no `set_warehouse` field
+      * doc already has set_warehouse
+      * No branch resolvable
+      * Branch has no warehouses configured
+    """
+    user = frappe.session.user
+    if user in ("Administrator", "Guest"):
+        return
+    if not doc.meta.get_field("set_warehouse"):
+        return
+    if doc.get("set_warehouse"):
+        return
+
+    # Prefer doc.branch (operator has picked one). Fall back to user's
+    # branch when the field is empty.
+    branch_name = doc.get("branch") or _resolve_user_branch(
+        user,
+        company=doc.get("company"),
+        cost_center=doc.get("cost_center"),
+    )
+    if not branch_name:
+        return
+
+    wh = _branch_default_warehouse(branch_name)
+    if wh:
+        doc.set_warehouse = wh

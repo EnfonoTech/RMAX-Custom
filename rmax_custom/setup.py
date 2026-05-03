@@ -265,7 +265,7 @@ def after_migrate():
         )
         # Do not raise — after_migrate must be tolerant so other setup runs.
 
-    # Master Letter Head + Branch backfill
+    # Master + per-branch Letter Heads + Branch backfill
     try:
         from rmax_custom.setup_letter_heads import setup_master_letter_head
 
@@ -273,6 +273,17 @@ def after_migrate():
     except Exception:
         frappe.log_error(
             title="rmax_custom: master letter head setup failed",
+            message=frappe.get_traceback(),
+        )
+
+    # Branch-wise naming series rows + Property Setter options
+    try:
+        from rmax_custom.setup_branch_series import setup_branch_series
+
+        setup_branch_series()
+    except Exception:
+        frappe.log_error(
+            title="rmax_custom: branch series setup failed",
             message=frappe.get_traceback(),
         )
 
