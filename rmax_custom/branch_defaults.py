@@ -346,21 +346,30 @@ def _branch_series_override(branch_name: str, doctype: str, is_return: bool) -> 
 
 
 def set_naming_series_from_branch(doc, method=None):
-    """Before insert: prefill `naming_series` based on the user's Branch.
+    """Before insert: prefill / override `naming_series` based on the user's Branch.
 
     Resolution:
       1. Branch's per-doctype `custom_naming_series_table` row matching
          `doc.doctype` and (if applicable) `doc.is_return`.
       2. Branch's `custom_doc_prefix` -> "<PREFIX>.YYYY.-.####".
 
+    OVERRIDES form-prefilled naming_series when the current value does
+    not carry the resolved branch prefix. Frappe's form auto-fills
+    `naming_series` to the doctype's first option (e.g.
+    `ACC-SINV-.YYYY.-` on Sales Invoice) before our hook runs — without
+    the override branch users would always end up on the standard
+    series. Manager + Admin roles are bypassed so they can pick a
+    series manually.
+
     No-op for Administrator + Guest, for users with no resolvable
-    branch, when the doctype has no naming_series field, or when the
-    doc already has a naming_series.
+    branch, or when the doctype has no naming_series field.
     """
     user = frappe.session.user
     if user in ("Administrator", "Guest"):
         return
-    if doc.get("naming_series"):
+    roles = set(frappe.get_roles(user))
+    if roles & {"System Manager", "Stock Manager", "Sales Manager", "Sales Master Manager"}:
+        # Trusted roles keep their manual pick.
         return
     if not doc.meta.get_field("naming_series"):
         return
@@ -380,6 +389,19 @@ def set_naming_series_from_branch(doc, method=None):
         if not prefix:
             return
         series = f"{prefix}.YYYY.-.####"
+
+    # If the current naming_series already starts with the resolved
+    # branch's prefix (or matches an explicit branch override row),
+    # keep it — operator may have picked a slightly different variant
+    # of the branch series. Otherwise OVERRIDE the form pre-fill.
+    current = (doc.get("naming_series") or "").strip()
+    if current:
+        prefix_only = (frappe.db.get_value("Branch", branch_name, "custom_doc_prefix") or "").strip()
+        if prefix_only and current.upper().startswith(prefix_only.upper()):
+            return
+        if current == series:
+            return
+        # Otherwise fall through and override.
 
     # Append the series to the field options if not already present so
     # the value validates. `naming_series` field stores newline-delimited
