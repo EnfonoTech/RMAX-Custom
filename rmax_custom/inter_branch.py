@@ -544,6 +544,68 @@ def print_reconciliation(company: str, from_date: str = "2026-01-01", to_date: s
             print(f"  {fb:8s} -> {tb:8s} = {ab:8.2f}    {tb:8s} -> {fb:8s} = {ba:8.2f}    sum = {net:8.2f}  [{status}]")
 
 
+def _backfill_branch_columns_on_child_doctypes() -> None:
+    """Ensure every stock-side child doctype carries the Branch dimension.
+
+    ERPNext's `make_dimension_in_accounting_doctypes` runs on Accounting
+    Dimension save, but on some sites it skips specific child doctypes
+    (observed: `Stock Reconciliation Item` on rmax.enfonoerp.com). When
+    the child table lacks the column, our `auto_set_branch_from_warehouse`
+    helper sets the value in-memory but it never persists to DB, GL Entry
+    branch attribution becomes header-only, and per-line dimension
+    enforcement is bypassed.
+
+    Idempotent. Adds the Custom Field on every child doctype below that
+    actually exists on the site and has no `branch` column yet.
+    """
+    from frappe.custom.doctype.custom_field.custom_field import create_custom_field
+
+    targets = [
+        ("Sales Invoice Item", "warehouse"),
+        ("Stock Reconciliation Item", "warehouse"),
+        ("Stock Entry Detail", "t_warehouse"),
+        ("Purchase Receipt Item", "warehouse"),
+        ("Delivery Note Item", "warehouse"),
+        ("Purchase Invoice Item", "warehouse"),
+        ("Material Request Item", "warehouse"),
+        ("POS Invoice Item", "warehouse"),
+    ]
+    for child_dt, insert_after in targets:
+        if not frappe.db.exists("DocType", child_dt):
+            continue
+        # Already has the column?
+        table = "tab" + child_dt
+        try:
+            cols = frappe.db.sql(
+                f"SHOW COLUMNS FROM `{table}` LIKE 'branch'"
+            )
+        except Exception:
+            continue
+        if cols:
+            continue
+        try:
+            create_custom_field(
+                child_dt,
+                {
+                    "fieldname": "branch",
+                    "label": "Branch",
+                    "fieldtype": "Link",
+                    "options": "Branch",
+                    "insert_after": insert_after,
+                    "is_system_generated": 0,
+                },
+            )
+            frappe.log_error(
+                f"rmax_custom: added branch Custom Field on {child_dt}",
+                "rmax_custom: branch column backfill",
+            )
+        except Exception:
+            frappe.log_error(
+                frappe.get_traceback(),
+                f"rmax_custom: failed to add branch Custom Field on {child_dt}",
+            )
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate.
 
@@ -552,6 +614,7 @@ def setup_inter_branch_foundation() -> None:
     its child companies via `validate_root_company_and_sync_account_to_children`.
     """
     _ensure_branch_accounting_dimension()
+    _backfill_branch_columns_on_child_doctypes()
     root_companies = frappe.get_all(
         "Company",
         filters={"parent_company": ["in", ["", None]]},
