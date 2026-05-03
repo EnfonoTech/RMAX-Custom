@@ -839,26 +839,43 @@ def auto_set_branch_from_warehouse(doc, method=None) -> None:
     Avoids the per-Company `mandatory_for_bs` GL rejection on Stock
     Reconciliation, opening stock, Stock Entry repacks, etc.
 
-    For each item row with no `branch`, resolves via Branch Configuration
-    Warehouse mapping. Header `branch` (if absent) is set to the first row
-    that resolves successfully — operator can override afterwards.
+    Behaviour:
+      * Per item row, resolve the warehouse → branch via Branch
+        Configuration. If a mapping exists, OVERRIDE the row's branch
+        with the resolved value — warehouse is authoritative on stock
+        documents. Operators selecting a mismatched branch (e.g. SR row
+        on Azzizziyah-CL warehouse but branch=Warehouse Jeddah) get
+        their pick replaced silently to keep GL entries consistent.
+      * Header `branch` is set to the first item's resolved branch when
+        items agree. When the item rows resolve to multiple branches,
+        the header is left as set (the per-row branch carries the
+        accounting dimension on each GL Entry anyway).
+      * Rows whose warehouse is not mapped (or has no warehouse) are
+        left untouched.
+      * Roles bypass: System Manager and Stock Manager are trusted to
+        manually override — no auto-correction for them.
 
     Material Transfer Stock Entry rows have BOTH `s_warehouse` and
-    `t_warehouse`; this helper fills `branch` from the source side because
-    that's the warehouse the GL row will hang on for the credit leg. The
-    target-side leg's branch is corrected post-submit by
+    `t_warehouse`; this helper fills `branch` from the source side
+    because that's the warehouse the GL row will hang on for the credit
+    leg. The target-side leg's branch is corrected post-submit by
     `_retag_se_gl_entries`.
     """
     items = getattr(doc, "items", None)
     if not items:
         return
 
+    user = frappe.session.user
+    if user == "Administrator":
+        return
+    roles = set(frappe.get_roles(user))
+    if roles & {"System Manager", "Stock Manager"}:
+        return
+
+    resolved_branches = set()
     first_resolved = None
+    overridden = False
     for item in items:
-        if getattr(item, "branch", None):
-            if not first_resolved:
-                first_resolved = item.branch
-            continue
         wh = (
             getattr(item, "warehouse", None)
             or getattr(item, "s_warehouse", None)
@@ -867,13 +884,36 @@ def auto_set_branch_from_warehouse(doc, method=None) -> None:
         if not wh:
             continue
         br = resolve_warehouse_branch(wh)
-        if br:
-            item.branch = br
-            if not first_resolved:
-                first_resolved = br
+        if not br:
+            continue
+        # OVERRIDE — warehouse is the source of truth for stock GL.
+        prior = getattr(item, "branch", None)
+        if prior and prior != br:
+            overridden = True
+        item.branch = br
+        resolved_branches.add(br)
+        if first_resolved is None:
+            first_resolved = br
 
-    if first_resolved and not getattr(doc, "branch", None):
+    # Header branch is consistent only when every resolved item agrees.
+    if first_resolved and len(resolved_branches) == 1:
+        prior_header = getattr(doc, "branch", None)
+        if prior_header and prior_header != first_resolved:
+            overridden = True
         doc.branch = first_resolved
+
+    if overridden and not doc.flags.get("rmax_branch_auto_corrected_msg"):
+        doc.flags.rmax_branch_auto_corrected_msg = True
+        frappe.msgprint(
+            _(
+                "Branch auto-corrected from the warehouse mapping to keep GL "
+                "entries consistent. Pick the correct warehouse if you intended "
+                "a different branch."
+            ),
+            indicator="orange",
+            title=_("Branch Adjusted"),
+            alert=True,
+        )
 
 
 def on_stock_entry_submit(doc, method=None) -> None:
