@@ -87,9 +87,27 @@ def _ensure_branch_row(branch_name: str, doctype: str, series: str, use_for_retu
     parent_doc.save(ignore_permissions=True)
 
 
-def _push_to_property_setter_options(doctype: str, series_list: Iterable[str]) -> None:
+def _is_legacy_no_abbrev_template(opt: str, branch_prefixes: Iterable[str]) -> bool:
+    """Detect deprecated `<PREFIX>-.YYYY.-.####` (no per-doctype abbrev) templates
+    seeded by an earlier version of this provisioner.  These cause SHARED
+    counters across doctypes (Frappe keys `tabSeries` on the resolved prefix),
+    so SI #1, PE #2, DN #3 is the user-visible symptom.
+    """
+    for p in branch_prefixes:
+        # p ends with '-' already; legacy template is exactly `<P>.YYYY.-.####`
+        if opt == f"{p}.YYYY.-.####":
+            return True
+    return False
+
+
+def _push_to_property_setter_options(
+    doctype: str,
+    series_list: Iterable[str],
+    branch_prefixes: Iterable[str] | None = None,
+) -> None:
     """Append every series in series_list to the doctype's naming_series
     Property Setter options.  Frappe stores options newline-delimited.
+    Also strips legacy no-abbrev templates (counter-collision risk).
     """
     if not frappe.db.exists("DocType", doctype):
         return
@@ -101,7 +119,11 @@ def _push_to_property_setter_options(doctype: str, series_list: Iterable[str]) -
     current_opts = (field.options or "").split("\n")
     current = [o.strip() for o in current_opts if o and o.strip()]
 
-    desired = list(current)
+    branch_prefixes = list(branch_prefixes or [])
+    desired = [
+        o for o in current
+        if not _is_legacy_no_abbrev_template(o, branch_prefixes)
+    ]
     for s in series_list:
         if s not in desired:
             desired.append(s)
@@ -149,10 +171,12 @@ def setup_branch_series() -> None:
         return
 
     by_doctype: dict[str, list[str]] = {}
+    branch_prefixes: list[str] = []
     for br in branches:
         prefix = (br.custom_doc_prefix or "").strip()
         if not prefix:
             continue
+        branch_prefixes.append(prefix)
         for dt, abbrev, supports_return in SERIES_TARGETS:
             if not frappe.db.exists("DocType", dt):
                 continue
@@ -167,6 +191,16 @@ def setup_branch_series() -> None:
                 by_doctype.setdefault(dt, []).append(ret_template)
 
     for dt, series_list in by_doctype.items():
-        _push_to_property_setter_options(dt, series_list)
+        _push_to_property_setter_options(dt, series_list, branch_prefixes=branch_prefixes)
+
+    # Purge legacy no-abbrev rows from Branch Naming Series child table.
+    # An earlier seeder version inserted `<PREFIX>-.YYYY.-.####` rows that now
+    # cause SI/PE/DN to share a counter when the form pre-fills picks them.
+    # prefix already ends with '-', so legacy is `<P>.YYYY.-.####`
+    legacy_templates = [f"{p}.YYYY.-.####" for p in branch_prefixes]
+    if legacy_templates:
+        frappe.db.delete("Branch Naming Series", {
+            "naming_series": ["in", legacy_templates],
+        })
 
     frappe.db.commit()
