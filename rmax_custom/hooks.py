@@ -119,6 +119,8 @@ jinja = {
         "rmax_custom.print_helpers.get_rmax_company_bank_accounts",
         "rmax_custom.print_helpers.get_rmax_company_address",
         "rmax_custom.print_helpers.get_rmax_customer_phone",
+        "rmax_custom.print_helpers.get_rmax_letter_head_html",
+        "rmax_custom.print_helpers.get_rmax_hijri_date",
     ]
 }
 

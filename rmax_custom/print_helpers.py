@@ -92,6 +92,78 @@ def get_rmax_company_address(company: str) -> dict | None:
     )
 
 
+def get_rmax_hijri_date(d) -> str:
+    """
+    Convert a Gregorian `datetime.date` (or YYYY-MM-DD string) to Hijri
+    `dd/mm/yyyy` for bilingual print headers.
+
+    Falls back to empty string when conversion library missing.  No raise.
+    """
+    if not d:
+        return ""
+    try:
+        # `hijri_converter` is shipped by ksa_compliance's deps.
+        from hijri_converter import Gregorian
+    except ImportError:
+        try:
+            from hijri_converter.convert import Gregorian  # type: ignore
+        except Exception:
+            return ""
+
+    try:
+        if isinstance(d, str):
+            from datetime import date as _date
+            parts = d.split("-")
+            if len(parts) != 3:
+                return ""
+            d = _date(int(parts[0]), int(parts[1]), int(parts[2]))
+        h = Gregorian(d.year, d.month, d.day).to_hijri()
+        return f"{h.day:02d}/{h.month:02d}/{h.year:04d}"
+    except Exception:
+        return ""
+
+
+def get_rmax_letter_head_html(doc) -> str:
+    """
+    Resolve the Letter Head HTML for a printed doc.
+
+    Priority:
+      1. doc.letter_head if set + enabled + has content
+      2. `RMAX - <Branch>` if doc.branch resolves
+      3. `RMAX - Clear Light` master fallback
+      4. Empty string
+
+    Embedded inline in the print format so the wrapper-letterhead toggle in
+    the print dialog can't accidentally strip the header (operators kept
+    leaving it on "No Letter Head").
+    """
+    candidates: list[str] = []
+
+    lh = getattr(doc, "letter_head", None)
+    if lh:
+        candidates.append(lh)
+
+    branch = getattr(doc, "branch", None) if doc else None
+    if branch:
+        candidates.append(f"RMAX - {branch}")
+
+    candidates.append("RMAX - Clear Light")
+
+    for name in candidates:
+        if not name:
+            continue
+        row = frappe.db.get_value(
+            "Letter Head",
+            {"name": name, "disabled": 0},
+            ["content", "source"],
+            as_dict=True,
+        )
+        if row and (row.get("content") or "").strip():
+            return row["content"]
+
+    return ""
+
+
 def get_rmax_customer_phone(doc) -> str:
     """
     Resolve customer phone for the print buyer block.
