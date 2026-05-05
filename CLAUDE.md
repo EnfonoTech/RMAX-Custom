@@ -108,17 +108,104 @@ These are CRITICAL — without them, Frappe blocks opening documents that refere
 - `Delivery Note`: set_warehouse
 - `Delivery Note Item`: warehouse, target_warehouse
 
-### Branch Configuration Auto-Actions
+### Branch Master (ERPNext `Branch` + RMAX custom fields)
 
-When saved, creates per user:
-- User Permission: Company (is_default=1)
-- User Permission: Branch
-- User Permission: Warehouse (first=default, rest=access)
-- User Permission: Cost Center (first=default, rest=access)
-- User Permission: Company default cost center (is_default=0, for tax templates)
-- Role assignment (Branch User / Stock User / Stock Manager per dropdown)
+The standard ERPNext `Branch` doctype is the FIRST thing operators create — every Branch Configuration row links to one Branch master, every per-branch series + letterhead is keyed off it.
 
-Multi-branch: second branch gets is_default=0 (no duplicate default error).
+Custom fields on `Branch` (shipped via `fixtures/custom_field.json`):
+
+| Fieldname | Type | Purpose |
+|-----------|------|---------|
+| `custom_doc_prefix` | Data | Doc number prefix.  Trailing `-` required.  e.g. `WJ-`, `AZZ-`, `HO-`, `CL1-`.  Drives `setup_branch_series` to generate `<PREFIX><DOCABBREV>-.YYYY.-.####` for every doctype. |
+| `custom_branch_name_ar` | Data | Arabic branch name — used in branch-specific Letter Head bilingual headers. |
+| `custom_letter_head` | Link → Letter Head | Optional explicit letterhead override.  When set, takes priority over the auto-resolved `RMAX - <Branch>` letterhead. |
+| `custom_naming_series_table` | Table → Branch Naming Series | Per-doctype series picker rows.  Auto-seeded by `setup_branch_series` on every `after_migrate` — operators rarely edit. |
+
+Auto-actions on `after_insert` (`rmax_custom.inter_branch.on_branch_insert`):
+
+- Creates `Due from <Branch>` + `Due to <Branch>` accounts under each root Company's Inter-Branch Receivable / Inter-Branch Payable groups.  Both directions for every existing Branch — the new branch can transact with all existing branches immediately.
+
+### Branch Configuration (RMAX-only doctype)
+
+`Branch Configuration` is the per-Branch operational config — autonames `field:branch` so there's exactly ONE row per Branch master.  Operator workflow: Branch first, then Branch Configuration that links it.
+
+Schema:
+
+| Fieldname | Type | Reqd | Purpose |
+|-----------|------|------|---------|
+| `branch` | Link → Branch | yes | Parent Branch — autoname source. |
+| `company` | Link → Company | yes | Which Company this branch trades under. |
+| `mode_of_payment` | Table → Branch Configuration Mode of Payment | no | Cash / Bank MoP allowlist for branch users (see "Modes of Payment" section below). |
+| `warehouse` | Table → Branch Configuration Warehouse | no | Branch warehouses.  First row = user's default warehouse. |
+| `cost_center` | Table → Branch Configuration Cost Center | no | Branch cost centers.  First row = user's default CC. |
+| `user` | Table → Branch Configuration User | no | Users assigned to this branch + role (Branch User / Stock User / Stock Manager / Damage User). |
+
+**Validation (server-side):**
+- Each warehouse row's Company must match the parent's Company.
+- Each cost-center row's Company must match the parent's Company.
+- Validation throws with the offending row's name + actual vs expected Company.
+
+**Auto-actions on `on_update` (`create_permissions`):**
+For every user row in `user`:
+- `User Permission` Company (`is_default=1`)
+- `User Permission` Branch
+- `User Permission` Warehouse for every row — first = default, rest = access only
+- `User Permission` Cost Center for every row — first = default, rest = access only
+- `User Permission` Company's default Cost Center (`is_default=0`) — needed by tax templates that hardcode the company default
+- `_ensure_system_user` upgrades `user_type` to `System User` if currently `Website User` (Website Users silently lose desk roles)
+- `_assign_role` direct-inserts the chosen `Has Role` row (Branch User / Stock User / Stock Manager / Damage User)
+- `_set_module_profile` applies "Branch User" or "Damage User" Module Profile to restrict desk sidebar
+
+**Auto-actions on `before_save` (when editing existing row):**
+- Compares old vs new user list — for each user dropped from the table:
+  - Deletes Company / Branch / Warehouse / Cost Center User Permissions for the OLD branch
+  - `_maybe_remove_role` removes the role iff the user isn't assigned to any other Branch Configuration with that same role
+- Company change: removes the OLD company's User Permission for every remaining user
+
+**Multi-branch users:** when one user appears in two Branch Configurations:
+- ALL Company / Warehouse / Cost Center / Branch permissions accumulate
+- Only the FIRST-saved Configuration's Company gets `is_default=1`; subsequent saves see an existing default and don't overwrite (`_has_existing_default` guard)
+- Same logic for Warehouse / Cost Center first-row defaults
+
+### Branch-Wise Naming Series
+
+Per-Branch document numbering.  Mirrors Flames' "Document Naming Series" pattern but stored as a child table on Branch master rather than the standalone Frappe `Document Naming Settings` (revisit if Frappe pattern fits better — see todo).
+
+**Pieces:**
+
+1. `Branch.custom_doc_prefix` (e.g. `WJ-`, `AZZ-`) — operator-set prefix.
+2. `setup_branch_series.SERIES_TARGETS` — list of `(doctype, abbrev, supports_return)` tuples covering 16 doctypes (SI / DN / PR / PI / PE / SE / SR / QT / MR / ST / JV / SO / PO / DS / DT / NVS).
+3. `setup_branch_series.RETURN_SUFFIX_OVERRIDES` — return-variant abbrev overrides: SI → `CN` (Credit Note), DN → `DRN` (Delivery Return Note), PI → `DN` (Debit Note); other return-supporting doctypes default to `<abbrev>R`.
+4. Template builder: `<PREFIX><ABBREV>-.YYYY.-.####` — e.g. `AZZ-INV-.YYYY.-.####`, `WJ-DN-.YYYY.-.####`, `WJ-DRN-.YYYY.-.####`.
+5. `Branch Naming Series` child table on Branch — rows of `(parent_doctype, naming_series, use_for_return)`.  Picked up by `branch_defaults.set_naming_series_from_branch` at `before_insert` to auto-set the right series per doctype + return-flag.
+6. `Property Setter` for each doctype's `naming_series.options` — newline-delimited list of every branch's templates.  Frappe validates saved docs against this list and renders the picker dropdown from it.
+7. `setup_branch_series` — idempotent provisioner called from `setup.after_migrate`.  Walks every Branch with non-empty `custom_doc_prefix`, generates rows + Property Setter options.  Refreshes drifted templates.  Strips legacy `<PREFIX>-.YYYY.-.####` (no abbrev) rows + Property Setter options that earlier versions seeded — those caused SHARED counters across SI / PE / DN because Frappe keys `tabSeries` on the resolved prefix.
+8. `branch_defaults.set_naming_series_from_branch` (before_insert hook) — picks the row matching the user's branch + the doc's `is_return`, OVERRIDING any series the form pre-filled, unless the existing series already starts with the branch prefix (operator manually picked one) or the user holds System Manager / Stock / Sales / Sales Master Manager (trusted bypass).
+
+**Counter isolation:** Frappe stores counters in `tabSeries` keyed on the FULL resolved prefix.  `AZZ-INV-2026-` and `AZZ-PE-2026-` are different keys → independent counters.  Legacy `AZZ-2026-` (no abbrev) shared counters across doctypes — purged.
+
+### Branch Letter Heads
+
+Per-branch bilingual letterheads, matching the original Flames Tax Invoice format (Clear Light logo + EN address block + AR address block).
+
+- `setup_letter_heads.BRANCH_LETTERHEAD_DATA` — list of 14 branches, each with `addr_en`, `addr_ar`, `mobile`.
+- `_branch_letterhead_html(addr_en, addr_ar, mobile, branch)` — generates a 3-column table (EN / logo / AR) with Jinja placeholders for `{{ company.company_name }}` etc.
+- `setup_master_letter_head` — provisions the master `RMAX - Clear Light` Letter Head with full Jinja-driven content.
+- `setup_branch_letter_heads` — creates `RMAX - <Branch>` Letter Head per branch.  Both run idempotently in `after_migrate`.
+- Print format `RMAX Tax Invoice ZATCA` embeds the letterhead INLINE via `get_rmax_letter_head_html(doc)` (in `print_helpers.py`).  Cascades: `doc.letter_head` → `RMAX - <doc.branch>` → `RMAX - Clear Light` master fallback.
+- Wrapper letterhead (Frappe's standard `<div class="letter-head">{{ letter_head }}</div>`) is hidden via CSS in the print format — operator's "No Letter Head" toggle in the print dialog can't strip the inline render.
+- `frappe.render_template(content, {"doc": doc, "company": doc.company})` is called inside the helper to render Jinja inside the Letter Head body — without this, raw `{%- set company = ... %}` text appears in the printed PDF (deployed fix `f6fb4a8`).
+
+### Operator Workflow Cheatsheet
+
+1. Create `Branch` master.  Fill `branch`, `custom_doc_prefix` (e.g. `AZZ-`), `custom_branch_name_ar`.
+2. Run `bench --site <site> execute rmax_custom.setup.after_migrate` (or rely on next migrate).  This:
+   - Seeds `Branch Naming Series` rows
+   - Adds templates to every doctype's Property Setter `naming_series.options`
+   - Creates `RMAX - <Branch>` Letter Head with branch-specific bilingual address (if branch is in `BRANCH_LETTERHEAD_DATA`)
+   - Creates `Due from <Branch>` / `Due to <Branch>` GL accounts under every root Company
+3. Create `Branch Configuration` for the new Branch.  Fill Company, add Warehouse rows (first = default), Cost Center rows (first = default), Mode of Payment rows (Cash + Bank), User rows with role.
+4. On save: User Permissions + role assignments + Module Profile flow automatically.
 
 ### Branch Configuration — Modes of Payment (Cash/Bank allowlist)
 
