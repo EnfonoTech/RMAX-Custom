@@ -158,8 +158,15 @@ def get_rmax_letter_head_html(doc) -> str:
             ["content", "source"],
             as_dict=True,
         )
-        if row and (row.get("content") or "").strip():
-            return row["content"]
+        content = (row or {}).get("content") or ""
+        if not content.strip():
+            continue
+        # Letter Head bodies are Jinja templates — render with the doc in context
+        # so {{ doc.* }} and helper calls inside the letter head resolve.
+        try:
+            return frappe.render_template(content, {"doc": doc, "company": getattr(doc, "company", None)})
+        except Exception:
+            return content
 
     return ""
 
