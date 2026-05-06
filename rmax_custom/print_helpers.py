@@ -171,6 +171,16 @@ def get_rmax_letter_head_html(doc) -> str:
     return ""
 
 
+def get_rmax_invoice_title(doc):
+    """Jinja-facing alias for :func:`get_invoice_title`.
+
+    Registered in ``hooks.py`` as ``get_rmax_invoice_title`` so print format
+    templates call ``get_rmax_invoice_title(doc)`` consistently with other
+    ``get_rmax_*`` helpers.
+    """
+    return get_invoice_title(doc)
+
+
 def get_invoice_title(doc):
     """Return ``(en_title, ar_title)`` for a Sales Invoice / Delivery Note doc.
 

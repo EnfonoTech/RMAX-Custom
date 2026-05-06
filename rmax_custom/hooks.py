@@ -121,7 +121,7 @@ jinja = {
         "rmax_custom.print_helpers.get_rmax_customer_phone",
         "rmax_custom.print_helpers.get_rmax_letter_head_html",
         "rmax_custom.print_helpers.get_rmax_hijri_date",
-        "rmax_custom.print_helpers.get_invoice_title:get_rmax_invoice_title",
+        "rmax_custom.print_helpers.get_rmax_invoice_title",
     ]
 }
 
