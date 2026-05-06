@@ -541,6 +541,9 @@ fixtures = [
                     "Delivery Note-custom_inter_company_si",
                     "Delivery Note-custom_inter_company_status",
 
+                    # Delivery Note — Phase 4 consolidation backlink
+                    "Delivery Note-custom_consolidated_si",
+
                     # Company — NO VAT Sale accounts
                     "Company-custom_novat_naseef_account",
                     "Company-custom_novat_cogs_account",
