@@ -251,7 +251,9 @@ def _net_items_across_dns(dns):
         for row in dn.items:
             key = (row.item_code, row.uom)
             b = buckets.setdefault(key, {
-                "qty": 0, "amount": 0, "uom": row.uom, "src_rows": [],
+                "qty": 0, "amount": 0, "uom": row.uom,
+                "warehouse": row.get("warehouse") or dn.get("set_warehouse"),
+                "src_rows": [],
             })
             qty = sign * abs(flt(row.qty or 0))
             amount = sign * abs(flt(row.amount or (row.qty * row.rate) or 0))
@@ -273,8 +275,19 @@ def _build_consolidated_standard_si(dns, buckets):
     si.update_stock = 0
     if head.set_warehouse:
         si.set_warehouse = head.set_warehouse
+
+    # Resolve branch for GL accounting dimension — prefer explicit DN branch,
+    # then fall back to warehouse → branch mapping from Branch Configuration.
     if head.get("branch"):
         si.branch = head.get("branch")
+    elif head.set_warehouse:
+        try:
+            from rmax_custom.inter_branch import resolve_warehouse_branch
+            resolved = resolve_warehouse_branch(head.set_warehouse)
+            if resolved:
+                si.branch = resolved
+        except Exception:
+            pass
 
     # Inherit taxes from first non-return DN.
     for dn in dns:
@@ -291,11 +304,14 @@ def _build_consolidated_standard_si(dns, buckets):
         # Do not set delivery_note/dn_detail — netted qty cannot be attributed
         # to a single DN row and would trigger validate_multiple_billing.
         # DN linkage is tracked via custom_consolidated_si on each DN instead.
+        # Warehouse is set so auto_set_branch_from_warehouse can resolve the
+        # Branch accounting dimension required by the site.
         si.append("items", {
             "item_code": item_code,
             "qty": b["qty"],
             "uom": uom,
             "rate": rate,
+            "warehouse": b.get("warehouse"),
         })
 
     return si
