@@ -508,6 +508,9 @@ fixtures = [
                     "Customer-custom_vat_registration_number",
                     "Customer-custom_allow_duplicate_vat",
                     "Customer-custom_duplicate_vat_reason",
+                    "Customer-custom_customer_name_ar",
+                    "Customer-custom_mobile_ar",
+                    "Customer-custom_is_b2c",
 
                     # Branch — naming-series prefix per branch (drives auto-pick)
                     "Branch-custom_doc_prefix",
