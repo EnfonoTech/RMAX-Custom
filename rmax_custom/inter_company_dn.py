@@ -289,6 +289,20 @@ def sales_invoice_on_cancel(doc, method=None):
 	if linked:
 		frappe.db.commit()
 
+	# Clear the net-off consolidation stamp on every DN linked via
+	# custom_consolidated_si. (Set by api.delivery_note.consolidate_dns_to_si.)
+	consolidated_dns = frappe.get_all(
+		"Delivery Note",
+		filters={"custom_consolidated_si": doc.name},
+		pluck="name",
+	)
+	for dn_name in consolidated_dns:
+		frappe.db.set_value(
+			"Delivery Note", dn_name,
+			"custom_consolidated_si", None,
+			update_modified=False,
+		)
+
 
 def _source_dns_for_si(si_doc) -> set[str]:
 	names: set[str] = set()
