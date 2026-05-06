@@ -12,6 +12,29 @@
 
 const RMAX_INTER_COMPANY_PRICE_LIST = "Inter Company Price";
 
+// ---------------------------------------------------------------------------
+// Task 5.2: Client-side auto-fill of set_warehouse for Branch Users on new DNs
+// ---------------------------------------------------------------------------
+const RMAX_DN_WAREHOUSE_BYPASS_ROLES = [
+    "Sales Manager", "System Manager", "Sales Master Manager", "Stock Manager",
+];
+
+function _rmax_dn_autofill_source_warehouse(frm) {
+    if (!frm.is_new()) return;
+    if (frm.doc.set_warehouse) return;
+    if (frappe.session.user === "Administrator") return;
+    if (RMAX_DN_WAREHOUSE_BYPASS_ROLES.some((r) => frappe.user.has_role(r))) return;
+
+    frappe.call({
+        method: "rmax_custom.branch_defaults.get_user_branch_warehouses",
+        callback(r) {
+            if (r.message && r.message.length && !frm.doc.set_warehouse) {
+                frm.set_value("set_warehouse", r.message[0]);
+            }
+        },
+    });
+}
+
 const RMAX_BRANCH_RESTRICTED_ROLES = ["Branch User", "Stock User"];
 const RMAX_BRANCH_OVERRIDE_ROLES = [
     "System Manager",
@@ -62,6 +85,8 @@ frappe.ui.form.on("Delivery Note", {
         _rmax_dn_hide_target_warehouse(frm);
         // Re-hide after the grid finishes its first render.
         setTimeout(() => _rmax_dn_hide_target_warehouse(frm), 250);
+        // Auto-fill set_warehouse from the user's branch config for new DNs.
+        _rmax_dn_autofill_source_warehouse(frm);
     },
     items_on_form_rendered: function (frm) {
         _rmax_dn_hide_target_warehouse(frm);
