@@ -171,6 +171,29 @@ def get_rmax_letter_head_html(doc) -> str:
     return ""
 
 
+def get_invoice_title(doc):
+    """Return ``(en_title, ar_title)`` for a Sales Invoice / Delivery Note doc.
+
+    Resolves to the simplified pair when:
+    - ``Customer.custom_is_b2c`` is truthy, OR
+    - ``Customer.tax_id`` is empty/whitespace.
+
+    Both signals indicate a B2C transaction per ZATCA Phase-2 conventions and
+    the client docx (Section A.5).
+    """
+    customer_name = doc.get("customer") if hasattr(doc, "get") else getattr(doc, "customer", None)
+    if not customer_name:
+        return ("Tax Invoice", "فاتورة ضريبية")
+
+    customer = frappe.get_cached_doc("Customer", customer_name)
+    is_b2c = bool(customer.get("custom_is_b2c"))
+    has_vat = bool((customer.get("tax_id") or "").strip())
+
+    if is_b2c or not has_vat:
+        return ("Simplified Tax Invoice", "فاتورة ضريبية مبسطة")
+    return ("Tax Invoice", "فاتورة ضريبية")
+
+
 def get_rmax_customer_phone(doc) -> str:
     """
     Resolve customer phone for the print buyer block.
