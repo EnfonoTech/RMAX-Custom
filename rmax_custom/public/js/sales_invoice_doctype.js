@@ -24,9 +24,9 @@ function _rmax_si_branch_user_hide(frm) {
 
     frm.set_df_property("is_pos", "hidden", 1);
     frm.set_df_property("is_debit_note", "hidden", 1);
-    frm.set_df_property("payment_due_date", "hidden", 1);
+    frm.set_df_property("due_date", "hidden", 1);
 
-    frm.toggle_display("taxes_section_break", false);
+    frm.toggle_display("taxes_section", false);
     frm.toggle_display("taxes_and_charges", false);
     frm.toggle_display("taxes", false);
 }
