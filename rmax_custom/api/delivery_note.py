@@ -288,14 +288,14 @@ def _build_consolidated_standard_si(dns, buckets):
         if b["qty"] <= 0:
             continue
         rate = (b["amount"] / b["qty"]) if b["qty"] else 0
-        src = b["src_rows"][0]
+        # Do not set delivery_note/dn_detail — netted qty cannot be attributed
+        # to a single DN row and would trigger validate_multiple_billing.
+        # DN linkage is tracked via custom_consolidated_si on each DN instead.
         si.append("items", {
             "item_code": item_code,
             "qty": b["qty"],
             "uom": uom,
             "rate": rate,
-            "delivery_note": src["dn"],
-            "dn_detail": src["row"],
         })
 
     return si
