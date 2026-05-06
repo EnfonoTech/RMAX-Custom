@@ -512,6 +512,11 @@ fixtures = [
                     "Customer-custom_mobile_ar",
                     "Customer-custom_is_b2c",
 
+                    # Address — Arabic bilingual fields for ZATCA print format
+                    "Address-custom_address_line1_ar",
+                    "Address-custom_address_line2_ar",
+                    "Address-custom_city_ar",
+
                     # Branch — naming-series prefix per branch (drives auto-pick)
                     "Branch-custom_doc_prefix",
                     "Branch-custom_letter_head",
