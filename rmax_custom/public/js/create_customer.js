@@ -78,6 +78,13 @@ function open_create_customer_dialog(frm) {
                         reqd: 1,
                     },
                     {
+                        fieldname: "custom_customer_name_ar",
+                        label: __("Customer Name (Arabic)"),
+                        fieldtype: "Data",
+                        description: __("Optional. Renders on bilingual ZATCA print format and enables Arabic search."),
+                        reqd: 0,
+                    },
+                    {
                         fieldname: "mobile_no",
                         fieldtype: "Data",
                         label: "Mobile No",
@@ -249,6 +256,7 @@ function open_create_customer_dialog(frm) {
                             method: "rmax_custom.api.customer.create_customer_with_address",
                             args: {
                                 customer_name: values.customer_name,
+                                custom_customer_name_ar: values.custom_customer_name_ar || "",
                                 mobile_no: values.mobile_no,
                                 email_id: values.email_id || null,
                                 customer_type: customer_type,
