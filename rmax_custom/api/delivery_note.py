@@ -26,6 +26,11 @@ import frappe
 from frappe import _
 from frappe.utils import flt
 
+from rmax_custom.inter_company_dn import (
+    _build_inter_company_si_from_buckets,
+    _copy_tax_row,
+)
+
 
 STATUS_NOT_RETURNED = "Not Returned"
 STATUS_RETURNED = "Returned"
@@ -200,3 +205,134 @@ def _validate_batch(dns: List["frappe.model.document.Document"]) -> None:
                         "return Sales Invoice {1}. Cancel that SI first."
                     ).format(dn.name, existing_si)
                 )
+
+
+# ---------------------------------------------------------------------------
+# Mixed DN + Return DN consolidation — net-off by (item_code, uom)
+# ---------------------------------------------------------------------------
+
+
+def _normalise_consolidation_names(delivery_note_names):
+    if isinstance(delivery_note_names, str):
+        delivery_note_names = json.loads(delivery_note_names)
+    if not delivery_note_names:
+        frappe.throw(_("Select at least one Delivery Note"))
+    return delivery_note_names
+
+
+def _validate_consolidation_batch(dns):
+    if any(d.docstatus != 1 for d in dns):
+        frappe.throw(_("All Delivery Notes must be submitted"))
+
+    for d in dns:
+        existing = d.get("custom_consolidated_si")
+        if existing and frappe.db.exists(
+            "Sales Invoice", {"name": existing, "docstatus": ["!=", 2]}
+        ):
+            frappe.throw(_(
+                "DN {0} already linked to non-cancelled Sales Invoice {1}"
+            ).format(d.name, existing))
+
+    keys = ["customer", "company", "currency"]
+    first = {k: dns[0].get(k) for k in keys}
+    for d in dns[1:]:
+        for k in keys:
+            if d.get(k) != first[k]:
+                frappe.throw(_(
+                    "DN {0} mismatched on {1}: expected {2}, got {3}"
+                ).format(d.name, k, first[k], d.get(k)))
+
+
+def _net_items_across_dns(dns):
+    """Bucket rows by (item_code, uom). Return DNs subtract."""
+    buckets = {}
+    for dn in dns:
+        sign = -1 if dn.is_return else 1
+        for row in dn.items:
+            key = (row.item_code, row.uom)
+            b = buckets.setdefault(key, {
+                "qty": 0, "amount": 0, "uom": row.uom, "src_rows": [],
+            })
+            qty = sign * abs(flt(row.qty or 0))
+            amount = sign * abs(flt(row.amount or (row.qty * row.rate) or 0))
+            b["qty"] += qty
+            b["amount"] += amount
+            b["src_rows"].append({"dn": dn.name, "row": row.name})
+    return buckets
+
+
+def _build_consolidated_standard_si(dns, buckets):
+    head = dns[0]
+    si = frappe.new_doc("Sales Invoice")
+    si.customer = head.customer
+    si.customer_name = head.customer_name
+    si.company = head.company
+    si.currency = head.currency
+    si.posting_date = frappe.utils.today()
+    si.set_posting_time = 1
+    si.update_stock = 0
+    if head.set_warehouse:
+        si.set_warehouse = head.set_warehouse
+    if head.get("branch"):
+        si.branch = head.get("branch")
+
+    # Inherit taxes from first non-return DN.
+    for dn in dns:
+        if not dn.is_return and dn.taxes_and_charges:
+            si.taxes_and_charges = dn.taxes_and_charges
+            for t in dn.taxes:
+                si.append("taxes", _copy_tax_row(t))
+            break
+
+    for (item_code, uom), b in buckets.items():
+        if b["qty"] <= 0:
+            continue
+        rate = (b["amount"] / b["qty"]) if b["qty"] else 0
+        src = b["src_rows"][0]
+        si.append("items", {
+            "item_code": item_code,
+            "qty": b["qty"],
+            "uom": uom,
+            "rate": rate,
+            "delivery_note": src["dn"],
+            "dn_detail": src["row"],
+        })
+
+    return si
+
+
+@frappe.whitelist()
+def consolidate_dns_to_si(delivery_note_names):
+    """Mixed DN + Return DN consolidation into a single Draft Sales Invoice
+    with net-off by (item_code, uom)."""
+    names = _normalise_consolidation_names(delivery_note_names)
+    dns = [frappe.get_doc("Delivery Note", n) for n in names]
+
+    _validate_consolidation_batch(dns)
+    buckets = _net_items_across_dns(dns)
+
+    is_inter_company = bool(dns[0].get("custom_is_inter_company"))
+    if is_inter_company:
+        # All rows must agree.
+        if any(not d.get("custom_is_inter_company") for d in dns):
+            frappe.throw(_("Cannot mix inter-company and standard DNs in one batch"))
+        si = _build_inter_company_si_from_buckets(dns, buckets)
+    else:
+        si = _build_consolidated_standard_si(dns, buckets)
+
+    if not si.items:
+        frappe.throw(_(
+            "After netting returns, no item has positive qty. "
+            "Sales Invoice not created."
+        ))
+
+    si.insert(ignore_permissions=False)
+
+    for dn in dns:
+        frappe.db.set_value(
+            "Delivery Note", dn.name,
+            "custom_consolidated_si", si.name,
+            update_modified=False,
+        )
+
+    return si.name
