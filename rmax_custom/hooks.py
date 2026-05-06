@@ -121,6 +121,7 @@ jinja = {
         "rmax_custom.print_helpers.get_rmax_customer_phone",
         "rmax_custom.print_helpers.get_rmax_letter_head_html",
         "rmax_custom.print_helpers.get_rmax_hijri_date",
+        "rmax_custom.print_helpers.get_rmax_invoice_title",
     ]
 }
 
@@ -508,6 +509,14 @@ fixtures = [
                     "Customer-custom_vat_registration_number",
                     "Customer-custom_allow_duplicate_vat",
                     "Customer-custom_duplicate_vat_reason",
+                    "Customer-custom_customer_name_ar",
+                    "Customer-custom_mobile_ar",
+                    "Customer-custom_is_b2c",
+
+                    # Address — Arabic bilingual fields for ZATCA print format
+                    "Address-custom_address_line1_ar",
+                    "Address-custom_address_line2_ar",
+                    "Address-custom_city_ar",
 
                     # Branch — naming-series prefix per branch (drives auto-pick)
                     "Branch-custom_doc_prefix",
@@ -532,6 +541,9 @@ fixtures = [
                     "Delivery Note-custom_inter_company_branch",
                     "Delivery Note-custom_inter_company_si",
                     "Delivery Note-custom_inter_company_status",
+
+                    # Delivery Note — Phase 4 consolidation backlink
+                    "Delivery Note-custom_consolidated_si",
 
                     # Company — NO VAT Sale accounts
                     "Company-custom_novat_naseef_account",

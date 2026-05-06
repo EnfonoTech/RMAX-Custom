@@ -10,6 +10,27 @@
  * 3. Auto-negate qty on save for Credit Notes (is_return = 1).
  */
 
+const _RMAX_SI_HIDE_BYPASS_ROLES = [
+    "Sales Manager",
+    "System Manager",
+    "Sales Master Manager",
+    "Accounts Manager",
+];
+
+function _rmax_si_branch_user_hide(frm) {
+    if (frappe.session.user === "Administrator") return;
+    if (_RMAX_SI_HIDE_BYPASS_ROLES.some((r) => frappe.user.has_role(r))) return;
+    if (!frappe.user.has_role("Branch User")) return;
+
+    frm.set_df_property("is_pos", "hidden", 1);
+    frm.set_df_property("is_debit_note", "hidden", 1);
+    frm.set_df_property("due_date", "hidden", 1);
+
+    frm.toggle_display("taxes_section", false);
+    frm.toggle_display("taxes_and_charges", false);
+    frm.toggle_display("taxes", false);
+}
+
 const RMAX_UPDATE_STOCK_ELEVATED_ROLES = [
     "Sales Manager",
     "Sales Master Manager",
@@ -82,6 +103,7 @@ frappe.ui.form.on("Sales Invoice", {
                 "Locked for Branch Users. Contact a Sales Manager to change."
             );
         }
+        _rmax_si_branch_user_hide(frm);
     },
     before_save: function (frm) {
         _rmax_apply_branch_payment_accounts(frm);

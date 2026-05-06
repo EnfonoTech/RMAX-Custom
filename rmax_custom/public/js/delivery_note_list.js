@@ -44,12 +44,52 @@ frappe.listview_settings["Delivery Note"] = Object.assign(
                         _rmax_create_return_si(listview);
                     }
                 );
+                listview.page.add_actions_menu_item(
+                    __("Consolidate to Sales Invoice (Net Returns)"),
+                    function () {
+                        _rmax_consolidate_dns(listview);
+                    }
+                );
             } catch (e) {
                 console.warn("rmax_custom: Delivery Note list action wiring failed", e);
             }
         },
     }
 );
+
+function _rmax_consolidate_dns(listview) {
+    const selected = listview.get_checked_items().map((row) => row.name);
+    if (!selected.length) {
+        frappe.msgprint(__("Select at least one Delivery Note first."));
+        return;
+    }
+
+    frappe.confirm(
+        __(
+            "Consolidate {0} Delivery Note(s) into one Draft Sales Invoice with returns netted off?",
+            [selected.length]
+        ),
+        function () {
+            frappe.call({
+                method: "rmax_custom.api.delivery_note.consolidate_dns_to_si",
+                args: {
+                    delivery_note_names: selected,
+                },
+                freeze: true,
+                freeze_message: __("Building Sales Invoice..."),
+                callback: function (r) {
+                    if (r.message) {
+                        frappe.show_alert({
+                            message: __("Created {0}", [r.message]),
+                            indicator: "green",
+                        });
+                        frappe.set_route("Form", "Sales Invoice", r.message);
+                    }
+                },
+            });
+        }
+    );
+}
 
 function _rmax_create_inter_company_si(listview) {
     const selected = listview.get_checked_items().map((row) => row.name);

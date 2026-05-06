@@ -93,6 +93,7 @@ def create_customer_with_address(
     allow_duplicate_vat=0,
     duplicate_vat_reason=None,
     buyer_kind=None,
+    custom_customer_name_ar: str = "",
 ):
 
     if not customer_name:
@@ -182,6 +183,9 @@ def create_customer_with_address(
         "custom_allow_duplicate_vat": 1 if allow_duplicate_vat else 0,
         "custom_duplicate_vat_reason": duplicate_vat_reason if allow_duplicate_vat else None,
     })
+
+    if custom_customer_name_ar:
+        customer.custom_customer_name_ar = custom_customer_name_ar
 
     customer.insert(ignore_permissions=True)
 

@@ -565,6 +565,46 @@ def _branch_default_warehouse(branch_name: str) -> str | None:
     return None
 
 
+@frappe.whitelist()
+def get_user_branch_warehouses():
+    """Return the list of warehouse names mapped to the current user via
+    Branch Configuration → Branch Configuration Warehouse rows.
+
+    Order: warehouse rows in `idx` order per branch; first row is the
+    user's default warehouse.  Aggregates across all branches the user
+    belongs to (multi-branch users).
+
+    Used by delivery_note_doctype.js to client-side pre-fill set_warehouse
+    on new Delivery Note forms before the before_insert server hook fires.
+    """
+    user = frappe.session.user
+    if user in ("Administrator", "Guest"):
+        return []
+
+    branches = frappe.get_all(
+        "Branch Configuration User",
+        filters={"user": user},
+        pluck="parent",
+    )
+    if not branches:
+        return []
+
+    rows = frappe.get_all(
+        "Branch Configuration Warehouse",
+        filters={"parent": ("in", branches)},
+        fields=["warehouse"],
+        order_by="idx asc",
+    )
+    seen: set = set()
+    result = []
+    for r in rows:
+        wh = r.get("warehouse")
+        if wh and wh not in seen:
+            seen.add(wh)
+            result.append(wh)
+    return result
+
+
 def set_warehouse_from_branch(doc, method=None):
     """Before insert: prefill `set_warehouse` from the doc's branch's first
     configured warehouse.

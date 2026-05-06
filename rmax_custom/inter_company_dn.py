@@ -82,20 +82,63 @@ def _cleanup_legacy_pi_field():
 
 
 # ---------------------------------------------------------------------------
-# Whitelisted API — called from Delivery Note list action
+# SI-building helpers — shared by all consolidation paths
 # ---------------------------------------------------------------------------
 
 
-@frappe.whitelist()
-def create_si_from_multiple_dns(delivery_note_names):
-	"""Create one Draft Sales Invoice from multiple inter-company DNs."""
-	names = _normalise_names(delivery_note_names)
-	if not names:
-		frappe.throw(_("Select at least one Delivery Note."))
+def _build_positive_only_buckets(dns):
+	"""Build buckets without netting — every row sign=+1.
 
-	dns = [frappe.get_doc("Delivery Note", n) for n in names]
-	_validate_batch(dns)
+	Used by the existing inter-company SI consolidation flow which assumes
+	all selected DNs are positive (no return DNs in the batch).
 
+	Returns a dict keyed by ``(item_code, uom)`` where each value holds:
+	  - ``qty``      — accumulated absolute qty
+	  - ``amount``   — accumulated absolute amount (qty * rate)
+	  - ``uom``      — UOM string (mirrors the key component)
+	  - ``src_rows`` — list of ``{"dn": dn.name, "row": row.name, "item": row}``
+	                   preserving all per-row attributes for the first-row copy
+	"""
+	buckets = {}
+	for dn in dns:
+		for row in dn.items:
+			key = (row.item_code, row.uom)
+			b = buckets.setdefault(key, {
+				"qty": 0, "amount": 0, "uom": row.uom, "src_rows": [],
+			})
+			b["qty"] += flt(abs(row.qty or 0))
+			b["amount"] += flt(abs(row.amount or ((row.qty or 0) * (row.rate or 0))))
+			b["src_rows"].append({"dn": dn.name, "row": row.name, "item": row})
+	return buckets
+
+
+def _copy_tax_row(t):
+	"""Return a dict suitable for ``si.append("taxes", ...)`` from a DN tax row."""
+	return {
+		"charge_type": t.charge_type,
+		"account_head": t.account_head,
+		"description": t.description,
+		"rate": t.rate,
+		"tax_amount": t.tax_amount,
+		"cost_center": t.cost_center,
+		"included_in_print_rate": t.included_in_print_rate,
+	}
+
+
+def _build_inter_company_si_from_buckets(dns, buckets):
+	"""Build an inter-company Draft Sales Invoice from pre-netted buckets.
+
+	Used by both the all-positive path (``create_si_from_multiple_dns``) and
+	the new mixed-net path (``api.delivery_note.consolidate_dns_to_si``).
+
+	The caller is responsible for:
+	- setting ``si.set_target_warehouse`` + per-item ``target_warehouse``
+	- calling ``si.insert()``
+
+	Field resolution follows the SELLING-company (head.company) convention
+	used throughout this module — ``head.company`` is the selling side, not
+	``head.represents_company`` (which is the buying company).
+	"""
 	head = dns[0]
 	selling_company = head.company
 
@@ -113,35 +156,30 @@ def create_si_from_multiple_dns(delivery_note_names):
 	if head.get("custom_inter_company_branch"):
 		si.custom_inter_company_branch = head.custom_inter_company_branch
 
-	# Items — one SI row per DN item, preserving source reference
-	for dn in dns:
-		for item in dn.items:
-			si.append("items", {
-				"item_code": item.item_code,
-				"item_name": item.item_name,
-				"description": item.description,
-				"qty": item.qty,
-				"rate": item.rate,
-				"amount": item.amount,
-				"uom": item.uom,
-				"stock_uom": item.stock_uom,
-				"conversion_factor": item.conversion_factor or 1,
-				"warehouse": item.warehouse,
-				"delivery_note": dn.name,
-				"dn_detail": item.name,
-			})
+	# Items — one SI row per consolidated bucket
+	for (item_code, uom), b in buckets.items():
+		if flt(b["qty"]) <= 0:
+			continue
+		rate = flt(b["amount"]) / flt(b["qty"]) if flt(b["qty"]) else 0
+		src = b["src_rows"][0]
+		src_item = src["item"]  # original DN item row for attribute copying
+		si.append("items", {
+			"item_code": item_code,
+			"item_name": src_item.item_name,
+			"description": src_item.description,
+			"qty": b["qty"],
+			"rate": rate,
+			"uom": uom,
+			"stock_uom": src_item.stock_uom,
+			"conversion_factor": src_item.conversion_factor or 1,
+			"warehouse": src_item.warehouse,
+			"delivery_note": src["dn"],
+			"dn_detail": src["row"],
+		})
 
 	# Taxes — inherit from the first DN
 	for tax in (head.taxes or []):
-		si.append("taxes", {
-			"charge_type": tax.charge_type,
-			"account_head": tax.account_head,
-			"description": tax.description,
-			"rate": tax.rate,
-			"tax_amount": tax.tax_amount,
-			"cost_center": tax.cost_center,
-			"included_in_print_rate": tax.included_in_print_rate,
-		})
+		si.append("taxes", _copy_tax_row(tax))
 
 	# Inter Company Branch master lookup → cost center for the SELLING side.
 	branch = head.get("custom_inter_company_branch")
@@ -151,9 +189,32 @@ def create_si_from_multiple_dns(delivery_note_names):
 		for item in si.items:
 			item.cost_center = branch_data["cost_center"]
 
+	return si
+
+
+# ---------------------------------------------------------------------------
+# Whitelisted API — called from Delivery Note list action
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def create_si_from_multiple_dns(delivery_note_names):
+	"""Create one Draft Sales Invoice from multiple inter-company DNs."""
+	names = _normalise_names(delivery_note_names)
+	if not names:
+		frappe.throw(_("Select at least one Delivery Note."))
+
+	dns = [frappe.get_doc("Delivery Note", n) for n in names]
+	_validate_batch(dns)
+
+	buckets = _build_positive_only_buckets(dns)
+	si = _build_inter_company_si_from_buckets(dns, buckets)
+
 	# Internal-customer SIs require a target warehouse on every row — that's the
 	# BUYING-company warehouse which receives the auto-generated PI's stock.
 	# Fetch it from the buying-company row of the same Inter Company Branch.
+	head = dns[0]
+	branch = head.get("custom_inter_company_branch")
 	target_warehouse = _get_target_warehouse(branch, head.represents_company)
 	if not target_warehouse:
 		frappe.throw(
@@ -227,6 +288,20 @@ def sales_invoice_on_cancel(doc, method=None):
 		_refresh_dn_billing_status(dn_names)
 	if linked:
 		frappe.db.commit()
+
+	# Clear the net-off consolidation stamp on every DN linked via
+	# custom_consolidated_si. (Set by api.delivery_note.consolidate_dns_to_si.)
+	consolidated_dns = frappe.get_all(
+		"Delivery Note",
+		filters={"custom_consolidated_si": doc.name},
+		pluck="name",
+	)
+	for dn_name in consolidated_dns:
+		frappe.db.set_value(
+			"Delivery Note", dn_name,
+			"custom_consolidated_si", None,
+			update_modified=False,
+		)
 
 
 def _source_dns_for_si(si_doc) -> set[str]:
