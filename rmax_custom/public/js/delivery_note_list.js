@@ -39,9 +39,9 @@ frappe.listview_settings["Delivery Note"] = Object.assign(
                     }
                 );
                 listview.page.add_actions_menu_item(
-                    __("Create Return Invoice"),
+                    __("Create Consolidated Return Delivery Note"),
                     function () {
-                        _rmax_create_return_si(listview);
+                        _rmax_create_consolidated_return_dn(listview);
                     }
                 );
                 listview.page.add_actions_menu_item(
@@ -125,6 +125,43 @@ function _rmax_create_inter_company_si(listview) {
     );
 }
 
+function _rmax_create_consolidated_return_dn(listview) {
+    const selected = listview.get_checked_items().map((row) => row.name);
+    if (!selected.length) {
+        frappe.msgprint(__("Select at least one Delivery Note first."));
+        return;
+    }
+    frappe.confirm(
+        __(
+            "Build a single Draft Return Delivery Note from the selected {0} DN(s)? " +
+            "Stock reverses on submit.",
+            [selected.length]
+        ),
+        function () {
+            frappe.call({
+                method: "rmax_custom.api.delivery_note.create_consolidated_return_dn_from_dns",
+                args: { delivery_note_names: selected },
+                freeze: true,
+                freeze_message: __("Building Return Delivery Note..."),
+                callback: function (r) {
+                    if (r.message) {
+                        frappe.show_alert({
+                            message: __("Created {0}", [r.message]),
+                            indicator: "green",
+                        });
+                        frappe.set_route("Form", "Delivery Note", r.message);
+                    }
+                },
+            });
+        }
+    );
+}
+
+// DEPRECATED — Create Return Invoice (Return SI with update_stock=1) was
+// rejected by ERPNext's validate_delivery_note when DN linkage was set.
+// Replaced by _rmax_create_consolidated_return_dn above.
+// Kept here for rollback reference. Not wired to any menu item.
+/*
 function _rmax_create_return_si(listview) {
     const selected = listview.get_checked_items().map((row) => row.name);
     if (!selected.length) {
@@ -160,3 +197,4 @@ function _rmax_create_return_si(listview) {
         }
     );
 }
+*/

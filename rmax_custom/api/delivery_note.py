@@ -322,6 +322,204 @@ def _build_consolidated_standard_si(dns, buckets):
 
 
 @frappe.whitelist()
+def create_consolidated_return_dn_from_dns(delivery_note_names) -> str:
+    """Build a single Draft Return Delivery Note (is_return=1) consolidating
+    rows from multiple submitted source DNs. Stock reverses via SLE on submit.
+
+    Per ERPNext convention, Return DN with empty `return_against` is permitted
+    (validate_return early-returns at sales_and_purchase_return.py:21 when
+    `doc.return_against` is falsy). This skips per-row validate_returned_items,
+    so we replace it with our own batch-level guard.
+
+    Returns the new Return DN name.
+
+    Raises frappe.ValidationError on:
+    - any DN not submitted
+    - source DN is itself a return
+    - cross-DN customer/company/currency mismatch
+    - DN already linked to a non-cancelled Return DN
+    """
+    names = _normalise_consolidation_names(delivery_note_names)
+    dns = [frappe.get_doc("Delivery Note", n) for n in names]
+
+    _validate_return_dn_batch(dns)
+
+    head = dns[0]
+    rdn = frappe.new_doc("Delivery Note")
+    rdn.customer = head.customer
+    rdn.customer_name = head.customer_name
+    rdn.company = head.company
+    rdn.currency = head.currency
+    rdn.posting_date = frappe.utils.today()
+    rdn.set_posting_time = 1
+    rdn.is_return = 1
+    rdn.return_against = ""  # intentionally empty — validate_return early-exits when falsy
+
+    if head.get("branch"):
+        rdn.branch = head.get("branch")
+    if head.set_warehouse:
+        rdn.set_warehouse = head.set_warehouse
+
+    # Inherit taxes from first DN that has a tax template
+    for dn in dns:
+        if dn.taxes_and_charges:
+            rdn.taxes_and_charges = dn.taxes_and_charges
+            for t in dn.taxes:
+                rdn.append("taxes", _copy_dn_tax_row(t))
+            break
+
+    for dn in dns:
+        for row in dn.items:
+            # NOTE: dn_detail, against_sales_order, so_detail are intentionally
+            # NOT set. ERPNext's status_updater for is_return DNs uses dn_detail
+            # (join_field) with percent_join_field_parent="return_against" to
+            # update per_returned on the source DN. Since return_against is empty
+            # (our loophole), the updater resolves an empty DN name and throws
+            # DoesNotExistError. Traceability is provided by custom_return_dn
+            # stamp on the source DN instead.
+            rdn.append("items", {
+                "item_code": row.item_code,
+                "item_name": row.item_name,
+                "description": row.description,
+                "qty": -1 * abs(flt(row.qty)),
+                "uom": row.uom,
+                "stock_uom": row.stock_uom,
+                "conversion_factor": row.conversion_factor,
+                "rate": row.rate,
+                "incoming_rate": row.rate,  # preserve valuation for SLE
+                "warehouse": row.warehouse,
+                "cost_center": row.cost_center,
+                "expense_account": row.get("expense_account"),
+            })
+
+    rdn.insert(ignore_permissions=False)
+
+    # Stamp source DNs with the new Return DN name
+    for dn in dns:
+        frappe.db.set_value(
+            "Delivery Note", dn.name,
+            "custom_return_dn", rdn.name,
+            update_modified=False,
+        )
+
+    return rdn.name
+
+
+def _validate_return_dn_batch(dns):
+    """Pre-validation for create_consolidated_return_dn_from_dns."""
+    if not dns:
+        frappe.throw(_("No Delivery Notes resolved."))
+
+    if any(d.docstatus != 1 for d in dns):
+        frappe.throw(_("All Delivery Notes must be submitted."))
+
+    if any(d.is_return for d in dns):
+        frappe.throw(_("Cannot create Return DN from Return Delivery Notes."))
+
+    for d in dns:
+        existing = d.get("custom_return_dn")
+        if existing and frappe.db.exists(
+            "Delivery Note", {"name": existing, "docstatus": ["!=", 2]}
+        ):
+            frappe.throw(_(
+                "DN {0} already linked to non-cancelled Return DN {1}."
+            ).format(d.name, existing))
+
+    keys = ["customer", "company", "currency"]
+    first = {k: dns[0].get(k) for k in keys}
+    for d in dns[1:]:
+        for k in keys:
+            if d.get(k) != first[k]:
+                frappe.throw(_(
+                    "DN {0} mismatched on {1}: expected {2}, got {3}."
+                ).format(d.name, k, first[k], d.get(k)))
+
+
+def _copy_dn_tax_row(t):
+    """Copy a DN tax row for the return DN (negate tax_amount)."""
+    return {
+        "charge_type": t.charge_type,
+        "account_head": t.account_head,
+        "rate": t.rate,
+        "tax_amount": -1 * flt(t.tax_amount),
+        "description": t.description,
+        "cost_center": t.cost_center,
+        "included_in_print_rate": t.included_in_print_rate,
+    }
+
+
+def before_submit_return_dn_guard(doc, method=None):
+    """Hook: Delivery Note before_submit.
+
+    When a consolidated Return DN (is_return=1, return_against='') is about to
+    be submitted, strip the is_return status_updater rules that use
+    percent_join_field_parent='return_against'. Without return_against set,
+    ERPNext's status_updater tries to load `frappe.get_doc("Delivery Note", "")`
+    which raises DoesNotExistError.
+
+    The rules stripped are:
+    - DN Item → Sales Order Item returned_qty (via so_detail, no issue — no rows)
+    - DN Item → Delivery Note Item returned_qty (via dn_detail, uses
+      percent_join_field_parent='return_against' → triggers empty-name load)
+
+    Traceability for our Return DN is handled by the custom_return_dn stamp,
+    not ERPNext's per_returned/returned_qty fields.
+    """
+    if not (doc.is_return and not doc.return_against):
+        return
+    # Filter out rules whose percent_join_field_parent resolves to empty string
+    doc.status_updater = [
+        rule for rule in doc.status_updater
+        if not (
+            rule.get("percent_join_field_parent") == "return_against"
+        )
+    ]
+
+
+def clear_consolidated_return_dn_stamp(doc, method=None):
+    """Hook: Delivery Note on_cancel.
+
+    When a consolidated Return DN (is_return=1, custom_return_dn stamped on
+    sources) is cancelled, clear the stamp on every source DN so they become
+    eligible for a new return batch.
+
+    Also covers cancellation of non-return DNs that were erroneously stamped
+    (defensive: no-ops on non-return docs quickly).
+    """
+    if not doc.is_return:
+        return
+    linked_dns = frappe.get_all(
+        "Delivery Note",
+        filters={"custom_return_dn": doc.name},
+        pluck="name",
+    )
+    for dn_name in linked_dns:
+        frappe.db.set_value(
+            "Delivery Note", dn_name,
+            "custom_return_dn", None,
+            update_modified=False,
+        )
+
+
+def _DEPRECATED_create_return_si_from_multiple_dns(delivery_note_names):
+    """DEPRECATED — kept for reference only.
+
+    The original implementation attempted to create a Return SI with
+    update_stock=1 + DN item linkage (delivery_note / dn_detail). ERPNext's
+    validate_delivery_note (sales_invoice.py) rejects this combination with
+    "Stock cannot be updated against Delivery Note ...".
+
+    Use create_consolidated_return_dn_from_dns instead (builds a Return DN that
+    reverses stock via SLE). Then run consolidate_dns_to_si on the full set of
+    source DNs + the Return DN to produce a net-qty Sales Invoice.
+
+    This function is intentionally not registered as @frappe.whitelist and is
+    not wired in any list action.
+    """
+    return create_return_si_from_multiple_dns(delivery_note_names)
+
+
+@frappe.whitelist()
 def consolidate_dns_to_si(delivery_note_names):
     """Mixed DN + Return DN consolidation into a single Draft Sales Invoice
     with net-off by (item_code, uom)."""
