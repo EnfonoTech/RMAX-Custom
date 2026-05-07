@@ -667,6 +667,22 @@ fixtures = [
                     # opens a cross-branch quote / DN handed off by
                     # another branch.
 
+                    # Sales / Purchase / Quotation / DN / PR / PI / SI Item
+                    # cost_center — Item Default fetches the company-default
+                    # cost center (e.g. "Main - CL") into child rows, which
+                    # Branch Users have no User Permission for. The form-level
+                    # UP filter rejects the row before before_validate can
+                    # rewrite it via override_cost_center_from_branch. Setting
+                    # ignore_user_permissions=1 lets the row save; the hook
+                    # then rewrites the value to the branch's CC.
+                    "Sales Invoice Item-cost_center-ignore_user_permissions",
+                    "Sales Taxes and Charges-cost_center-ignore_user_permissions",
+                    "Delivery Note Item-cost_center-ignore_user_permissions",
+                    "Purchase Invoice Item-cost_center-ignore_user_permissions",
+                    "Purchase Taxes and Charges-cost_center-ignore_user_permissions",
+                    "Purchase Receipt Item-cost_center-ignore_user_permissions",
+                    "Quotation Item-cost_center-ignore_user_permissions",
+
                     # Default Print Format per doctype — RMAX bilingual / branded formats.
                     "Sales Invoice-default_print_format",
                     "Quotation-default_print_format",
