@@ -93,6 +93,13 @@ def create_return_si_from_multiple_dns(delivery_note_names) -> str:
         si.branch = branch
 
     # Build the items list by walking every selected DN's rows.
+    # NOTE: do NOT set `delivery_note` / `dn_detail` on item rows. ERPNext's
+    # `validate_delivery_note` (sales_invoice.py:1046) throws
+    # "Stock cannot be updated against Delivery Note ..." when update_stock=1
+    # AND any item carries a delivery_note link — it prevents double stock
+    # movement (the source DN already moved stock; this Return SI reverses
+    # it via its own Stock Ledger Entries). Reverse traceability lives on
+    # `DN.custom_return_si` stamp set below.
     for dn in dns:
         for row in dn.items:
             si.append("items", {
@@ -107,8 +114,6 @@ def create_return_si_from_multiple_dns(delivery_note_names) -> str:
                 "amount": -1 * abs(flt(row.amount)),
                 "warehouse": row.warehouse,
                 "cost_center": row.cost_center,
-                "delivery_note": dn.name,
-                "dn_detail": row.name,
             })
 
     si.flags.ignore_permissions = False
