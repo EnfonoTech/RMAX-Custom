@@ -370,6 +370,13 @@ def create_consolidated_return_dn_from_dns(delivery_note_names) -> str:
 
     for dn in dns:
         for row in dn.items:
+            # NOTE: dn_detail, against_sales_order, so_detail are intentionally
+            # NOT set. ERPNext's status_updater for is_return DNs uses dn_detail
+            # (join_field) with percent_join_field_parent="return_against" to
+            # update per_returned on the source DN. Since return_against is empty
+            # (our loophole), the updater resolves an empty DN name and throws
+            # DoesNotExistError. Traceability is provided by custom_return_dn
+            # stamp on the source DN instead.
             rdn.append("items", {
                 "item_code": row.item_code,
                 "item_name": row.item_name,
@@ -383,9 +390,6 @@ def create_consolidated_return_dn_from_dns(delivery_note_names) -> str:
                 "warehouse": row.warehouse,
                 "cost_center": row.cost_center,
                 "expense_account": row.get("expense_account"),
-                "dn_detail": row.name,
-                "against_sales_order": row.get("against_sales_order"),
-                "so_detail": row.get("so_detail"),
             })
 
     rdn.insert(ignore_permissions=False)
