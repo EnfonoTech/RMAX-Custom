@@ -1,5 +1,7 @@
-"""Tests for rmax_custom.api.delivery_note.consolidate_dns_to_si — mixed
-DN + Return DN net-off consolidation path."""
+"""Tests for rmax_custom.api.delivery_note:
+ - consolidate_dns_to_si       — mixed DN + Return DN net-off consolidation
+ - create_consolidated_return_dn_from_dns — RMAX-style Return DN from many DNs
+"""
 
 from __future__ import annotations
 
@@ -7,7 +9,10 @@ import frappe
 from frappe.tests.utils import FrappeTestCase
 from frappe.utils import flt
 
-from rmax_custom.api.delivery_note import consolidate_dns_to_si
+from rmax_custom.api.delivery_note import (
+    consolidate_dns_to_si,
+    create_consolidated_return_dn_from_dns,
+)
 
 
 class TestConsolidateDnsToSi(FrappeTestCase):
@@ -136,6 +141,78 @@ def _make_submitted_dn(customer, item, company, warehouse, *, qty, rate):
     dn.insert(ignore_permissions=True)
     dn.submit()
     return dn
+
+
+class TestConsolidatedReturnDn(FrappeTestCase):
+    """Tests for create_consolidated_return_dn_from_dns."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.customer = _ensure_customer("RMAX RDN Test")
+        cls.item = _ensure_item("RMAX-RDN-TEST-ITEM")
+        cls.company = _pick_default_company()
+        cls.warehouse = _pick_default_warehouse(cls.company)
+
+    def test_two_dns_consolidate_to_one_return_dn(self):
+        dn1 = _make_submitted_dn(self.customer, self.item, self.company,
+                                 self.warehouse, qty=10, rate=100)
+        dn2 = _make_submitted_dn(self.customer, self.item, self.company,
+                                 self.warehouse, qty=5, rate=100)
+
+        rdn_name = create_consolidated_return_dn_from_dns([dn1.name, dn2.name])
+        rdn = frappe.get_doc("Delivery Note", rdn_name)
+
+        self.assertEqual(rdn.is_return, 1)
+        self.assertFalse(rdn.return_against)
+        self.assertEqual(rdn.customer, self.customer)
+        self.assertEqual(len(rdn.items), 2)
+        # qty negated
+        self.assertEqual(flt(rdn.items[0].qty), -10)
+        self.assertEqual(flt(rdn.items[1].qty), -5)
+        # source stamps set
+        self.assertEqual(
+            frappe.db.get_value("Delivery Note", dn1.name, "custom_return_dn"), rdn_name
+        )
+        self.assertEqual(
+            frappe.db.get_value("Delivery Note", dn2.name, "custom_return_dn"), rdn_name
+        )
+
+    def test_cross_customer_throws(self):
+        c1 = _ensure_customer("RMAX RDN A")
+        c2 = _ensure_customer("RMAX RDN B")
+        dn_a = _make_submitted_dn(c1, self.item, self.company,
+                                  self.warehouse, qty=2, rate=10)
+        dn_b = _make_submitted_dn(c2, self.item, self.company,
+                                  self.warehouse, qty=2, rate=10)
+        with self.assertRaises(frappe.ValidationError):
+            create_consolidated_return_dn_from_dns([dn_a.name, dn_b.name])
+
+    def test_already_linked_throws(self):
+        dn = _make_submitted_dn(self.customer, self.item, self.company,
+                                self.warehouse, qty=5, rate=10)
+        create_consolidated_return_dn_from_dns([dn.name])
+        with self.assertRaises(frappe.ValidationError):
+            create_consolidated_return_dn_from_dns([dn.name])
+
+    def test_return_dn_input_throws(self):
+        dn = _make_submitted_dn(self.customer, self.item, self.company,
+                                self.warehouse, qty=5, rate=10)
+        rdn_name = create_consolidated_return_dn_from_dns([dn.name])
+        # try to "return a return"
+        with self.assertRaises(frappe.ValidationError):
+            create_consolidated_return_dn_from_dns([rdn_name])
+
+    def test_cancel_clears_stamp(self):
+        dn = _make_submitted_dn(self.customer, self.item, self.company,
+                                self.warehouse, qty=3, rate=10)
+        rdn_name = create_consolidated_return_dn_from_dns([dn.name])
+        rdn = frappe.get_doc("Delivery Note", rdn_name)
+        rdn.submit()
+        rdn.cancel()
+        self.assertFalse(
+            frappe.db.get_value("Delivery Note", dn.name, "custom_return_dn")
+        )
 
 
 def _make_submitted_return_dn(parent_dn, *, qty):

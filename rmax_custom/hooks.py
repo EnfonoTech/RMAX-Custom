@@ -255,6 +255,7 @@ doc_events = {
 		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+		"on_cancel": "rmax_custom.api.delivery_note.clear_consolidated_return_dn_stamp",
 	},
 	"Purchase Receipt": {
 		"before_insert": [
@@ -544,6 +545,9 @@ fixtures = [
 
                     # Delivery Note — Phase 4 consolidation backlink
                     "Delivery Note-custom_consolidated_si",
+
+                    # Delivery Note — consolidated Return DN backlink
+                    "Delivery Note-custom_return_dn",
 
                     # Company — NO VAT Sale accounts
                     "Company-custom_novat_naseef_account",
