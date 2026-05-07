@@ -71,6 +71,8 @@ BRANCH_USER_PERMISSIONS = [
     # Bin / SLE — needed by stock reports + warehouse stock popup
     {"parent": "Stock Ledger Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     {"parent": "Bin", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    # GL Entry — needed by General Ledger / Customer Statement report (read-only)
+    {"parent": "GL Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
 ]
 
 
@@ -132,6 +134,8 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     # Stock Ledger / Bin — needed by stock reports and warehouse stock popup
     {"parent": "Stock Ledger Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     {"parent": "Bin", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
+    # GL Entry — needed by General Ledger / Customer Statement report
+    {"parent": "GL Entry", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 1, "export": 0, "share": 0},
     # Item — explicit permlevel 0 + 1 because the standard DocPerm wipe means
     # Stock User loses access to permlevel 1 fields (standard_rate, valuation_rate)
     # which Item form reads on every open.
