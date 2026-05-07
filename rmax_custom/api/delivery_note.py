@@ -106,7 +106,6 @@ def create_return_si_from_multiple_dns(delivery_note_names) -> str:
                 "rate": row.rate,
                 "amount": -1 * abs(flt(row.amount)),
                 "warehouse": row.warehouse,
-                "income_account": row.income_account,
                 "cost_center": row.cost_center,
                 "delivery_note": dn.name,
                 "dn_detail": row.name,
