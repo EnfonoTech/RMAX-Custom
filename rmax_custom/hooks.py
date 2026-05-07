@@ -255,6 +255,7 @@ doc_events = {
 		],
 		"before_validate": "rmax_custom.branch_defaults.override_cost_center_from_branch",
 		"validate": "rmax_custom.inter_branch.auto_set_branch_from_warehouse",
+		"before_submit": "rmax_custom.api.delivery_note.before_submit_return_dn_guard",
 		"on_cancel": "rmax_custom.api.delivery_note.clear_consolidated_return_dn_stamp",
 	},
 	"Purchase Receipt": {

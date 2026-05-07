@@ -448,6 +448,34 @@ def _copy_dn_tax_row(t):
     }
 
 
+def before_submit_return_dn_guard(doc, method=None):
+    """Hook: Delivery Note before_submit.
+
+    When a consolidated Return DN (is_return=1, return_against='') is about to
+    be submitted, strip the is_return status_updater rules that use
+    percent_join_field_parent='return_against'. Without return_against set,
+    ERPNext's status_updater tries to load `frappe.get_doc("Delivery Note", "")`
+    which raises DoesNotExistError.
+
+    The rules stripped are:
+    - DN Item → Sales Order Item returned_qty (via so_detail, no issue — no rows)
+    - DN Item → Delivery Note Item returned_qty (via dn_detail, uses
+      percent_join_field_parent='return_against' → triggers empty-name load)
+
+    Traceability for our Return DN is handled by the custom_return_dn stamp,
+    not ERPNext's per_returned/returned_qty fields.
+    """
+    if not (doc.is_return and not doc.return_against):
+        return
+    # Filter out rules whose percent_join_field_parent resolves to empty string
+    doc.status_updater = [
+        rule for rule in doc.status_updater
+        if not (
+            rule.get("percent_join_field_parent") == "return_against"
+        )
+    ]
+
+
 def clear_consolidated_return_dn_stamp(doc, method=None):
     """Hook: Delivery Note on_cancel.
 
