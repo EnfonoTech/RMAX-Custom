@@ -1119,3 +1119,173 @@ Cancelling the SI (`sales_invoice_on_cancel` hook) clears those stamps so the DN
 ### 14.8 Client-Side
 
 `delivery_note_doctype.js` exposes the "Create Inter-Company SI" list action via `frappe.listview_settings`. Validates selection count + submission status before calling the whitelisted endpoint.
+
+---
+
+## 15. Print Formats (Bilingual ZATCA)
+
+Four bilingual print formats shipped via `rmax_custom/rmax_custom/print_format/`:
+
+| Format | DocType | File |
+|--------|---------|------|
+| `rmax_tax_invoice_zatca` | Sales Invoice | `rmax_tax_invoice_zatca.json` |
+| `rmax_quotation` | Quotation | `rmax_quotation.json` |
+| `rmax_delivery_note` | Delivery Note | `rmax_delivery_note.json` |
+| `rmax_purchase_order` | Purchase Order | `rmax_purchase_order.json` |
+
+### Layout
+
+4-column header table: EN Label | EN Value | AR Value | AR Label. Item table columns: Item Code | Description | Qty | UOM | Rate | Amount.
+
+### CSS Classes
+
+- `rz-rtl`: `direction: rtl; text-align: right` — applied to AR value cells. **DO NOT add trailing colons** inside RTL cells — Unicode bidi algorithm places the colon at the LEFT visual edge (opposite of intent). Values must be bare `{{ value }}` with no surrounding punctuation.
+- `rz-c-code`: item code column width (11%).
+
+### B2C Simplified Tax Invoice
+
+When `doc.contact_display == "B2C"` (or `doc.customer_group == "Individual"`) the title row switches to bilingual `"Simplified Tax Invoice / فاتورة ضريبية مبسطة"`. B2B stays `"Tax Invoice / فاتورة ضريبية"`.
+
+### Letterhead Integration
+
+`print_helpers.get_rmax_letter_head_html(doc)` cascades: `doc.letter_head` → `RMAX - <doc.branch>` → `RMAX - Clear Light` fallback. Frappe's standard `<div class="letter-head">` wrapper is hidden via CSS — operator's "No Letter Head" toggle in the print dialog is intentionally overridden.
+
+### Colon Rule (deployed 2026-05-10)
+
+All four formats had `{{ value }} :` or `: {{ value }}` in value cells. Removed — colon rendered at visual LEFT of RTL cell due to Unicode bidi. Value cells now contain bare `{{ value }}`.
+
+---
+
+## 16. Sales Invoice — Branch User UI Constraints
+
+Implemented in `sales_invoice_doctype.js` via `_rmax_si_branch_user_hide()`.
+
+### Hidden fields for Branch User (only)
+
+| Field / Section | Fieldname |
+|-----------------|-----------|
+| Is POS | `is_pos` |
+| Is Debit Note | `is_debit_note` |
+| Due Date | `payment_due_date` |
+| Taxes & Charges section | `taxes_section_break` |
+
+Plain Branch Users (no Sales Manager / Sales Master Manager / Stock Manager / System Manager / Administrator) see none of these. Admins see all.
+
+### update_stock lock
+
+`update_stock = 1` forced on new SI. Read-only for plain Branch Users. Bypass roles: Sales Manager, Sales Master Manager, Stock Manager, System Manager, Administrator.
+
+### Source Warehouse Auto-Fill
+
+On new SI: `set_warehouse` prefilled from the user's default Warehouse User Permission.
+
+---
+
+## 17. Delivery Note — Branch User Enhancements
+
+### Source Warehouse Auto-Fill (2026-05-06)
+
+`delivery_note_doctype.js` `_rmax_dn_autofill_source_warehouse()`:
+- Fires on `form.onload` when `is_new` and user is Branch User (no Sales/Stock/System Manager).
+- Sets `set_warehouse` from the user's first `Warehouse` User Permission (via `frappe.defaults.get_user_defaults("Warehouse")`).
+- Also fires on `refresh` to repopulate after page reload.
+
+### Return DN Consolidation (Net-Off Mode) (2026-05-07)
+
+`consolidate_dns_to_si` in `inter_company_dn.py` extended:
+- Accepts mixed normal DN + Return DN in one batch.
+- Net-off: quantities summed per item across DN polarity (negative for returns). Resulting SI rows use net qty — no separate credit note line.
+- `before_submit` guard on Return DN: strips `return_against` from `status_updater_rules` before submit to avoid "document is linked" block.
+- Drops `dn_detail` / `so_detail` from Return DN item rows on the consolidated SI (prevents ERPNext overbilling check).
+- Drops `delivery_note` linkage on Return SI item rows for same reason.
+- Drops `income_account` on Return SI item rows (ERPNext sets it from the source DN row; leave blank for standard tax calculation to apply).
+
+---
+
+## 18. Permission Additions (2026-05-07)
+
+### GL Entry — Read for Branch User + Stock User
+
+`setup.py` `BRANCH_USER_PERMISSIONS`:
+```python
+{"doctype": "GL Entry", "read": 1},
+```
+`STOCK_USER_EXTRA_PERMISSIONS`:
+```python
+{"doctype": "GL Entry", "read": 1},
+```
+Allows Branch and Stock Users to view GL Entries for their own documents (e.g. from the Ledger button on Sales Invoice).
+
+### Item-Table cost_center — ignore_user_permissions
+
+`Property Setter` added for `cost_center` fields on item child tables (Sales Invoice Item, Delivery Note Item, etc.):
+- `ignore_user_permissions = 1`
+- Prevents "Not permitted" when opening docs whose item rows were booked against another branch's cost center (cross-branch inter-company invoices, HO lines).
+- Added to `fixtures/property_setter.json` and `hooks.py` fixture filter.
+
+---
+
+## 19. Customer — Arabic Name Enhancements
+
+### Quick Entry Dialog (2026-05-10)
+
+`custom_customer_name_ar` Custom Field: `allow_in_quick_entry` changed from `0` → `1`.
+
+Effect: when a Branch User creates a Customer inline from SI / DN / Quotation (the quick-entry popup), the Arabic Name field now appears alongside the English name and mobile fields.
+
+### create_customer_with_address API (2026-05-06)
+
+`rmax_custom.api.customer.create_customer_with_address` accepts optional `custom_customer_name_ar` parameter. Passed through to the Customer doc on creation.
+
+### search_fields Property Setter (already deployed)
+
+`Customer-main-search_fields = customer_name,custom_customer_name_ar,mobile_no,custom_vat_registration_number`
+
+Allows searching customers by Arabic name or mobile in all Link fields that point to Customer.
+
+---
+
+## 20. Damage PWA (Mobile App)
+
+Frappe bench app. Source: `github.com/EnfonoTech/damage-pwa`, branch `develop`.
+
+### Architecture
+
+- **Frontend:** Vite + Vue 3 in `frontend/`. Builds to `damage_pwa/public/frontend/`.
+- **Capacitor shell:** `android-capacitor/` — separate `src/` directory with its own `platform.js`. Builds to `www/` via `npm run build` then `npx cap sync android`.
+- **Android project:** `damage-pwa-android/` — Gradle project, produces signed APK.
+- **Frappe routes:** `www/damage-pwa/index.py` serves the PWA at `/damage-pwa`.
+- **Custom DocType:** `damage_pwa_pin` — stores per-user PIN for mobile auth.
+- **API:** `api/auth.py` (PIN login), `api/inspect.py` (damage transfer endpoints).
+
+### Production Deployment (2026-05-10)
+
+- Installed on `rmaxerp.enfonoerp.com` (KSA 1 Lightnode).
+- SSH deploy key: `/home/frappe/.ssh/github_damage_pwa` (ed25519, added to GitHub repo).
+- `allow_cors` in `site_config.json`: `['https://localhost', 'capacitor://localhost', 'http://localhost']` — set by `after_install` hook automatically.
+- PWA URL: `https://rmaxerp.enfonoerp.com/damage-pwa`
+
+### Android APK
+
+- Version: **v1.0.19** — `rmax-wh-v1.0.19.apk`
+- GitHub Release: `https://github.com/EnfonoTech/damage-pwa/releases/tag/v1.0.19`
+- Keystore: `damage-pwa-android/keystore/damage-pwa.keystore`, alias `damage-pwa`, password `changeit`
+- `API_BASE` in both `frontend/src/utils/platform.js` and `android-capacitor/src/utils/platform.js` → `https://rmaxerp.enfonoerp.com`
+
+### Build Steps (new APK)
+
+```bash
+# 1. Build Capacitor shell
+cd android-capacitor && npm run build
+
+# 2. Sync to Android project
+npx cap sync android
+
+# 3. Build signed APK
+cd ../damage-pwa-android
+./gradlew assembleRelease \
+  -Pandroid.injected.signing.store.file=$(pwd)/keystore/damage-pwa.keystore \
+  -Pandroid.injected.signing.store.password=changeit \
+  -Pandroid.injected.signing.key.alias=damage-pwa \
+  -Pandroid.injected.signing.key.password=changeit
+```

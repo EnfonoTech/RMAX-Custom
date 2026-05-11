@@ -25,6 +25,7 @@ Two servers. Deploy to both on every merge to `main`.
 |------|--------|-----------|-----------|-----------|
 | rmax_dev2 | RMAX (5.189.131.148) | `41ef79dc-a2fd-418a-bd88-b5f5173aeaf7` | `/home/v15/frappe-bench` | `upstream` |
 | rmax-uat2.enfonoerp.com | AQRAR (185.193.19.184) | `3beb2d91-86d1-4d2d-ba0b-30955992455c` | `/home/v15/frappe-bench` | `upstream` |
+| rmaxerp.enfonoerp.com (**PROD**) | KSA 1 Lightnode (130.94.59.103) | `59073625-8d8b-4278-aabf-f64b8c85f8be` | `/home/frappe/frappe-bench` | `upstream` |
 
 ### Server Manager API
 ```bash
@@ -438,6 +439,35 @@ Implementation: `rmax_custom/inter_company_dn.py`. Operators batch multiple subm
 
 **Company Config Needed:** `custom_damage_loss_account` field on Company — required for write-off Stock Entry. Not yet configured.
 
+### Print Formats (Bilingual)
+
+Four bilingual ZATCA-compatible print formats in `rmax_custom/rmax_custom/print_format/`:
+- `rmax_tax_invoice_zatca` (Sales Invoice)
+- `rmax_quotation` (Quotation)
+- `rmax_delivery_note` (Delivery Note)
+- `rmax_purchase_order` (Purchase Order)
+
+**RTL rule:** Arabic value cells use `rz-rtl` class (`direction:rtl; text-align:right`). NEVER add colons inside these cells — bidi algorithm moves colon to visual LEFT (gotcha #29).
+
+**B2C mode:** when `customer_group == "Individual"`, title = `"Simplified Tax Invoice / فاتورة ضريبية مبسطة"`. B2B = `"Tax Invoice / فاتورة ضريبية"`.
+
+**Letterhead:** inline via `print_helpers.get_rmax_letter_head_html(doc)`. Cascades: `doc.letter_head` → `RMAX - <branch>` → `RMAX - Clear Light` master. Standard Frappe letterhead wrapper hidden via CSS.
+
+### Sales Invoice — Branch User Constraints
+
+`_rmax_si_branch_user_hide()` in `sales_invoice_doctype.js` hides for plain Branch Users:
+- `is_pos`, `is_debit_note`, `payment_due_date`, `taxes_section_break`
+
+`update_stock` forced `1` on new SI, read-only for Branch User. Bypass roles: Sales Manager, Sales Master Manager, Stock Manager, System Manager, Administrator.
+
+### Delivery Note — Branch User Enhancements
+
+`_rmax_dn_autofill_source_warehouse()` in `delivery_note_doctype.js`:
+- On new DN: auto-fills `set_warehouse` from user's first Warehouse User Permission.
+- Fires on `onload` (new) and `refresh` (reload).
+
+**Return DN consolidation:** `consolidate_dns_to_si` accepts mixed normal + Return DNs. Net-off mode: quantities summed by polarity. Before-submit guard strips `return_against` status_updater rules. Item rows on consolidated SI drop `dn_detail`, `so_detail`, `delivery_note`, `income_account`.
+
 ### List Filtering Logic
 
 `get_branch_warehouse_condition()` checks `tabBranch Configuration User` (NOT roles, NOT User Permissions) as source of truth. Returns warehouses from user's branch configs.
@@ -618,6 +648,10 @@ doctype_js = {
 26. **Unmapped warehouses silently skip the inter-branch SE hook.** When ANY item row's `s_warehouse` or `t_warehouse` doesn't resolve via `resolve_warehouse_branch()`, `_stock_entry_branch_pair` returns `(None, None, 0.0)` and the companion JE is not created. The SE itself submits successfully. RMAX's Damage warehouses (`Damage Jeddah - CNC`, `Damage Riyadh - CNC`) need explicit Branch Configuration mapping. Operational policy must be set: per-city (Damage Jeddah → Jeddah branch) vs centralized (all damage WHs → HO) vs dedicated (all damage WHs → Damage branch). Without a mapping, branch-to-damage transfers do not create inter-branch obligations and reconciliation reports will under-count those movements.
 27. **Companion JE inherits source valuation as-is.** `create_companion_inter_branch_je_for_stock_entry` and `_for_stock_transfer` use the source SE's `basic_amount` (or `qty * basic_rate` fallback). If the source warehouse Bin's `valuation_rate` is wrong (inflated by a bad PR / Stock Reconciliation / LCV), the JE faithfully posts that wrong number. Inter-branch is NOT the source of truth for valuation. Trace via Stock Ledger Entry → fix the upstream document → cancel + re-create the SE/ST.
 28. **`auto_set_branch_from_warehouse` handles Stock Entry rows that have BOTH `s_warehouse` and `t_warehouse`.** Lookup priority is `warehouse → s_warehouse → t_warehouse`. For Material Transfer rows the source-side `s_warehouse` is selected, so the row's branch reflects the SOURCE branch. The target-side branch on the GL Entry rows is corrected post-submit by `_retag_se_gl_entries` (which queries each GL row's `account.warehouse` and sets `branch` per leg).
+29. **RTL print cells: NEVER add colons inside `rz-rtl` value cells.** `direction: rtl; text-align: right` + a trailing colon on Latin/numeric content causes the Unicode bidi algorithm to place the colon at the visual LEFT of the cell — opposite of intent. Pattern `{{ value }} :` renders as `: value` visually. Use bare `{{ value }}` in all four print formats.
+30. **Return DN items must drop `dn_detail` / `so_detail` on consolidated SI.** ERPNext's overbilling check (`validate_multiple_billing`) rejects the SI if item rows reference `dn_detail` that's already invoiced. Strip both fields in `consolidate_dns_to_si` before inserting the Return item rows.
+31. **`allow_in_quick_entry` must be `1` for Custom Fields to appear in inline Customer creation.** Default is `0` — the quick-entry popup omits fields without this flag. `custom_customer_name_ar` was fixed 2026-05-10. Check this whenever adding a Custom Field that operators need during inline record creation.
+32. **Branch User item-table `cost_center` needs `ignore_user_permissions=1`.** Without it, opening any doc whose item rows carry a cost center from another branch raises "Not permitted". Applies to: Sales Invoice Item, Delivery Note Item, Quotation Item, Purchase Invoice Item, Purchase Receipt Item. Deployed 2026-05-07.
 
 ---
 
@@ -647,6 +681,7 @@ frappe 15.x, erpnext 15.x, hrms 15.x, grey_theme, ksa_compliance, fateh_trading,
 
 ## Documentation
 
-- **User docs:** https://rmax-docs.vercel.app (source: /Users/sayanthns/Documents/RMAX/rmax-docs/)
-- **Developer docs:** DOCUMENTATION.md in repo root
+- **User docs:** `https://rmax-docs.enfonoerp.com` (pending Coolify docs hub) — source: `/Users/sayanthns/Documents/RMAX/rmax-docs/index.html` (single HTML, deployed via Coolify on Contabo docs server). Old Vercel URL `rmax-docs.vercel.app` served stale version due to org repo restriction.
+- **Developer docs:** DOCUMENTATION.md in repo root (authoritative for implementation details)
 - **User guide HTML:** rmax_custom/public/html/user-guide.html (accessible from site)
+- **Damage PWA docs:** `https://github.com/EnfonoTech/damage-pwa` — APK releases at `/releases`
