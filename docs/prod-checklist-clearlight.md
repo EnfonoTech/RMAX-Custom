@@ -94,6 +94,8 @@ Tick boxes as items land.
 
 | Site | Server | Server ID | Bench path | User |
 |------|--------|-----------|------------|------|
-| **rmax.enfonoerp.com** (PROD) | SaaS Server 1 (161.97.130.108) | `3c312733-e6ea-4d4a-8fa1-5354f0e23732` | `/home/frappe/frappe-bench` | `frappe` |
+| **rmaxerp.enfonoerp.com** (PROD) | KSA 1 Lightnode (130.94.59.103) | `59073625-8d8b-4278-aabf-f64b8c85f8be` | `/home/frappe/frappe-bench` | `frappe` |
 | rmax-uat2.enfonoerp.com | AQRAR (185.193.19.184) | `3beb2d91-86d1-4d2d-ba0b-30955992455c` | `/home/v15/frappe-bench` | `v15` |
 | rmax_dev2 | RMAX (5.189.131.148) | `41ef79dc-a2fd-418a-bd88-b5f5173aeaf7` | `/home/v15/frappe-bench` | `v15` |
+
+> **Note:** rmax.enfonoerp.com (was on SaaS Server 1) dropped and archived 2026-05-09. Prod migrated to rmaxerp.enfonoerp.com on KSA 1 Lightnode. SSL cert via Let's Encrypt (expires 2026-08-07, auto-renews).
