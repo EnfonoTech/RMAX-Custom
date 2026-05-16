@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import cstr
+from frappe.utils import cint, cstr
 from frappe.core.doctype.user_permission.user_permission import get_permitted_documents
 import re
 
@@ -62,8 +62,32 @@ def enforce_vat_duplicate_rule(doc, method=None):
 
 
 def _get_default_customer_group():
-	permitted = get_permitted_documents("Customer Group")
-	return (permitted[0] if permitted else None) or frappe.db.get_single_value("Selling Settings", "customer_group") or "All Customer Groups"
+	"""Return a leaf (non-group) Customer Group safe to assign to a new Customer.
+
+	Priority:
+	1. Selling Settings default — only if it is a leaf (is_group = 0).
+	2. First non-group Customer Group found in the system (alphabetical).
+
+	Never returns a group-type CG — ERPNext rejects those on Customer.validate.
+	"""
+	# 1. Try Selling Settings configured default
+	cg = frappe.db.get_single_value("Selling Settings", "customer_group")
+	if cg and not cint(frappe.db.get_value("Customer Group", cg, "is_group")):
+		return cg
+
+	# 2. First non-group Customer Group in the system
+	leaf = frappe.get_all(
+		"Customer Group",
+		filters={"is_group": 0},
+		fields=["name"],
+		limit=1,
+		order_by="name asc",
+	)
+	if leaf:
+		return leaf[0].name
+
+	# Last resort — return whatever Selling Settings says; ERPNext will validate
+	return cg or "Individual"
 
 
 def _get_default_territory():
