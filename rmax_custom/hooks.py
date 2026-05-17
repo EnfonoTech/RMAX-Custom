@@ -629,8 +629,11 @@ fixtures = [
                     "Material Request Item-from_warehouse-ignore_user_permissions",
                     "Material Request Item-cost_center-ignore_user_permissions",
 
-                    # Stock Entry — ignore user permissions on warehouse/cost center
-                    # so branch users can view Stock Entries from approved Stock Transfers
+                    # Stock Entry — ignore user permissions on warehouse/cost center/branch
+                    # so branch users can view Stock Entries from approved Stock Transfers.
+                    # branch field is auto-set to the SOURCE branch by auto_set_branch_from_warehouse;
+                    # without ignore_user_permissions the TARGET-branch approver cannot open the SE.
+                    "Stock Entry-branch-ignore_user_permissions",
                     "Stock Entry-from_warehouse-ignore_user_permissions",
                     "Stock Entry-to_warehouse-ignore_user_permissions",
                     "Stock Entry Detail-s_warehouse-ignore_user_permissions",
