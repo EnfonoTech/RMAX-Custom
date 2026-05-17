@@ -119,7 +119,7 @@ STOCK_USER_EXTRA_PERMISSIONS = [
     {"parent": "Warehouse Pick List", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 0, "share": 0},
     # Damage workflow DocTypes
     {"parent": "Damage Slip", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
-    {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 0, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
+    {"parent": "Damage Transfer", "read": 1, "write": 1, "create": 1, "submit": 1, "cancel": 0, "delete": 0, "print": 1, "email": 0, "report": 1, "export": 1, "share": 0},
     {"parent": "Supplier Code", "read": 1, "write": 0, "create": 0, "submit": 0, "cancel": 0, "delete": 0, "print": 0, "email": 0, "report": 0, "export": 0, "share": 0},
     # Core master + stock support doctypes — Custom DocPerm on Branch User wiped
     # standard ERPNext permissions for these, so Stock User needs explicit rows.
