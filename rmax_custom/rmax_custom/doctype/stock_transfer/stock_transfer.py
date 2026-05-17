@@ -206,11 +206,16 @@ class StockTransfer(Document):
 				})
 		# Mark the SE so the inter-branch SE submit hook skips this one — the
 		# Stock Transfer's own on_submit drives the companion JE creation.
+		# ignore_permissions=True: the approval permission gate already ran in
+		# _validate_target_branch_user(); the SE creation is a system action and
+		# must not be blocked by the approver's User Permissions on the source branch.
 		se.flags.from_stock_transfer = True
-		se.insert()
+		se.flags.ignore_permissions = True
+		se.insert(ignore_permissions=True)
 		self.stock_entry = se.name
 		self.stock_entry_created = 1
 		se.flags.from_stock_transfer = True
+		se.flags.ignore_permissions = True
 		se.submit()
 		frappe.msgprint(
 			f'Stock Entry Created: <a href="/app/stock-entry/{se.name}">{se.name}</a>',
