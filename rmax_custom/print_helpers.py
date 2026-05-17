@@ -12,6 +12,7 @@ render gracefully on sites where Phase 2 settings are missing.
 from __future__ import annotations
 
 import frappe
+from frappe.utils import cint
 
 
 def get_rmax_zatca_qr(doc) -> str | None:
@@ -184,13 +185,15 @@ def get_rmax_invoice_title(doc):
 def get_invoice_title(doc):
     """Return ``(en_title, ar_title)`` for a Sales Invoice / Delivery Note doc.
 
-    Resolves to the simplified pair when:
-    - ``Customer.custom_is_b2c`` is truthy, OR
-    - ``Customer.tax_id`` is empty/whitespace.
-
-    Both signals indicate a B2C transaction per ZATCA Phase-2 conventions and
-    the client docx (Section A.5).
+    Priority:
+    1. Sales Return (is_return=1) → Credit Note / إشعار دائن (ZATCA requirement).
+    2. B2C (custom_is_b2c or no tax_id) → Simplified Tax Invoice / فاتورة ضريبية مبسطة.
+    3. Default → Tax Invoice / فاتورة ضريبية.
     """
+    # Credit Note takes priority — ZATCA mandates "Credit Note" title for returns
+    if cint(doc.get("is_return") if hasattr(doc, "get") else getattr(doc, "is_return", 0)):
+        return ("Credit Note", "إشعار دائن")
+
     customer_name = doc.get("customer") if hasattr(doc, "get") else getattr(doc, "customer", None)
     if not customer_name:
         return ("Tax Invoice", "فاتورة ضريبية")
