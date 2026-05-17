@@ -115,9 +115,15 @@ function rmax_show_pos_total_popup(frm) {
 	}
 	
 	frappe.flags.rmax_payment_popup_showing = true;
-	
+
+	// Always clear payment rows before (re)loading modes so that Branch
+	// Configuration changes are reflected immediately without a page reload.
+	// Amounts are entered inside the popup dialog — nothing is lost here.
+	frm.clear_table("payments");
+	frm.refresh_field("payments");
+
 	function do_show_popup() {
-		// Load payment modes from POS Profile if empty (or from Mode of Payment if no profile)
+		// Always fetch fresh payment modes — table was cleared above.
 		if (!frm.doc.payments || frm.doc.payments.length === 0) {
 			if (!frm.doc.pos_profile) {
 				frappe.call({

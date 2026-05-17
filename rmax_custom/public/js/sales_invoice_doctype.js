@@ -125,6 +125,14 @@ frappe.ui.form.on("Sales Invoice Payment", {
 
 let _rmax_branch_accounts_cache = null;
 
+// Clear the cache on every form refresh so Branch Configuration changes
+// (adding/removing MoPs) are reflected without a hard page reload.
+frappe.ui.form.on("Sales Invoice", {
+    refresh: function () {
+        _rmax_branch_accounts_cache = null;
+    },
+});
+
 function _rmax_get_branch_accounts(callback) {
     if (_rmax_branch_accounts_cache) {
         callback(_rmax_branch_accounts_cache);
