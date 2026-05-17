@@ -655,9 +655,45 @@ doctype_js = {
 
 ---
 
-## Installed Apps on rmax_dev2
+## Installed Apps
 
-frappe 15.x, erpnext 15.x, hrms 15.x, grey_theme, ksa_compliance, fateh_trading, rmax_custom, crm
+**rmax_dev2 (dev):** frappe 15.x, erpnext 15.x, hrms 15.x, grey_theme, ksa_compliance, fateh_trading, rmax_custom, crm
+
+**rmaxerp.enfonoerp.com (prod):** frappe 15.107.2, erpnext 15.107.0, zatca_vat_report, grey_theme, ksa_compliance 0.61.2, hrms 15.60.1, rmax_custom, damage_pwa, fateh_support 0.1.0
+
+### fateh_support PWA
+
+**GitHub:** `EnfonoTech/fateh-support` (private)
+**Local source:** `/Users/sayanthns/ERP - PWAs/fateh_trading/`
+**App Python module:** `fateh_support` (under `fateh_trading/fateh_support/`)
+**Prod URL:** `https://rmaxerp.enfonoerp.com/fateh/`
+**Roles:** `Fateh Viewer` (branch users, stock visibility), `Price Approver` (sales managers, below-cost approvals)
+
+**Deploy steps for updates:**
+```bash
+# 1. Rebuild frontend locally
+cd "/Users/sayanthns/ERP - PWAs/fateh_trading/frontend"
+pnpm build  # outputs to ../fateh_support/public/frontend/
+
+# 2. Commit + push to GitHub
+cd "/Users/sayanthns/ERP - PWAs/fateh_trading"
+git add -A && git commit -m "..." && git push origin main
+
+# 3. Pull on prod via Server Manager
+curl -s -X POST -H "Authorization: Bearer 9c9d7e54d54c30e9f264f202376c04ed4dd4bab9c57eb2b3" \
+  -H "Content-Type: application/json" \
+  -d '{"command": "cd /home/frappe/frappe-bench/apps/fateh_support && git pull origin main"}' \
+  http://207.180.209.80:3847/api/servers/59073625-8d8b-4278-aabf-f64b8c85f8be/command
+
+# 4. migrate + clear-cache + restart worker (standard deploy)
+```
+
+**Initial install notes (2026-05-17):**
+- All Python deps (`pywebpush`, `bcrypt`, `py-vapid`) were already present in bench venv
+- `bench build` blocked by maintenance window → manually symlinked `fateh_support/public` → `sites/assets/fateh_support`
+- VAPID keys generated and saved to `Fateh Support Settings` on prod
+- `cost_floor_price_list` not yet set — approval gate disabled until configured by admin
+- assets symlink: `ln -s /home/frappe/frappe-bench/apps/fateh_support/fateh_support/public /home/frappe/frappe-bench/sites/assets/fateh_support`
 
 ## Dependencies
 
