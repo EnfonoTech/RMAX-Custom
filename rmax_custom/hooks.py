@@ -73,7 +73,8 @@ doctype_js = {
     "Purchase Invoice": "public/js/purchase_invoice_doctype.js",
     "Delivery Note": "public/js/delivery_note_doctype.js",
     "Journal Entry": "public/js/journal_entry_bnpl_template.js",
-    "Stock Entry": "public/js/stock_entry_inter_branch.js"
+    "Stock Entry": "public/js/stock_entry_inter_branch.js",
+    "Payment Entry": "public/js/payment_entry_doctype.js",
 }
 doctype_list_js = {
     "Purchase Receipt": "public/js/purchase_receipt_list.js",
