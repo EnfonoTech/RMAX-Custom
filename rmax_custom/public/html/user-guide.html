@@ -550,7 +550,6 @@
     <a href="#bnpl-invoice"><span class="icon">&#128176;</span> BNPL on Sales Invoice</a>
     <a href="#bnpl-settlement"><span class="icon">&#128181;</span> BNPL Settlement</a>
     <a href="#bnpl-reports"><span class="icon">&#128202;</span> BNPL Reports</a>
-    <a href="#no-vat-sale"><span class="icon">&#128274;</span> No VAT Sale</a>
     <a href="#create-customer"><span class="icon">&#128100;</span> Create Customer</a>
     <a href="#warehouse-stock"><span class="icon">&#128230;</span> Warehouse Stock</a>
     <a href="#material-request"><span class="icon">&#128666;</span> Material Request</a>
@@ -711,7 +710,6 @@
         <tr><td>Price List</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
         <tr><td>Stock Entry</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
         <tr><td>Inter Company Branch</td><td>Yes</td><td>No</td><td>No</td><td>-</td><td>-</td></tr>
-        <tr><td>No VAT Sale</td><td colspan="5"><strong>No access</strong> &mdash; Sales Manager only (changed Apr 2026).</td></tr>
       </table>
     </div>
 
@@ -1052,57 +1050,6 @@
       <p>Lists submitted BNPL invoices with the SAR uplift attributed per Mode of Payment (Tabby / Tamara). Use this to reconcile surcharge collected against the provider's commission deductions on settlement statements &mdash; the two should match closely.</p>
       <p><strong>Filters:</strong> Company (required), From Date, To Date, Mode of Payment.</p>
       <p><strong>Columns:</strong> Sales Invoice, Posting Date, Customer, Mode of Payment, BNPL Uplift Attributed, Original Items Total.</p>
-    </div>
-  </section>
-
-  <!-- ─── NO VAT SALE ─── -->
-  <section class="section" id="no-vat-sale">
-    <h2>&#128274; No VAT Sale <span class="badge">Sales Manager</span></h2>
-    <p>The <strong>No VAT Sale</strong> doctype books a non-VAT-able cash sale. On submit it posts a Journal Entry (cash receipt) and a Stock Entry (Material Issue) against the company&rsquo;s Naseef &amp; Damage Written Off accounts.</p>
-
-    <div class="callout callout-warning">
-      <span class="callout-icon">&#128274;</span>
-      <div><strong>Access restricted:</strong> Only <strong>System Manager</strong> and <strong>Sales Manager</strong> can read, write, submit, or cancel No VAT Sales. Branch User / Stock User / Sales User / Accounts Manager were removed from this doctype as of Apr 2026.</div>
-    </div>
-
-    <div class="card">
-      <h3>Approval Workflow</h3>
-      <p>Every No VAT Sale moves through a four-state workflow before it submits:</p>
-      <table class="info-table">
-        <tr><th>Status</th><th>Who acts</th><th>What happens</th></tr>
-        <tr><td>Draft</td><td>Creator</td><td>Fill items, pick branch + warehouse + approver, click <strong>Send for Approval</strong>.</td></tr>
-        <tr><td>Pending Approval</td><td>Named approver</td><td>Receives a ToDo + email assignment. Clicks <strong>Approve &amp; Submit</strong> (with optional remarks) or <strong>Reject</strong> (mandatory reason).</td></tr>
-        <tr><td>Approved</td><td>System</td><td>Doc is submitted. JE + SE post automatically.</td></tr>
-        <tr><td>Rejected</td><td>Creator</td><td>Doc stays Draft with reason. Creator edits and resends.</td></tr>
-      </table>
-    </div>
-
-    <div class="card">
-      <h3>Step-by-Step (Creator)</h3>
-      <ol class="steps">
-        <li>Open <strong>No VAT Sale</strong> &rarr; <strong>+ New</strong>.</li>
-        <li>Pick <span class="field">Branch</span>. The <span class="field">Warehouse</span> dropdown is now restricted to that branch&rsquo;s configured warehouses.</li>
-        <li>Pick <span class="field">Warehouse</span>, customer name, mode of payment.</li>
-        <li>Add item rows. <em>Selling rate</em> auto-fetches from <strong>No VAT Price</strong> price list, <em>valuation rate</em> from the Bin.</li>
-        <li>Pick <span class="field">Approved By</span>. Required.</li>
-        <li>Save the draft.</li>
-        <li>Click <strong>Approval &rarr; Send for Approval</strong>. Status flips to <em>Pending Approval</em> and the approver gets notified.</li>
-      </ol>
-    </div>
-
-    <div class="card">
-      <h3>Step-by-Step (Approver)</h3>
-      <ol class="steps">
-        <li>Open the ToDo or click the email link.</li>
-        <li>Review items, totals, and warehouse.</li>
-        <li>Click <strong>Approval &rarr; Approve &amp; Submit</strong>. Optional remarks dialog. Doc is submitted; JE + SE post.</li>
-        <li>Or click <strong>Approval &rarr; Reject</strong>. Mandatory reason. Doc stays Draft, creator can edit + resend.</li>
-      </ol>
-    </div>
-
-    <div class="callout callout-tip">
-      <span class="callout-icon">&#128313;</span>
-      <div><strong>Sales Manager / System Manager</strong> can act as approver on any No VAT Sale even if they are not the named <em>Approved By</em> user.</div>
     </div>
   </section>
 
