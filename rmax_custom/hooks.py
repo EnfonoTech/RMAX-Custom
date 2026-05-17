@@ -59,7 +59,10 @@ app_include_js = [
 
 # include js in doctype views
 doctype_js = {
-    "Quotation": "rmax_custom/custom_scripts/quotation/quotation.js",
+    "Quotation": [
+        "rmax_custom/custom_scripts/quotation/quotation.js",
+        "public/js/create_customer.js",
+    ],
     "Purchase Receipt": "public/js/purchase receipt.js",
     "Landed Cost Voucher": "public/js/landed_cost_voucher.js",
     "Material Request": "public/js/material_request_doctype.js",

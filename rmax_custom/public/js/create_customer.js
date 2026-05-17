@@ -1,5 +1,6 @@
 /**
- * RMAX Custom: Create New Customer dialog (Sales Invoice).
+ * RMAX Custom: Create New Customer dialog.
+ * Registered on Sales Invoice and Quotation.
  *
  * Customer split:
  *   - B2C (Individual)  →  only Customer Name + Mobile No required.
@@ -8,19 +9,41 @@
  *
  * Sales Manager / Sales Master Manager / System Manager can tick the
  * Allow Duplicate VAT override (B2B only).
+ *
+ * opts.customerField  — the form field to populate after creation.
+ *                       "customer" for Sales Invoice, "party_name" for Quotation.
  */
 
 frappe.ui.form.on("Sales Invoice", {
     refresh: function (frm) {
-        add_create_customer_button(frm);
+        add_create_customer_button(frm, { customerField: "customer" });
     },
 });
 
-function add_create_customer_button(frm) {
-    if (frm.doc.docstatus !== 0) return;
-    if (!frm.fields_dict.customer) return;
+frappe.ui.form.on("Quotation", {
+    refresh: function (frm) {
+        // Only show on Draft Quotations to Customer (not Lead / Prospect)
+        if (frm.doc.quotation_to && frm.doc.quotation_to !== "Customer") return;
+        add_create_customer_button(frm, {
+            customerField: "party_name",
+            preAction: function () {
+                // Ensure quotation_to = Customer so party_name link points at Customer
+                if (!frm.doc.quotation_to || frm.doc.quotation_to !== "Customer") {
+                    frm.set_value("quotation_to", "Customer");
+                }
+            },
+        });
+    },
+});
 
-    const $field = frm.fields_dict.customer.$wrapper;
+function add_create_customer_button(frm, opts) {
+    opts = opts || {};
+    const customerField = opts.customerField || "customer";
+
+    if (frm.doc.docstatus !== 0) return;
+    if (!frm.fields_dict[customerField]) return;
+
+    const $field = frm.fields_dict[customerField].$wrapper;
     const $parent = $field.parent();
 
     if ($parent.find(".create-customer-btn").length) return;
@@ -33,12 +56,15 @@ function add_create_customer_button(frm) {
         </button>
     `);
     $btn.on("click", function () {
-        open_create_customer_dialog(frm);
+        if (opts.preAction) opts.preAction();
+        open_create_customer_dialog(frm, opts);
     });
     $field.before($btn);
 }
 
-function open_create_customer_dialog(frm) {
+function open_create_customer_dialog(frm, opts) {
+    opts = opts || {};
+    const customerField = opts.customerField || "customer";
     const company = frm.doc.company || frappe.defaults.get_default("company");
 
     const OVERRIDE_ROLES = ["Sales Manager", "Sales Master Manager", "System Manager"];
@@ -280,8 +306,8 @@ function open_create_customer_dialog(frm) {
                             },
                             callback: function (r) {
                                 if (r.message) {
-                                    frm.set_value("customer", r.message.customer);
-                                    frm.refresh_field("customer");
+                                    frm.set_value(customerField, r.message.customer);
+                                    frm.refresh_field(customerField);
                                     frappe.show_alert({
                                         message: r.message.message,
                                         indicator: "green",
