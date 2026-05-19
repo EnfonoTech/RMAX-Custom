@@ -159,6 +159,7 @@ function render_branch_dashboard(data) {
 	html += '<div class="action-grid">';
 	html += action_card('bar-chart-2', 'Stock Sales Report', 'Sales analysis', 'report', 'Stock Sales Report');
 	html += action_card('dollar-sign', 'Collection Report', 'Payment collections', 'report', 'Collection Report');
+	html += action_card('credit-card', 'Branch Receivables', 'Outstanding receivables', 'report', 'Branch Receivables');
 	html += action_card('layers', 'Stock Balance', 'Current stock levels', 'report', 'Stock Balance');
 	html += action_card('book-open', 'Stock Ledger', 'Stock transactions', 'report', 'Stock Ledger');
 	html += action_card('user', 'Customer Statement', 'Account statements', 'report', 'General Ledger');

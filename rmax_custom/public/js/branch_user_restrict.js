@@ -8,7 +8,7 @@
  * - Material Request, Stock Transfer, Damage Transfer
  * - Item, Item Price, Item Group
  * - Stock Entry
- * - Reports: Stock Sales Report, Collection Report, Stock Balance, Stock Ledger, General Ledger
+ * - Reports: Stock Sales Report, Collection Report, Branch Receivables, Stock Balance, Stock Ledger, General Ledger
  * - Their own User profile
  *
  * Everything else is blocked and redirected to dashboard.
@@ -46,6 +46,7 @@
 	var ALLOWED_REPORTS = [
 		"Stock Sales Report",
 		"Collection Report",
+		"Branch Receivables",
 		"Stock Balance",
 		"Stock Ledger",
 		"General Ledger",
