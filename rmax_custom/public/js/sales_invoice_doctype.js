@@ -29,6 +29,29 @@ function _rmax_si_branch_user_hide(frm) {
     frm.toggle_display("taxes_section", false);
     frm.toggle_display("taxes_and_charges", false);
     frm.toggle_display("taxes", false);
+
+    // Additional hides for branch users
+    frm.toggle_display("scan_barcode", false);
+    frm.toggle_display("time_sheet_list", false);
+    frm.toggle_display("timesheets", false);
+
+    // Move branch and selling_price_list OUT of their section wrappers BEFORE hiding
+    // those sections — once moved, the section's display:none won't cascade to them.
+    const branchFld = frm.fields_dict["branch"];
+    const updateStockFld = frm.fields_dict["update_stock"];
+    if (branchFld && updateStockFld) {
+        $(updateStockFld.wrapper).before($(branchFld.wrapper));
+    }
+
+    const priceListFld = frm.fields_dict["selling_price_list"];
+    const warehouseFld = frm.fields_dict["set_warehouse"];
+    if (priceListFld && warehouseFld) {
+        $(warehouseFld.wrapper).before($(priceListFld.wrapper));
+    }
+
+    // Now hide the sections — moved fields are already outside these wrappers
+    frm.toggle_display("accounting_dimensions_section", false);
+    frm.toggle_display("currency_and_price_list", false);
 }
 
 const RMAX_UPDATE_STOCK_ELEVATED_ROLES = [
