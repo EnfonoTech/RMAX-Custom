@@ -79,6 +79,16 @@
       "link_type": "Report",
       "onboard": 0,
       "type": "Link"
+    },
+    {
+      "hidden": 0,
+      "is_query_report": 1,
+      "label": "Branch Receivables",
+      "link_count": 0,
+      "link_to": "Branch Receivables",
+      "link_type": "Report",
+      "onboard": 0,
+      "type": "Link"
     }
   ],
   "modified": "2026-04-15 00:00:00.000000",
