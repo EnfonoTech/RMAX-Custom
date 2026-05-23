@@ -251,7 +251,8 @@ def _is_pre_cut_over(je) -> bool:
     if not cut_over:
         # No cut-over configured = injector disabled for this company
         return True
-    return getdate(je.posting_date) < getdate(cut_over)
+    doc_date = getattr(je, "posting_date", None) or getattr(je, "transaction_date", None)
+    return getdate(doc_date) < getdate(cut_over)
 
 
 def _strip_existing_auto_legs(je) -> None:
