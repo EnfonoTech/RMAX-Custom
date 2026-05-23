@@ -700,7 +700,7 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
     tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
 
     je = frappe.new_doc("Journal Entry")
-    je.posting_date = stock_transfer.posting_date
+    je.posting_date = stock_transfer.transaction_date
     je.company = company
     je.voucher_type = "Journal Entry"
     je.custom_source_doctype = "Stock Transfer"
