@@ -120,8 +120,7 @@ function open_create_supplier_dialog(frm, opts) {
                         fieldtype: "Data",
                         label: "VAT Registration Number",
                         depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
-                        mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
-                        description: "Exactly 15 digits.",
+                        description: "Optional. Exactly 15 digits if provided.",
                     },
                     {
                         fieldname: "allow_duplicate_vat",
@@ -227,18 +226,19 @@ function open_create_supplier_dialog(frm, opts) {
                     }
 
                     if (is_b2b) {
-                        const vat = values.custom_vat_registration_number || "";
-                        if (vat.length !== 15) {
-                            frappe.msgprint("VAT must be exactly 15 digits.");
-                            return;
-                        }
                         const pincode = values.pincode || "";
                         if (pincode.length !== 5) {
                             frappe.msgprint("Postal Code must be exactly 5 digits.");
                             return;
                         }
 
-                        if (!allow_dup) {
+                        const vat = values.custom_vat_registration_number || "";
+                        if (vat && vat.length !== 15) {
+                            frappe.msgprint("VAT must be exactly 15 digits.");
+                            return;
+                        }
+
+                        if (vat && !allow_dup) {
                             // Pre-check duplicate VAT before submit
                             frappe.db
                                 .get_value("Supplier", { custom_vat_registration_number: vat }, "name")

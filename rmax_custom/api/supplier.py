@@ -94,8 +94,6 @@ def create_supplier_with_address(
     )
 
     if is_b2b:
-        if not custom_vat_registration_number:
-            frappe.throw(_("VAT Registration Number is required for B2B (Company) suppliers."))
         for label, value in (
             (_("Address Line 1"), address_line1),
             (_("Building Number"), custom_building_number),
