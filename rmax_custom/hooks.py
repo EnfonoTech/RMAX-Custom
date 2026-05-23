@@ -341,6 +341,9 @@ doc_events = {
 	"Customer": {
 		"validate": "rmax_custom.api.customer.enforce_vat_duplicate_rule",
 	},
+	"Supplier": {
+		"validate": "rmax_custom.api.supplier.enforce_vat_duplicate_rule",
+	},
 	"Journal Entry": {
 		"before_insert": [
 			"rmax_custom.branch_defaults.set_naming_series_from_branch",

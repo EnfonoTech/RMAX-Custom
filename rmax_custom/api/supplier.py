@@ -1,10 +1,59 @@
 import frappe
 from frappe import _
+from frappe.utils import cint
+
+
+# Roles allowed to override the VAT duplicate check on Supplier
+VAT_DUPLICATE_OVERRIDE_ROLES = {
+    "Purchase Manager",
+    "Purchase Master Manager",
+    "System Manager",
+}
+
+
+def _can_override_vat_duplicate(user=None):
+    user = user or frappe.session.user
+    if user == "Administrator":
+        return True
+    return bool(set(frappe.get_roles(user)) & VAT_DUPLICATE_OVERRIDE_ROLES)
+
+
+def enforce_vat_duplicate_rule(doc, method=None):
+    """Supplier.validate hook — server-side VAT duplicate enforcement."""
+    vat = (doc.get("custom_vat_registration_number") or "").strip()
+    if not vat:
+        return
+
+    if len(vat) != 15:
+        frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
+
+    if doc.get("custom_allow_duplicate_vat"):
+        if not _can_override_vat_duplicate():
+            frappe.throw(
+                _("You do not have permission to override the VAT duplicate check. Required role: Purchase Manager.")
+            )
+        if not (doc.get("custom_duplicate_vat_reason") or "").strip():
+            frappe.throw(_("Duplicate VAT Reason is required when 'Allow Duplicate VAT' is ticked."))
+        return
+
+    clash = frappe.get_all(
+        "Supplier",
+        filters={
+            "custom_vat_registration_number": vat,
+            "name": ["!=", doc.name or ""],
+        },
+        fields=["name"],
+        limit=1,
+    )
+    if clash:
+        frappe.throw(
+            _("VAT Registration Number already used by Supplier: {0}. A Purchase Manager can tick 'Allow Duplicate VAT' to override.").format(clash[0].name)
+        )
 
 
 def _get_default_supplier_group():
     sg = frappe.db.get_single_value("Buying Settings", "supplier_group")
-    if sg and not frappe.db.get_value("Supplier Group", sg, "is_group"):
+    if sg and not cint(frappe.db.get_value("Supplier Group", sg, "is_group")):
         return sg
     leaf = frappe.get_all(
         "Supplier Group",
@@ -20,19 +69,65 @@ def _get_default_supplier_group():
 def create_supplier_with_address(
     supplier_name,
     mobile_no=None,
+    supplier_type="Company",
     email_id=None,
-    tax_id=None,
     country=None,
+    custom_vat_registration_number=None,
     address_type=None,
     address_line1=None,
     address_line2=None,
     custom_building_number=None,
-    custom_area=None,
     city=None,
     pincode=None,
+    custom_area=None,
+    allow_duplicate_vat=0,
+    duplicate_vat_reason=None,
+    buyer_kind=None,
 ):
     if not supplier_name:
         frappe.throw(_("Supplier Name is required"))
+
+    allow_duplicate_vat = int(allow_duplicate_vat or 0)
+
+    is_b2b = (buyer_kind or "").startswith("B2B") or (
+        not buyer_kind and supplier_type == "Company"
+    )
+
+    if is_b2b:
+        if not custom_vat_registration_number:
+            frappe.throw(_("VAT Registration Number is required for B2B (Company) suppliers."))
+        for label, value in (
+            (_("Address Line 1"), address_line1),
+            (_("Building Number"), custom_building_number),
+            (_("Area/District"), custom_area),
+            (_("City/Town"), city),
+            (_("Postal Code"), pincode),
+        ):
+            if not value:
+                frappe.throw(_("{0} is required for B2B (Company) suppliers.").format(label))
+        if pincode and len(str(pincode)) != 5:
+            frappe.throw(_("Postal Code must be exactly 5 digits."))
+
+    if custom_vat_registration_number:
+        if len(str(custom_vat_registration_number)) != 15:
+            frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
+
+        if allow_duplicate_vat:
+            if not _can_override_vat_duplicate():
+                frappe.throw(
+                    _("You do not have permission to override the VAT duplicate check. Required role: Purchase Manager.")
+                )
+            if not (duplicate_vat_reason and duplicate_vat_reason.strip()):
+                frappe.throw(_("Duplicate VAT Reason is required when overriding the VAT duplicate check."))
+        else:
+            clash = frappe.db.exists(
+                "Supplier",
+                {"custom_vat_registration_number": custom_vat_registration_number},
+            )
+            if clash:
+                frappe.throw(
+                    _("VAT Registration Number already used by Supplier: {0}. A Purchase Manager can tick 'Allow Duplicate VAT' on the Supplier to override.").format(clash)
+                )
 
     if frappe.db.exists("Supplier", {"supplier_name": supplier_name}):
         frappe.throw(_("Supplier '{0}' already exists").format(supplier_name))
@@ -45,27 +140,32 @@ def create_supplier_with_address(
     supplier = frappe.get_doc({
         "doctype": "Supplier",
         "supplier_name": supplier_name,
+        "supplier_type": supplier_type or "Company",
         "supplier_group": _get_default_supplier_group(),
         "country": country,
         "mobile_no": mobile_no or None,
         "email_id": email_id or None,
-        "tax_id": tax_id or None,
+        "custom_vat_registration_number": custom_vat_registration_number,
+        "custom_allow_duplicate_vat": 1 if allow_duplicate_vat else 0,
+        "custom_duplicate_vat_reason": duplicate_vat_reason if allow_duplicate_vat else None,
     })
     supplier.insert(ignore_permissions=True)
 
     address_name = None
-    has_address = any([address_line1, city, custom_area, custom_building_number, pincode])
-    if has_address:
+    has_address_payload = any([
+        address_line1, address_line2, city, custom_area, custom_building_number, pincode,
+    ])
+    if has_address_payload:
         address = frappe.get_doc({
             "doctype": "Address",
             "address_title": supplier_name,
             "address_type": address_type or "Billing",
             "address_line1": address_line1,
-            "address_line2": address_line2 or None,
+            "address_line2": address_line2,
             "city": city,
-            "custom_area": custom_area or None,
-            "custom_building_number": custom_building_number or None,
-            "pincode": pincode or None,
+            "custom_area": custom_area,
+            "custom_building_number": custom_building_number,
+            "pincode": pincode,
             "country": country,
             "is_primary_address": 1,
             "is_shipping_address": 1,

@@ -201,6 +201,7 @@ def after_migrate():
     setup_damage_user_permissions()
     setup_purchase_manager_supplier_code()
     setup_vat_duplicate_override_perms()
+    setup_supplier_vat_override_perms()
     setup_report_role_grants()
     setup_branch_user_module_profile()
     setup_damage_user_module_profile()
@@ -320,6 +321,45 @@ def setup_vat_duplicate_override_perms():
             frappe.get_doc({
                 "doctype": "Custom DocPerm",
                 "parent": "Customer",
+                "parenttype": "DocType",
+                "parentfield": "permissions",
+                "role": role,
+                "permlevel": 1,
+                "read": 1,
+                "write": 1,
+            }).insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+# Roles allowed to tick custom_allow_duplicate_vat on Supplier (permlevel 1)
+SUPPLIER_VAT_DUPLICATE_OVERRIDE_ROLES = ("Purchase Manager", "Purchase Master Manager", "System Manager")
+
+
+def setup_supplier_vat_override_perms():
+    """Grant permlevel=1 write on Supplier to roles allowed to override VAT duplicate check."""
+    if not frappe.db.exists("DocType", "Supplier"):
+        return
+
+    for role in SUPPLIER_VAT_DUPLICATE_OVERRIDE_ROLES:
+        if not frappe.db.exists("Role", role):
+            continue
+
+        existing = frappe.db.exists("Custom DocPerm", {
+            "parent": "Supplier",
+            "role": role,
+            "permlevel": 1,
+        })
+
+        if existing:
+            frappe.db.set_value("Custom DocPerm", existing, {
+                "read": 1,
+                "write": 1,
+            })
+        else:
+            frappe.get_doc({
+                "doctype": "Custom DocPerm",
+                "parent": "Supplier",
                 "parenttype": "DocType",
                 "parentfield": "permissions",
                 "role": role,
