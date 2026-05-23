@@ -3,7 +3,6 @@ from frappe import _
 from frappe.utils import cint
 
 
-# Roles allowed to override the VAT duplicate check on Supplier
 VAT_DUPLICATE_OVERRIDE_ROLES = {
     "Purchase Manager",
     "Purchase Master Manager",
@@ -19,12 +18,12 @@ def _can_override_vat_duplicate(user=None):
 
 
 def enforce_vat_duplicate_rule(doc, method=None):
-    """Supplier.validate hook — server-side VAT duplicate enforcement."""
-    vat = (doc.get("custom_vat_registration_number") or "").strip()
-    if not vat:
+    """Supplier.validate hook — server-side tax_id duplicate enforcement."""
+    tax_id = (doc.get("tax_id") or "").strip()
+    if not tax_id:
         return
 
-    if len(vat) != 15:
+    if len(tax_id) != 15:
         frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
 
     if doc.get("custom_allow_duplicate_vat"):
@@ -39,7 +38,7 @@ def enforce_vat_duplicate_rule(doc, method=None):
     clash = frappe.get_all(
         "Supplier",
         filters={
-            "custom_vat_registration_number": vat,
+            "tax_id": tax_id,
             "name": ["!=", doc.name or ""],
         },
         fields=["name"],
@@ -72,7 +71,7 @@ def create_supplier_with_address(
     supplier_type="Company",
     email_id=None,
     country=None,
-    custom_vat_registration_number=None,
+    tax_id=None,
     address_type=None,
     address_line1=None,
     address_line2=None,
@@ -89,25 +88,9 @@ def create_supplier_with_address(
 
     allow_duplicate_vat = int(allow_duplicate_vat or 0)
 
-    is_b2b = (buyer_kind or "").startswith("B2B") or (
-        not buyer_kind and supplier_type == "Company"
-    )
-
-    if is_b2b:
-        for label, value in (
-            (_("Address Line 1"), address_line1),
-            (_("Building Number"), custom_building_number),
-            (_("Area/District"), custom_area),
-            (_("City/Town"), city),
-            (_("Postal Code"), pincode),
-        ):
-            if not value:
-                frappe.throw(_("{0} is required for B2B (Company) suppliers.").format(label))
-        if pincode and len(str(pincode)) != 5:
-            frappe.throw(_("Postal Code must be exactly 5 digits."))
-
-    if custom_vat_registration_number:
-        if len(str(custom_vat_registration_number)) != 15:
+    if tax_id:
+        tax_id = tax_id.strip()
+        if len(tax_id) != 15:
             frappe.throw(_("VAT Registration Number must be exactly 15 digits."))
 
         if allow_duplicate_vat:
@@ -118,10 +101,7 @@ def create_supplier_with_address(
             if not (duplicate_vat_reason and duplicate_vat_reason.strip()):
                 frappe.throw(_("Duplicate VAT Reason is required when overriding the VAT duplicate check."))
         else:
-            clash = frappe.db.exists(
-                "Supplier",
-                {"custom_vat_registration_number": custom_vat_registration_number},
-            )
+            clash = frappe.db.exists("Supplier", {"tax_id": tax_id})
             if clash:
                 frappe.throw(
                     _("VAT Registration Number already used by Supplier: {0}. A Purchase Manager can tick 'Allow Duplicate VAT' on the Supplier to override.").format(clash)
@@ -143,7 +123,7 @@ def create_supplier_with_address(
         "country": country,
         "mobile_no": mobile_no or None,
         "email_id": email_id or None,
-        "custom_vat_registration_number": custom_vat_registration_number,
+        "tax_id": tax_id or None,
         "custom_allow_duplicate_vat": 1 if allow_duplicate_vat else 0,
         "custom_duplicate_vat_reason": duplicate_vat_reason if allow_duplicate_vat else None,
     })
