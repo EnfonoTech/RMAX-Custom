@@ -142,6 +142,8 @@ function open_create_supplier_dialog(frm, opts) {
                         fieldname: "address_line1",
                         fieldtype: "Data",
                         label: "Address Line 1",
+                        mandatory_depends_on:
+                            "eval:doc.address_line2 || doc.custom_building_number || doc.custom_area || doc.city || doc.pincode",
                     },
                     {
                         fieldname: "address_line2",

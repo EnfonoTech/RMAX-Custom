@@ -130,9 +130,9 @@ def create_supplier_with_address(
     supplier.insert(ignore_permissions=True)
 
     address_name = None
-    has_address_payload = any([
-        address_line1, address_line2, city, custom_area, custom_building_number, pincode,
-    ])
+    # address_line1 is mandatory in ERPNext's Address doctype; skip the insert
+    # entirely if it's missing so partial fills don't raise a validation error.
+    has_address_payload = bool(address_line1)
     if has_address_payload:
         address = frappe.get_doc({
             "doctype": "Address",
