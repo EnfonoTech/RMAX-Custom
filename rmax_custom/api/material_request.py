@@ -1,8 +1,24 @@
 import json
 
 import frappe
-from frappe.utils import nowdate, flt, add_days
+from frappe.utils import nowdate, flt, add_days, getdate
 from frappe import _
+
+
+def fix_schedule_dates(doc, method=None):
+    """Auto-bump item schedule_date values that fall before transaction_date.
+
+    ERPNext's validate_schedule_date throws if any item's Required By Date is
+    earlier than the document's Transaction Date. This hook runs before that
+    check and silently raises any past dates up to transaction_date so the
+    user never sees the error.
+    """
+    if not doc.transaction_date:
+        return
+    txn = getdate(doc.transaction_date)
+    for row in doc.get("items") or []:
+        if row.schedule_date and getdate(row.schedule_date) < txn:
+            row.schedule_date = txn
 
 
 @frappe.whitelist()

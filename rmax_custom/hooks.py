@@ -284,6 +284,7 @@ doc_events = {
 			"rmax_custom.branch_defaults.set_letter_head_from_branch",
 			"rmax_custom.branch_defaults.set_warehouse_from_branch",
 		],
+		"before_validate": "rmax_custom.api.material_request.fix_schedule_dates",
 	},
 	"Sales Order": {
 		"before_insert": [
