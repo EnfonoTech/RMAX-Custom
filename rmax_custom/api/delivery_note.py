@@ -24,7 +24,7 @@ from typing import List
 
 import frappe
 from frappe import _
-from frappe.utils import flt
+from frappe.utils import cstr, flt
 
 from rmax_custom.inter_company_dn import (
     _build_inter_company_si_from_buckets,
@@ -34,6 +34,122 @@ from rmax_custom.inter_company_dn import (
 
 STATUS_NOT_RETURNED = "Not Returned"
 STATUS_RETURNED = "Returned"
+
+
+# ---------------------------------------------------------------------------
+# DN Return — Source DN Lookup
+# ---------------------------------------------------------------------------
+
+
+@frappe.whitelist()
+def find_source_delivery_notes(customer: str, items) -> list:
+    """Given a customer and a list of items being returned, find submitted
+    Delivery Notes that contain those items with remaining returnable qty.
+
+    Returns a list of candidate DNs ranked by match score (most items
+    matched first), then by posting_date descending (most recent first).
+
+    Args:
+        customer: Customer name (Link field value)
+        items: JSON list of {"item_code": str, "qty": float}
+
+    Returns:
+        [
+          {
+            "name": "DN-0001",
+            "posting_date": "2026-05-01",
+            "score": 3,            # how many of the requested items were found
+            "items": [
+              {
+                "item_code": "ITEM-001",
+                "item_name": "...",
+                "qty": 10.0,
+                "returned_qty": 2.0,
+                "returnable_qty": 8.0,
+                "uom": "Nos",
+                "rate": 100.0,
+                "warehouse": "Main Warehouse - RMAX",
+              },
+              ...
+            ]
+          },
+          ...
+        ]
+    """
+    frappe.has_permission("Delivery Note", ptype="read", throw=True)
+
+    if not customer:
+        frappe.throw(_("customer is required"))
+
+    if isinstance(items, str):
+        items = frappe.parse_json(items)
+
+    if not items:
+        frappe.throw(_("At least one item is required"))
+
+    item_codes = list({cstr(i.get("item_code")) for i in items if i.get("item_code")})
+    if not item_codes:
+        frappe.throw(_("No valid item codes provided"))
+
+    # Single parameterised query — no string interpolation
+    rows = frappe.db.sql(
+        """
+        SELECT
+            dn.name,
+            dn.posting_date,
+            dn.customer,
+            dni.item_code,
+            dni.item_name,
+            dni.qty,
+            COALESCE(dni.returned_qty, 0) AS returned_qty,
+            dni.uom,
+            dni.rate,
+            dni.warehouse
+        FROM `tabDelivery Note` dn
+        INNER JOIN `tabDelivery Note Item` dni ON dni.parent = dn.name
+        WHERE
+            dn.docstatus = 1
+            AND dn.is_return = 0
+            AND dn.customer = %s
+            AND dni.item_code IN %s
+            AND (dni.qty - COALESCE(dni.returned_qty, 0)) > 0
+        ORDER BY dn.posting_date DESC, dn.name DESC
+        """,
+        (customer, tuple(item_codes)),
+        as_dict=True,
+    )
+
+    # Group by DN name, build result structure
+    dn_map: dict = {}
+    for r in rows:
+        if r.name not in dn_map:
+            dn_map[r.name] = {
+                "name": r.name,
+                "posting_date": str(r.posting_date),
+                "score": 0,
+                "items": [],
+            }
+        returnable = flt(r.qty) - flt(r.returned_qty)
+        dn_map[r.name]["items"].append(
+            {
+                "item_code": r.item_code,
+                "item_name": r.item_name,
+                "qty": flt(r.qty),
+                "returned_qty": flt(r.returned_qty),
+                "returnable_qty": returnable,
+                "uom": r.uom,
+                "rate": flt(r.rate),
+                "warehouse": r.warehouse,
+            }
+        )
+        dn_map[r.name]["score"] += 1
+
+    # Sort: most matched items first, then most recent date
+    results = sorted(
+        dn_map.values(),
+        key=lambda d: (-d["score"], d["posting_date"]),
+    )
+    return results
 
 
 @frappe.whitelist()
