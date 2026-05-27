@@ -213,7 +213,7 @@ def create_pos_payments_for_invoice(sales_invoice: str, payments: str | list):
 		outstanding = frappe.utils.flt(si.outstanding_amount)
 		amount = frappe.utils.flt(row["amount"])
 
-		if amount - outstanding > 0.5:
+		if amount - abs(outstanding) > 0.5:
 			frappe.throw(
 				_(
 					"Payment amount {0} is greater than outstanding amount {1} for invoice {2}."
@@ -224,21 +224,34 @@ def create_pos_payments_for_invoice(sales_invoice: str, payments: str | list):
 		pe.mode_of_payment = row["mode_of_payment"]
 
 		bank_cash = get_bank_cash_account(row["mode_of_payment"], si.company)
-		pe.paid_to = bank_cash.get("account")
+		bank_account = bank_cash.get("account")
 
-		if pe.paid_to:
-			acc = frappe.get_cached_value(
-				"Account", pe.paid_to, ["account_currency", "account_type"], as_dict=True
-			)
-			if acc:
-				pe.paid_to_account_currency = acc.account_currency
-				pe.paid_to_account_type = acc.account_type
+		# For return SIs, payment_type is "Pay": cash/bank goes on paid_from.
+		# For normal SIs, payment_type is "Receive": cash/bank goes on paid_to.
+		if pe.payment_type == "Pay":
+			pe.paid_from = bank_account
+			if bank_account:
+				acc = frappe.get_cached_value(
+					"Account", bank_account, ["account_currency", "account_type"], as_dict=True
+				)
+				if acc:
+					pe.paid_from_account_currency = acc.account_currency
+		else:
+			pe.paid_to = bank_account
+			if bank_account:
+				acc = frappe.get_cached_value(
+					"Account", bank_account, ["account_currency", "account_type"], as_dict=True
+				)
+				if acc:
+					pe.paid_to_account_currency = acc.account_currency
+					pe.paid_to_account_type = acc.account_type
 
 		pe.paid_amount = amount
 		pe.received_amount = amount
 
 		if pe.references:
-			pe.references[0].allocated_amount = amount
+			# For "Pay" type (return SI), outstanding is negative so allocated_amount must be negative too
+			pe.references[0].allocated_amount = -amount if pe.payment_type == "Pay" else amount
 
 		if not pe.posting_date:
 			pe.posting_date = si.posting_date

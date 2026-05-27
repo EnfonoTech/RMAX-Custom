@@ -59,6 +59,12 @@ class BranchConfiguration(Document):
 			for m in old_doc.mode_of_payment:
 				delete_permission(user, "Mode of Payment", m.mode_of_payment)
 
+			for c in old_doc.customer:
+				delete_permission(user, "Customer Group", c.customer_group)
+
+			for s in old_doc.supplier:
+				delete_permission(user, "Supplier Group", s.supplier_group)
+
 			# Remove role if user is not in any other Branch Configuration
 			# Find what role they had in this branch
 			old_role = None
@@ -78,6 +84,28 @@ class BranchConfiguration(Document):
 			for user in remaining_users:
 				for mop in removed_mops:
 					delete_permission(user, "Mode of Payment", mop)
+
+		# Handle customer group removals for remaining users
+		old_customers = {c.customer_group for c in old_doc.customer if c.customer_group}
+		new_customers = {c.customer_group for c in self.customer if c.customer_group}
+		removed_customers = old_customers - new_customers
+
+		if removed_customers:
+			remaining_users = old_users & new_users
+			for user in remaining_users:
+				for cg in removed_customers:
+					delete_permission(user, "Customer Group", cg)
+
+		# Handle supplier group removals for remaining users
+		old_suppliers = {s.supplier_group for s in old_doc.supplier if s.supplier_group}
+		new_suppliers = {s.supplier_group for s in self.supplier if s.supplier_group}
+		removed_suppliers = old_suppliers - new_suppliers
+
+		if removed_suppliers:
+			remaining_users = old_users & new_users
+			for user in remaining_users:
+				for sg in removed_suppliers:
+					delete_permission(user, "Supplier Group", sg)
 
 		# Handle company change — remove old company permission for remaining users
 		old_company = old_doc.get("company")
@@ -108,6 +136,14 @@ class BranchConfiguration(Document):
 			for idx, m in enumerate(self.mode_of_payment):
 				# First mode of payment is the default
 				create_permission(u.user, "Mode of Payment", m.mode_of_payment, is_default=1 if idx == 0 else 0)
+
+			for idx, c in enumerate(self.customer):
+				# First customer group is the default
+				create_permission(u.user, "Customer Group", c.customer_group, is_default=1 if idx == 0 else 0)
+
+			for idx, s in enumerate(self.supplier):
+				# First supplier group is the default
+				create_permission(u.user, "Supplier Group", s.supplier_group, is_default=1 if idx == 0 else 0)
 
 			# Also grant access to the company's default cost center (used in tax templates)
 			# without marking it as default — the branch cost center stays as the user's default

@@ -8,7 +8,7 @@ frappe.ui.form.on("Sales Invoice", {
 				frm.doc &&
 				frm.doc.docstatus === 0 &&
 				frm.doc.custom_payment_mode === "Cash" &&
-				flt(frm.doc.grand_total) > 0 &&
+				Math.abs(flt(frm.doc.grand_total)) > 0 &&
 				frm.doc.name &&
 				!String(frm.doc.name).startsWith("new-")
 			);
@@ -59,7 +59,7 @@ frappe.ui.form.on("Sales Invoice", {
 		if (frm.doc.custom_payment_mode !== "Cash") return;
 
 		// Validate required fields
-		if (!frm.doc.grand_total || frm.doc.grand_total <= 0) return;
+		if (Math.abs(flt(frm.doc.grand_total)) <= 0) return;
 		if (!frm.doc.name || String(frm.doc.name).startsWith("new-")) return;
 
 		// If POS Profile exists, respect its disable flag; else show popup anyway
@@ -247,7 +247,7 @@ function rmax_render_dialog(frm) {
 		return;
 	}
 
-	const base_invoice_total = flt(frm.doc.rounded_total || frm.doc.grand_total || 0);
+	const base_invoice_total = Math.abs(flt(frm.doc.rounded_total || frm.doc.grand_total || 0));
 	const currency = frm.doc.currency || "";
 
 	// Validate invoice total
