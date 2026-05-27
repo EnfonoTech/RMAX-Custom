@@ -13,6 +13,27 @@ frappe.pages['rmax-dashboard'].on_page_load = function(wrapper) {
 		document.head.appendChild(style);
 	}
 
+	// Add refresh button to toolbar
+	page.add_inner_button(__('Refresh'), function() {
+		load_dashboard(page);
+	});
+
+	// Store page ref for on_page_show
+	wrapper._rmax_page = page;
+
+	load_dashboard(page);
+};
+
+frappe.pages['rmax-dashboard'].on_page_show = function(wrapper) {
+	// Re-fetch every time user navigates back to the dashboard
+	// (e.g. after creating/approving a Stock Transfer)
+	var page = wrapper._rmax_page;
+	if (page) {
+		load_dashboard(page);
+	}
+};
+
+function load_dashboard(page) {
 	page.main.html('<div class="rmax-dash"><div class="rmax-dash-loading"><div class="loading-spinner"></div><span>Loading dashboard...</span></div></div>');
 
 	frappe.call({
@@ -26,7 +47,7 @@ frappe.pages['rmax-dashboard'].on_page_load = function(wrapper) {
 			page.main.html('<div class="rmax-dash"><p class="dash-error">Failed to load dashboard data.</p></div>');
 		}
 	});
-};
+}
 
 function render_dashboard(page, data) {
 	var html = '<div class="rmax-dash">';

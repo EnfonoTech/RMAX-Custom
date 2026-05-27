@@ -169,6 +169,26 @@ def get_dashboard_data():
             WHERE mr.docstatus = 1
             AND mr.status IN ('Pending', 'Partially Ordered')
             AND mr.material_request_type = 'Material Transfer'
+            AND mr.name NOT IN (
+                SELECT sub.mr_name
+                FROM (
+                    SELECT st.material_request AS mr_name,
+                           SUM(sti.quantity) AS st_total_qty
+                    FROM `tabStock Transfer` st
+                    JOIN `tabStock Transfer Item` sti ON sti.parent = st.name
+                    WHERE st.material_request IS NOT NULL
+                    AND st.material_request != ''
+                    AND st.docstatus != 2
+                    AND (st.workflow_state IS NULL OR st.workflow_state != 'Rejected')
+                    GROUP BY st.material_request
+                ) sub
+                JOIN (
+                    SELECT parent AS mr_name, SUM(qty) AS mr_total_qty
+                    FROM `tabMaterial Request Item`
+                    GROUP BY parent
+                ) mr_qty ON mr_qty.mr_name = sub.mr_name
+                WHERE sub.st_total_qty >= mr_qty.mr_total_qty
+            )
             {mr_filter}
             ORDER BY mr.custom_is_urgent DESC, mr.transaction_date DESC
             LIMIT 10
