@@ -199,8 +199,8 @@ function _rmax_dn_hide_target_warehouse(frm) {
 // ---------------------------------------------------------------------------
 
 function _rmax_dn_show_find_source_button(frm) {
-    // Only for unsaved return DNs that don't yet have a source linked.
-    if (!frm.doc.is_return) return;
+    // Show on any new unsaved DN without a source — user may not have set
+    // is_return yet (it's read-only); we set it when they pick a source DN.
     if (frm.doc.return_against) return;
     if (!frm.is_new()) return;
 
@@ -316,15 +316,17 @@ function _rmax_dn_show_source_picker(frm, matches) {
 }
 
 function _rmax_dn_apply_source(frm, dn_name) {
-    // Set return_against and reload the form from the source DN (standard
-    // ERPNext flow: frm.amend_doc recreates the return, but here we simply
-    // set the link field and let the server-side populate via onload mapping).
+    // is_return is read-only on the form widget — write directly to frm.doc
+    // to bypass the lock, then set return_against through the normal setter
+    // so ERPNext's onchange logic fires correctly.
+    frm.doc.is_return = 1;
+    frm.refresh_field("is_return");
+
     frm.set_value("return_against", dn_name).then(function () {
         frappe.show_alert({
             message: __("Source Delivery Note set to {0}. Save the form to proceed.", [dn_name]),
             indicator: "green",
         });
-        // Remove the Find Source button now that return_against is filled.
         frm.remove_custom_button(__("Find Source DN"), __("Return"));
     });
 }
