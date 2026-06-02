@@ -670,3 +670,376 @@ def consolidate_dns_to_si(delivery_note_names):
         )
 
     return si.name
+
+
+# ---------------------------------------------------------------------------
+# Multi-source return allocation APIs
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def create_bulk_delivery_return(delivery_note_names):
+	"""Create a draft Delivery Return from multiple selected Delivery Notes.
+	All DNs must share the same customer and company.
+	Items are pre-filled with their full returnable qty per source DN.
+	Returns the created Delivery Return name.
+	"""
+	if isinstance(delivery_note_names, str):
+		delivery_note_names = json.loads(delivery_note_names)
+
+	if not delivery_note_names:
+		frappe.throw(_("No Delivery Notes selected"))
+
+	dns = [frappe.get_doc("Delivery Note", n) for n in delivery_note_names]
+
+	for dn in dns:
+		if dn.docstatus != 1:
+			frappe.throw(_("{0} is not submitted").format(dn.name))
+		if dn.is_return:
+			frappe.throw(_("{0} is itself a return — cannot return a return").format(dn.name))
+
+	customers = {dn.customer for dn in dns}
+	companies  = {dn.company  for dn in dns}
+	if len(customers) > 1:
+		frappe.throw(_("All selected Delivery Notes must belong to the same Customer"))
+	if len(companies) > 1:
+		frappe.throw(_("All selected Delivery Notes must belong to the same Company"))
+
+	customer = dns[0].customer
+	company  = dns[0].company
+
+	# Pre-compute already-returned qty per (source_dn, item_code)
+	source_dns  = [dn.name for dn in dns]
+	item_codes  = list({r.item_code for dn in dns for r in dn.items})
+
+	ret_rows = frappe.db.sql("""
+		SELECT
+			ret.return_against  AS source_dn,
+			reti.item_code,
+			SUM(ABS(reti.qty))  AS returned_qty
+		FROM `tabDelivery Note` ret
+		JOIN `tabDelivery Note Item` reti ON reti.parent = ret.name
+		WHERE ret.return_against IN %(source_dns)s
+		  AND ret.docstatus      IN (0, 1)
+		  AND reti.item_code     IN %(item_codes)s
+		GROUP BY ret.return_against, reti.item_code
+	""", {"source_dns": source_dns, "item_codes": item_codes}, as_dict=True)
+
+	returned_map = {(r.source_dn, r.item_code): flt(r.returned_qty) for r in ret_rows}
+
+	dr = frappe.new_doc("Delivery Return")
+	dr.customer     = customer
+	dr.company      = company
+	dr.posting_date = frappe.utils.today()
+
+	for dn in dns:
+		for item in dn.items:
+			returnable = flt(item.qty) - returned_map.get((dn.name, item.item_code), 0)
+			if returnable <= 0:
+				continue
+			dr.append("items", {
+				"item_code":              item.item_code,
+				"item_name":              item.item_name,
+				"against_delivery_note":  dn.name,
+				"qty":                    returnable,
+				"uom":                    item.uom,
+				"rate":                   flt(item.rate),
+				"amount":                 returnable * flt(item.rate),
+				"returnable_qty":         returnable,
+				"warehouse":              item.warehouse,
+			})
+
+	if not dr.items:
+		frappe.throw(_("No returnable items found in the selected Delivery Notes"))
+
+	dr.insert(ignore_permissions=True)
+	return dr.name
+
+
+@frappe.whitelist()
+def get_return_source_dn(customer, company, item_code, qty=1):
+	"""Find the most recent (LIFO) source DN for a single item.
+	Called by the Delivery Return Request item table to auto-fill Against DN.
+	Returns {dn, rate, uom, returnable_qty} or None.
+	"""
+	qty = flt(qty) or 1
+
+	rows = frappe.db.sql("""
+		SELECT
+			dn.name          AS dn_name,
+			dn.posting_date,
+			SUM(dni.qty)     AS total_qty,
+			MAX(dni.rate)    AS rate,
+			MAX(dni.uom)     AS uom
+		FROM `tabDelivery Note` dn
+		JOIN `tabDelivery Note Item` dni ON dni.parent = dn.name
+		WHERE dn.customer   = %(customer)s
+		  AND dn.company    = %(company)s
+		  AND dn.docstatus  = 1
+		  AND dn.is_return  = 0
+		  AND dni.item_code = %(item_code)s
+		GROUP BY dn.name
+		ORDER BY dn.posting_date DESC, dn.creation DESC
+	""", {"customer": customer, "company": company, "item_code": item_code}, as_dict=True)
+
+	if not rows:
+		return None
+
+	source_dns = [r.dn_name for r in rows]
+	ret_rows = frappe.db.sql("""
+		SELECT ret.return_against AS source_dn, SUM(ABS(reti.qty)) AS returned_qty
+		FROM `tabDelivery Note` ret
+		JOIN `tabDelivery Note Item` reti ON reti.parent = ret.name
+		WHERE ret.return_against IN %(source_dns)s
+		  AND ret.docstatus IN (0, 1)
+		  AND reti.item_code = %(item_code)s
+		GROUP BY ret.return_against
+	""", {"source_dns": source_dns, "item_code": item_code}, as_dict=True)
+
+	returned_map = {r.source_dn: flt(r.returned_qty) for r in ret_rows}
+
+	for r in rows:
+		returnable = flt(r.total_qty) - returned_map.get(r.dn_name, 0)
+		if returnable > 0:
+			return {
+				"dn": r.dn_name,
+				"rate": flt(r.rate),
+				"uom": r.uom or "Nos",
+				"returnable_qty": flt(returnable, 3),
+			}
+
+	return None
+
+
+@frappe.whitelist()
+def resolve_return_allocation(customer, company, items):
+    """LIFO allocation — given customer + items, find which submitted DNs they
+    came from and group the return quantities by source DN.
+
+    items: JSON list [{item_code, qty}]
+    Returns: [{dn, posting_date, items:[{item_code, qty, rate, uom}]}]
+    """
+    if isinstance(items, str):
+        items = json.loads(items)
+
+    item_codes = list({r["item_code"] for r in items if r.get("item_code")})
+    if not item_codes:
+        frappe.throw(_("No items provided"))
+
+    # All submitted non-return DNs for this customer containing these items
+    rows = frappe.db.sql("""
+        SELECT
+            dn.name          AS dn_name,
+            dn.posting_date,
+            dni.item_code,
+            SUM(dni.qty)     AS total_qty,
+            MAX(dni.rate)    AS rate,
+            MAX(dni.uom)     AS uom
+        FROM `tabDelivery Note` dn
+        JOIN `tabDelivery Note Item` dni ON dni.parent = dn.name
+        WHERE dn.customer  = %(customer)s
+          AND dn.company   = %(company)s
+          AND dn.docstatus = 1
+          AND dn.is_return = 0
+          AND dni.item_code IN %(item_codes)s
+        GROUP BY dn.name, dni.item_code
+        ORDER BY dn.posting_date DESC, dn.creation DESC
+    """, {"customer": customer, "company": company, "item_codes": item_codes}, as_dict=True)
+
+    if not rows:
+        frappe.throw(_("No delivery notes found for customer {0} with the specified items").format(customer))
+
+    source_dns = list({r.dn_name for r in rows})
+
+    # Already returned qty per (source_dn, item_code) — draft + submitted
+    ret_rows = frappe.db.sql("""
+        SELECT
+            ret.return_against  AS source_dn,
+            reti.item_code,
+            SUM(ABS(reti.qty))  AS returned_qty
+        FROM `tabDelivery Note` ret
+        JOIN `tabDelivery Note Item` reti ON reti.parent = ret.name
+        WHERE ret.return_against IN %(source_dns)s
+          AND ret.docstatus       IN (0, 1)
+          AND reti.item_code      IN %(item_codes)s
+        GROUP BY ret.return_against, reti.item_code
+    """, {"source_dns": source_dns, "item_codes": item_codes}, as_dict=True)
+
+    returned_map = {(r.source_dn, r.item_code): flt(r.returned_qty) for r in ret_rows}
+
+    # Build per-DN available stock: {dn_name: {posting_date, items: {item_code: {returnable_qty, rate, uom}}}}
+    dn_info = {}
+    for r in rows:
+        if r.dn_name not in dn_info:
+            dn_info[r.dn_name] = {"posting_date": str(r.posting_date), "items": {}}
+        returnable = flt(r.total_qty) - returned_map.get((r.dn_name, r.item_code), 0)
+        if returnable > 0:
+            dn_info[r.dn_name]["items"][r.item_code] = {
+                "returnable_qty": returnable,
+                "rate": flt(r.rate),
+                "uom": r.uom or "Nos",
+            }
+
+    # LIFO: most-recent DN first
+    sorted_dns = sorted(dn_info, key=lambda d: dn_info[d]["posting_date"], reverse=True)
+
+    allocations = {}  # {dn_name: {item_code: qty}}
+
+    for item_row in items:
+        item_code = item_row.get("item_code")
+        if not item_code:
+            continue
+        remaining = flt(item_row.get("qty", 0))
+        if remaining <= 0:
+            continue
+        original = remaining
+
+        for dn_name in sorted_dns:
+            slot = dn_info[dn_name]["items"].get(item_code)
+            if not slot or slot["returnable_qty"] <= 0:
+                continue
+            allocate = min(remaining, slot["returnable_qty"])
+            slot["returnable_qty"] -= allocate
+            allocations.setdefault(dn_name, {})[item_code] = (
+                allocations.get(dn_name, {}).get(item_code, 0) + allocate
+            )
+            remaining -= allocate
+            if remaining <= 0:
+                break
+
+        if remaining > 0:
+            fulfilled = flt(original - remaining, 2)
+            frappe.throw(
+                _("Only {0} of <b>{1}</b> is returnable (requested {2})").format(
+                    fulfilled, item_code, flt(original, 2)
+                )
+            )
+
+    result = []
+    for dn_name in sorted_dns:
+        if dn_name not in allocations:
+            continue
+        group_items = []
+        for item_code, qty in allocations[dn_name].items():
+            slot = dn_info[dn_name]["items"].get(item_code, {})
+            group_items.append({
+                "item_code": item_code,
+                "qty": flt(qty, 3),
+                "rate": slot.get("rate", 0),
+                "uom": slot.get("uom", "Nos"),
+            })
+        result.append({
+            "dn": dn_name,
+            "posting_date": dn_info[dn_name]["posting_date"],
+            "items": group_items,
+        })
+    return result
+
+
+@frappe.whitelist()
+def validate_return_against_dn(source_dn, customer, items):
+    """Validate items against a user-chosen DN (called when Step 2 DN picker changes).
+    Returns {valid, errors, items, posting_date}.
+    """
+    if isinstance(items, str):
+        items = json.loads(items)
+
+    dn_doc = frappe.get_cached_doc("Delivery Note", source_dn)
+    if dn_doc.customer != customer:
+        return {"valid": False, "errors": [_("{0} belongs to a different customer").format(source_dn)]}
+    if dn_doc.docstatus != 1:
+        return {"valid": False, "errors": [_("{0} is not submitted").format(source_dn)]}
+    if dn_doc.is_return:
+        return {"valid": False, "errors": [_("{0} is itself a return DN").format(source_dn)]}
+
+    item_codes = [r["item_code"] for r in items]
+
+    dn_item_map = {}
+    for row in dn_doc.items:
+        if row.item_code in item_codes:
+            if row.item_code not in dn_item_map:
+                dn_item_map[row.item_code] = {"qty": 0, "rate": row.rate, "uom": row.uom}
+            dn_item_map[row.item_code]["qty"] += row.qty
+
+    ret_rows = frappe.db.sql("""
+        SELECT reti.item_code, SUM(ABS(reti.qty)) AS returned_qty
+        FROM `tabDelivery Note` ret
+        JOIN `tabDelivery Note Item` reti ON reti.parent = ret.name
+        WHERE ret.return_against = %(dn)s
+          AND ret.docstatus IN (0, 1)
+          AND reti.item_code IN %(codes)s
+        GROUP BY reti.item_code
+    """, {"dn": source_dn, "codes": item_codes}, as_dict=True)
+    returned_map = {r.item_code: flt(r.returned_qty) for r in ret_rows}
+
+    errors = []
+    updated_items = []
+
+    for item_row in items:
+        item_code = item_row["item_code"]
+        requested = flt(item_row["qty"])
+
+        if item_code not in dn_item_map:
+            errors.append(_("<b>{0}</b> not found in {1}").format(item_code, source_dn))
+            updated_items.append(item_row)
+            continue
+
+        returnable = dn_item_map[item_code]["qty"] - returned_map.get(item_code, 0)
+        if returnable <= 0:
+            errors.append(_("<b>{0}</b> has no returnable qty in {1}").format(item_code, source_dn))
+        elif requested > returnable + 0.001:
+            errors.append(
+                _("Only {0} of <b>{1}</b> returnable from {2}").format(
+                    flt(returnable, 2), item_code, source_dn
+                )
+            )
+
+        updated_items.append({
+            "item_code": item_code,
+            "qty": min(requested, max(returnable, 0)),
+            "rate": dn_item_map[item_code]["rate"],
+            "uom": dn_item_map[item_code]["uom"],
+        })
+
+    return {
+        "valid": len(errors) == 0,
+        "errors": errors,
+        "items": updated_items,
+        "posting_date": str(dn_doc.posting_date),
+    }
+
+
+@frappe.whitelist()
+def create_return_dns_from_allocation(customer, company, allocations):
+    """Create one draft Return Delivery Note per allocation group using
+    ERPNext's standard make_return_doc mapper.
+
+    allocations: [{dn, items:[{item_code, qty, rate, uom}]}]
+    Returns: [created_dn_names]
+    """
+    from erpnext.controllers.sales_and_purchase_return import make_return_doc
+
+    if isinstance(allocations, str):
+        allocations = json.loads(allocations)
+
+    created = []
+
+    for group in allocations:
+        source_dn = group["dn"]
+        items_map = {r["item_code"]: flt(r["qty"]) for r in group["items"]}
+
+        # ERPNext creates a properly mapped return DN with all fields set
+        return_dn = make_return_doc("Delivery Note", source_dn)
+
+        # Keep only the allocated items (remove items not being returned)
+        return_dn.items = [row for row in return_dn.items if row.item_code in items_map]
+
+        # Adjust to allocated quantities (make_return_doc already negates)
+        for row in return_dn.items:
+            alloc_qty = items_map[row.item_code]
+            row.qty = -abs(alloc_qty)
+            row.stock_qty = row.qty * (flt(row.conversion_factor) or 1)
+
+        return_dn.insert(ignore_permissions=True)
+        created.append(return_dn.name)
+
+    return created

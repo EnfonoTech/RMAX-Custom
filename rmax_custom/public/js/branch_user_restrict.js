@@ -20,6 +20,8 @@
 		"Sales Invoice",
 		"Quotation",
 		"Delivery Note",
+		"Delivery Return",
+		"Delivery Return Item",
 		"Customer",
 		"Payment Entry",
 		"Purchase Receipt",

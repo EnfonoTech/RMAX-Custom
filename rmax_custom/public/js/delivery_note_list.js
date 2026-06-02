@@ -29,6 +29,14 @@ frappe.listview_settings["Delivery Note"] = Object.assign(
     frappe.listview_settings["Delivery Note"] || {},
     {
         onload: function (listview) {
+            // Delivery Return button — visible to all roles
+            if (listview && listview.page) {
+                listview.page.add_button(__("Delivery Return"), function () {
+                    frappe.new_doc("Delivery Return");
+                });
+            }
+
+            // Consolidation actions — Sales Manager / Accounts Manager / System Manager only
             try {
                 if (!_rmax_dn_user_can_consolidate()) return;
                 if (!listview || !listview.page || typeof listview.page.add_actions_menu_item !== "function") return;

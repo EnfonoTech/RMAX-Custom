@@ -87,8 +87,8 @@ frappe.ui.form.on("Delivery Note", {
         setTimeout(() => _rmax_dn_hide_target_warehouse(frm), 250);
         // Auto-fill set_warehouse from the user's branch config for new DNs.
         _rmax_dn_autofill_source_warehouse(frm);
-        // Show "Find Source DN" button for return DNs without a source linked.
-        _rmax_dn_show_find_source_button(frm);
+        // Shortcut to create a Delivery Return Request for this customer.
+        _rmax_dn_show_create_return_button(frm);
     },
     items_on_form_rendered: function (frm) {
         _rmax_dn_hide_target_warehouse(frm);
@@ -195,140 +195,21 @@ function _rmax_dn_hide_target_warehouse(frm) {
 }
 
 // ---------------------------------------------------------------------------
-// DN Return — Find Source DN button
+// DN Return — shortcut button to Delivery Return Request
 // ---------------------------------------------------------------------------
 
-function _rmax_dn_show_find_source_button(frm) {
-    // Show on any new unsaved DN without a source — user may not have set
-    // is_return yet (it's read-only); we set it when they pick a source DN.
-    if (frm.doc.return_against) return;
-    if (!frm.is_new()) return;
+function _rmax_dn_show_create_return_button(frm) {
+    // Show on submitted DNs — navigates to a new Delivery Return Request
+    // with customer pre-filled. The DRR handles the full return flow.
+    if (frm.doc.docstatus !== 1) return;
+    if (frm.doc.is_return) return;
 
-    frm.add_custom_button(__("Find Source DN"), function () {
-        _rmax_dn_find_source(frm);
-    }, __("Return"));
-}
-
-function _rmax_dn_find_source(frm) {
-    if (!frm.doc.customer) {
-        frappe.msgprint(__("Please select a Customer first."));
-        return;
-    }
-
-    const items = (frm.doc.items || [])
-        .filter((r) => r.item_code)
-        .map((r) => ({ item_code: r.item_code, qty: Math.abs(r.qty || 1) }));
-
-    if (!items.length) {
-        frappe.msgprint(__("Please add at least one item to search for the source Delivery Note."));
-        return;
-    }
-
-    frappe.dom.freeze(__("Searching for matching Delivery Notes…"));
-
-    frappe.call({
-        method: "rmax_custom.api.delivery_note.find_source_delivery_notes",
-        args: { customer: frm.doc.customer, items: JSON.stringify(items) },
-        callback: function (r) {
-            frappe.dom.unfreeze();
-            const matches = r.message || [];
-            if (!matches.length) {
-                frappe.msgprint({
-                    title: __("No Matching Delivery Notes"),
-                    message: __(
-                        "No submitted Delivery Note was found for customer <b>{0}</b> "
-                        + "containing the entered items with returnable quantity.",
-                        [frm.doc.customer]
-                    ),
-                    indicator: "orange",
-                });
-                return;
-            }
-            _rmax_dn_show_source_picker(frm, matches);
-        },
-        error: function () {
-            frappe.dom.unfreeze();
-        },
-    });
-}
-
-function _rmax_dn_show_source_picker(frm, matches) {
-    // Build a dialog that shows candidate DNs with their matched items.
-    let selected_dn = null;
-
-    const rows_html = matches.map((dn) => {
-        const items_list = dn.items
-            .map((i) =>
-                `<li>${frappe.utils.escape_html(i.item_code)} — `
-                + `${__("Returnable")}: <b>${frappe.format(i.returnable_qty, { fieldtype: "Float" })} ${frappe.utils.escape_html(i.uom)}</b></li>`
-            )
-            .join("");
-
-        return `
-            <div class="rmax-dn-pick-row" data-dn="${frappe.utils.escape_html(dn.name)}"
-                 style="border:1px solid var(--border-color); border-radius:6px;
-                        padding:12px 14px; margin-bottom:8px; cursor:pointer;">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong>${frappe.utils.escape_html(dn.name)}</strong>
-                    <span class="indicator-pill blue">${dn.score} ${__("item(s) matched")}</span>
-                </div>
-                <div style="color:var(--text-muted); font-size:12px; margin:4px 0 6px;">
-                    ${frappe.format(dn.posting_date, { fieldtype: "Date" })}
-                </div>
-                <ul style="margin:0; padding-left:18px; font-size:12px;">${items_list}</ul>
-            </div>`;
-    }).join("");
-
-    const d = new frappe.ui.Dialog({
-        title: __("Select Source Delivery Note"),
-        fields: [
-            {
-                fieldtype: "HTML",
-                fieldname: "dn_list_html",
-                options: `<div id="rmax-dn-pick-list">${rows_html}</div>`,
-            },
-        ],
-        primary_action_label: __("Apply"),
-        primary_action: function () {
-            if (!selected_dn) {
-                frappe.msgprint(__("Please select a Delivery Note."));
-                return;
-            }
-            d.hide();
-            _rmax_dn_apply_source(frm, selected_dn);
-        },
-    });
-
-    d.show();
-
-    // Row click → highlight selection
-    d.$wrapper.find("#rmax-dn-pick-list").on("click", ".rmax-dn-pick-row", function () {
-        d.$wrapper.find(".rmax-dn-pick-row").css({
-            "background": "",
-            "border-color": "var(--border-color)",
+    frm.add_custom_button(__("Return Request"), function () {
+        frappe.new_doc("Delivery Return", {
+            customer: frm.doc.customer,
+            company:  frm.doc.company,
         });
-        $(this).css({
-            "background": "var(--highlight-color, #f0f4ff)",
-            "border-color": "var(--primary)",
-        });
-        selected_dn = $(this).data("dn");
-    });
-}
-
-function _rmax_dn_apply_source(frm, dn_name) {
-    // is_return is read-only on the form widget — write directly to frm.doc
-    // to bypass the lock, then set return_against through the normal setter
-    // so ERPNext's onchange logic fires correctly.
-    frm.doc.is_return = 1;
-    frm.refresh_field("is_return");
-
-    frm.set_value("return_against", dn_name).then(function () {
-        frappe.show_alert({
-            message: __("Source Delivery Note set to {0}. Save the form to proceed.", [dn_name]),
-            indicator: "green",
-        });
-        frm.remove_custom_button(__("Find Source DN"), __("Return"));
-    });
+    }, __("Create"));
 }
 
 function _rmax_apply_inter_company_mode(frm) {
