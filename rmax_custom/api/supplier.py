@@ -69,9 +69,28 @@ def enforce_vat_duplicate_rule(doc, method=None):
 
 
 def _get_default_supplier_group():
+    """Priority:
+    1. User Permission for Supplier Group — default one first, then first permitted.
+    2. Buying Settings default — only if it is a leaf (is_group = 0).
+    3. First non-group Supplier Group found in the system (alphabetical).
+    """
+    # 1. User Permissions for Supplier Group
+    permitted = frappe.get_all(
+        "User Permission",
+        filters={"user": frappe.session.user, "allow": "Supplier Group"},
+        fields=["for_value", "is_default"],
+        order_by="is_default desc",
+    )
+    if permitted:
+        default = next((p.for_value for p in permitted if p.is_default), None)
+        return default or permitted[0].for_value
+
+    # 2. Buying Settings default
     sg = frappe.db.get_single_value("Buying Settings", "supplier_group")
     if sg and not cint(frappe.db.get_value("Supplier Group", sg, "is_group")):
         return sg
+
+    # 3. First non-group Supplier Group alphabetically
     leaf = frappe.get_all(
         "Supplier Group",
         filters={"is_group": 0},

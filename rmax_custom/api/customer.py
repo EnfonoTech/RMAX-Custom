@@ -65,17 +65,29 @@ def _get_default_customer_group():
 	"""Return a leaf (non-group) Customer Group safe to assign to a new Customer.
 
 	Priority:
-	1. Selling Settings default — only if it is a leaf (is_group = 0).
-	2. First non-group Customer Group found in the system (alphabetical).
+	1. User Permission for Customer Group — default one first, then first permitted.
+	2. Selling Settings default — only if it is a leaf (is_group = 0).
+	3. First non-group Customer Group found in the system (alphabetical).
 
 	Never returns a group-type CG — ERPNext rejects those on Customer.validate.
 	"""
-	# 1. Try Selling Settings configured default
+	# 1. User Permissions for Customer Group
+	permitted = frappe.get_all(
+		"User Permission",
+		filters={"user": frappe.session.user, "allow": "Customer Group"},
+		fields=["for_value", "is_default"],
+		order_by="is_default desc",
+	)
+	if permitted:
+		default = next((p.for_value for p in permitted if p.is_default), None)
+		return default or permitted[0].for_value
+
+	# 2. Try Selling Settings configured default
 	cg = frappe.db.get_single_value("Selling Settings", "customer_group")
 	if cg and not cint(frappe.db.get_value("Customer Group", cg, "is_group")):
 		return cg
 
-	# 2. First non-group Customer Group in the system
+	# 3. First non-group Customer Group in the system
 	leaf = frappe.get_all(
 		"Customer Group",
 		filters={"is_group": 0},
@@ -86,7 +98,6 @@ def _get_default_customer_group():
 	if leaf:
 		return leaf[0].name
 
-	# Last resort — return whatever Selling Settings says; ERPNext will validate
 	return cg or "Individual"
 
 
