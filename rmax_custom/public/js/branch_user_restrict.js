@@ -23,6 +23,7 @@
 		"Delivery Return",
 		"Delivery Return Item",
 		"Customer",
+		"Supplier",
 		"Payment Entry",
 		"Purchase Receipt",
 		"Purchase Invoice",
