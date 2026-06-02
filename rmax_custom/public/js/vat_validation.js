@@ -86,3 +86,30 @@ function set_customer_type_filter(frm) {
         frm.refresh_field("customer_type");
     }
 }
+
+// ── Supplier form — hide "Branch" from supplier_type for non-privileged users ──
+
+frappe.ui.form.on("Supplier", {
+    refresh: function (frm) {
+        _set_supplier_type_filter(frm);
+    },
+    onload: function (frm) {
+        _set_supplier_type_filter(frm);
+    },
+});
+
+function _set_supplier_type_filter(frm) {
+    const allowed_roles = ["System Manager", "Purchase Manager", "Purchase Master Manager"];
+    const user_roles = frappe.user_roles || [];
+    const is_allowed = allowed_roles.some(r => user_roles.includes(r));
+
+    const field = frm.get_field("supplier_type");
+    if (!field) return;
+
+    const options = (field.df.options || "").split("\n");
+
+    if (!is_allowed) {
+        field.df.options = options.filter(opt => opt.trim() !== "Branch").join("\n");
+        frm.refresh_field("supplier_type");
+    }
+}

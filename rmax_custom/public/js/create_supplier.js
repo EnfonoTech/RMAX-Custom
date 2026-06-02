@@ -2,11 +2,13 @@
  * RMAX Custom: Create New Supplier dialog.
  * Registered on Purchase Invoice, Purchase Order, Purchase Receipt.
  *
- * Only Supplier Name is mandatory. VAT (tax_id) and Address are optional
- * and visible for both B2C and B2B. Supplier Kind only controls supplier_type.
+ * Supplier Kind:
+ *   - B2B (Company)   →  Name + Mobile + VAT (15 digits) + full Address mandatory.
+ *   - B2C (Individual)→  Name + Mobile required only.
+ *   - Branch          →  Name only required, no VAT, no address enforced.
  *
  * Purchase Manager / Purchase Master Manager / System Manager can tick the
- * Allow Duplicate VAT override when a duplicate tax_id is detected.
+ * Allow Duplicate VAT override (B2B only).
  */
 
 frappe.ui.form.on("Purchase Invoice", {
@@ -59,217 +61,264 @@ function open_create_supplier_dialog(frm, opts) {
     const company = frm.doc.company || frappe.defaults.get_default("company");
 
     const OVERRIDE_ROLES = ["Purchase Manager", "Purchase Master Manager", "System Manager"];
-    const can_override_vat = (frappe.user_roles || []).some((r) =>
-        OVERRIDE_ROLES.includes(r)
-    );
+    const user_roles = frappe.user_roles || [];
+    const can_override_vat = user_roles.some((r) => OVERRIDE_ROLES.includes(r));
+    const can_set_branch  = user_roles.some((r) => OVERRIDE_ROLES.includes(r));
 
-    frappe.db.get_value(
-        "Company",
-        company,
-        ["country", "default_currency"],
-        function (r) {
-            const country = r.country;
+    frappe.db.get_value("Company", company, ["country", "default_currency"], function (r) {
+        const country = r.country;
 
-            const d = new frappe.ui.Dialog({
-                title: "Create New Supplier",
-                size: "large",
+        const d = new frappe.ui.Dialog({
+            title: "Create New Supplier",
+            size: "large",
 
-                fields: [
-                    {
-                        fieldname: "buyer_kind",
-                        fieldtype: "Select",
-                        label: "Supplier Kind",
-                        options: "B2C (Individual)\nB2B (Company)",
-                        default: "B2B (Company)",
-                        reqd: 1,
-                        description: "Sets the Supplier Type. Does not affect which fields are required.",
-                    },
+            fields: [
+                {
+                    fieldname: "buyer_kind",
+                    fieldtype: "Select",
+                    label: "Supplier Kind",
+                    options: can_set_branch
+                        ? "B2B (Company)\nB2C (Individual)\nBranch"
+                        : "B2B (Company)\nB2C (Individual)",
+                    default: "B2B (Company)",
+                    reqd: 1,
+                    description: "B2B: VAT + Address mandatory. B2C: Name + Mobile only. Branch: Name only, no VAT required.",
+                },
 
-                    { fieldtype: "Section Break" },
+                { fieldtype: "Section Break" },
 
-                    {
-                        fieldname: "supplier_name",
-                        fieldtype: "Data",
-                        label: "Supplier Name",
-                        reqd: 1,
-                    },
-                    {
-                        fieldname: "mobile_no",
-                        fieldtype: "Data",
-                        label: "Mobile No",
-                    },
-                    {
-                        fieldname: "email_id",
-                        fieldtype: "Data",
-                        label: "Email ID",
-                    },
-                    {
-                        fieldname: "tax_id",
-                        fieldtype: "Data",
-                        label: "VAT Registration Number",
-                        description: "Optional. Exactly 15 digits if provided.",
-                    },
-                    {
-                        fieldname: "allow_duplicate_vat",
-                        fieldtype: "Check",
-                        label: "Allow Duplicate VAT (Manager Override)",
-                        default: 0,
-                        hidden: can_override_vat ? 0 : 1,
-                        depends_on: "eval:doc.tax_id",
-                    },
-                    {
-                        fieldname: "duplicate_vat_reason",
-                        fieldtype: "Small Text",
-                        label: "Duplicate VAT Reason",
-                        hidden: can_override_vat ? 0 : 1,
-                        depends_on: "eval:doc.allow_duplicate_vat",
-                        mandatory_depends_on: "eval:doc.allow_duplicate_vat",
-                    },
+                {
+                    fieldname: "supplier_name",
+                    fieldtype: "Data",
+                    label: "Supplier Name",
+                    reqd: 1,
+                },
+                {
+                    fieldname: "mobile_no",
+                    fieldtype: "Data",
+                    label: "Mobile No",
+                    depends_on: "eval:doc.buyer_kind !== 'Branch'",
+                    mandatory_depends_on: "eval:doc.buyer_kind !== 'Branch'",
+                },
+                {
+                    fieldname: "email_id",
+                    fieldtype: "Data",
+                    label: "Email ID",
+                },
 
-                    {
-                        fieldtype: "Section Break",
-                        label: "Address",
-                        collapsible: 1,
-                    },
-                    {
-                        fieldname: "address_type",
-                        fieldtype: "Select",
-                        label: "Address Type",
-                        options: "Billing\nShipping",
-                        default: "Billing",
-                    },
-                    {
-                        fieldname: "address_line1",
-                        fieldtype: "Data",
-                        label: "Address Line 1",
-                        mandatory_depends_on:
-                            "eval:doc.address_line2 || doc.custom_building_number || doc.custom_area || doc.city || doc.pincode",
-                    },
-                    {
-                        fieldname: "address_line2",
-                        fieldtype: "Data",
-                        label: "Address Line 2",
-                    },
-                    {
-                        fieldname: "custom_building_number",
-                        fieldtype: "Data",
-                        label: "Building Number",
-                    },
-                    {
-                        fieldname: "custom_area",
-                        fieldtype: "Data",
-                        label: "Area/District",
-                    },
-                    {
-                        fieldname: "city",
-                        fieldtype: "Data",
-                        label: "City/Town",
-                    },
-                    {
-                        fieldname: "country",
-                        fieldtype: "Link",
-                        options: "Country",
-                        label: "Country",
-                        default: country,
-                    },
-                    {
-                        fieldname: "pincode",
-                        fieldtype: "Data",
-                        label: "Postal Code",
-                    },
-                ],
+                // ── B2B-only block ──────────────────────────────────────────
+                {
+                    fieldtype: "Section Break",
+                    label: "B2B Details",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "tax_id",
+                    fieldtype: "Data",
+                    label: "VAT Registration Number",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    description: "Exactly 15 digits.",
+                },
+                {
+                    fieldname: "allow_duplicate_vat",
+                    fieldtype: "Check",
+                    label: "Allow Duplicate VAT (Manager Override)",
+                    default: 0,
+                    hidden: can_override_vat ? 0 : 1,
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)' && doc.tax_id",
+                },
+                {
+                    fieldname: "duplicate_vat_reason",
+                    fieldtype: "Small Text",
+                    label: "Duplicate VAT Reason",
+                    hidden: can_override_vat ? 0 : 1,
+                    depends_on: "eval:doc.allow_duplicate_vat",
+                    mandatory_depends_on: "eval:doc.allow_duplicate_vat",
+                },
 
-                primary_action_label: "Create Supplier",
+                // ── Address — B2B only, all mandatory ───────────────────────
+                {
+                    fieldtype: "Section Break",
+                    label: "Address Details",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "address_type",
+                    fieldtype: "Select",
+                    label: "Address Type",
+                    options: "Billing\nShipping",
+                    default: "Billing",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "address_line1",
+                    fieldtype: "Data",
+                    label: "Address Line 1",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "address_line2",
+                    fieldtype: "Data",
+                    label: "Address Line 2",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "custom_building_number",
+                    fieldtype: "Data",
+                    label: "Building Number",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "custom_area",
+                    fieldtype: "Data",
+                    label: "Area/District",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "city",
+                    fieldtype: "Data",
+                    label: "City/Town",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "country",
+                    fieldtype: "Link",
+                    options: "Country",
+                    label: "Country",
+                    default: country,
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+                {
+                    fieldname: "pincode",
+                    fieldtype: "Data",
+                    label: "Postal Code",
+                    depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                    mandatory_depends_on: "eval:doc.buyer_kind === 'B2B (Company)'",
+                },
+            ],
 
-                primary_action(values) {
-                    const allow_dup = values.allow_duplicate_vat ? 1 : 0;
-                    const dup_reason = (values.duplicate_vat_reason || "").trim();
-                    const vat = (values.tax_id || "").trim();
+            primary_action_label: "Create Supplier",
 
-                    if (allow_dup && !can_override_vat) {
-                        frappe.msgprint(
-                            "You do not have permission to override the VAT duplicate check. Required role: Purchase Manager."
-                        );
+            primary_action(values) {
+                const is_b2b    = values.buyer_kind === "B2B (Company)";
+                const is_branch = values.buyer_kind === "Branch";
+                const allow_dup = values.allow_duplicate_vat ? 1 : 0;
+                const dup_reason = (values.duplicate_vat_reason || "").trim();
+                const vat = (values.tax_id || "").trim();
+
+                // Mobile required for B2B and B2C
+                if (!is_branch) {
+                    const digits = (values.mobile_no || "").replace(/\D/g, "");
+                    if (digits.length < 10) {
+                        frappe.msgprint("Mobile number must have at least 10 digits.");
                         return;
                     }
-                    if (allow_dup && !dup_reason) {
-                        frappe.msgprint("Please provide the Duplicate VAT Reason.");
-                        return;
-                    }
+                }
 
-                    if (vat && vat.length !== 15) {
+                if (is_b2b) {
+                    if (vat.length !== 15) {
                         frappe.msgprint("VAT must be exactly 15 digits.");
                         return;
                     }
-
-                    if (vat && !allow_dup) {
-                        frappe.db
-                            .get_value("Supplier", { tax_id: vat }, "name")
-                            .then((res) => {
-                                if (res.message && res.message.name) {
-                                    frappe.msgprint(
-                                        `VAT already exists for Supplier: ${res.message.name}. A Purchase Manager can tick 'Allow Duplicate VAT' to override.`
-                                    );
-                                    return;
-                                }
-                                submit_create();
-                            });
+                    if ((values.pincode || "").length !== 5) {
+                        frappe.msgprint("Postal Code must be exactly 5 digits.");
                         return;
                     }
+                }
 
-                    submit_create();
+                if (allow_dup && !can_override_vat) {
+                    frappe.msgprint(
+                        "You do not have permission to override the VAT duplicate check. Required role: Purchase Manager."
+                    );
+                    return;
+                }
+                if (allow_dup && !dup_reason) {
+                    frappe.msgprint("Please provide the Duplicate VAT Reason.");
+                    return;
+                }
 
-                    function submit_create() {
-                        const supplier_type = values.buyer_kind === "B2B (Company)" ? "Company" : "Individual";
-                        frappe.call({
-                            method: "rmax_custom.api.supplier.create_supplier_with_address",
-                            args: {
-                                supplier_name: values.supplier_name,
-                                mobile_no: values.mobile_no || null,
-                                email_id: values.email_id || null,
-                                supplier_type: supplier_type,
-                                buyer_kind: values.buyer_kind,
-                                tax_id: vat || null,
-                                address_type: values.address_type || null,
-                                address_line1: values.address_line1 || null,
-                                address_line2: values.address_line2 || null,
-                                custom_building_number: values.custom_building_number || null,
-                                custom_area: values.custom_area || null,
-                                pincode: values.pincode || null,
-                                city: values.city || null,
-                                country: values.country || null,
-                                allow_duplicate_vat: allow_dup,
-                                duplicate_vat_reason: allow_dup ? dup_reason : null,
-                            },
-                            callback: function (r) {
-                                if (r.message) {
-                                    frm.set_value(supplierField, r.message.supplier);
-                                    frm.refresh_field(supplierField);
-                                    frappe.show_alert({
-                                        message: r.message.message,
-                                        indicator: "green",
-                                    });
-                                    d.hide();
-                                }
-                            },
-                        });
-                    }
-                },
-            });
+                if (is_b2b && vat && !allow_dup) {
+                    frappe.db.get_value("Supplier", { tax_id: vat }, "name").then((res) => {
+                        if (res.message && res.message.name) {
+                            frappe.msgprint(
+                                `VAT already exists for Supplier: ${res.message.name}. A Purchase Manager can tick 'Allow Duplicate VAT' to override.`
+                            );
+                            return;
+                        }
+                        submit_create();
+                    });
+                    return;
+                }
 
-            d.show();
+                submit_create();
 
-            d.fields_dict.tax_id.$input.on("input", function () {
-                let value = this.value.replace(/[^0-9]/g, "");
-                if (value.length > 15) value = value.slice(0, 15);
-                this.value = value;
-            });
+                function submit_create() {
+                    const supplier_type = is_branch ? "Branch"
+                        : is_b2b ? "Company"
+                        : "Individual";
 
-            d.fields_dict.pincode.$input.on("input", function () {
-                let value = this.value.replace(/[^0-9]/g, "");
-                if (value.length > 5) value = value.slice(0, 5);
-                this.value = value;
-            });
-        }
-    );
+                    frappe.call({
+                        method: "rmax_custom.api.supplier.create_supplier_with_address",
+                        args: {
+                            supplier_name:          values.supplier_name,
+                            mobile_no:              is_branch ? null : (values.mobile_no || null),
+                            email_id:               values.email_id || null,
+                            supplier_type:          supplier_type,
+                            buyer_kind:             values.buyer_kind,
+                            tax_id:                 is_b2b ? (vat || null) : null,
+                            address_type:           is_b2b ? values.address_type : null,
+                            address_line1:          is_b2b ? values.address_line1 : null,
+                            address_line2:          is_b2b ? (values.address_line2 || null) : null,
+                            custom_building_number: is_b2b ? values.custom_building_number : null,
+                            custom_area:            is_b2b ? values.custom_area : null,
+                            pincode:                is_b2b ? values.pincode : null,
+                            city:                   is_b2b ? values.city : null,
+                            country:                is_b2b ? values.country : null,
+                            allow_duplicate_vat:    allow_dup,
+                            duplicate_vat_reason:   allow_dup ? dup_reason : null,
+                        },
+                        callback: function (r) {
+                            if (r.message) {
+                                frm.set_value(supplierField, r.message.supplier);
+                                frm.refresh_field(supplierField);
+                                frappe.show_alert({
+                                    message: r.message.message,
+                                    indicator: "green",
+                                });
+                                d.hide();
+                            }
+                        },
+                    });
+                }
+            },
+        });
+
+        d.show();
+
+        // Digit-only masks
+        d.fields_dict.mobile_no.$input.on("input", function () {
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 15) value = value.slice(0, 15);
+            this.value = value;
+        });
+
+        d.fields_dict.tax_id.$input.on("input", function () {
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 15) value = value.slice(0, 15);
+            this.value = value;
+        });
+
+        d.fields_dict.pincode.$input.on("input", function () {
+            let value = this.value.replace(/[^0-9]/g, "");
+            if (value.length > 5) value = value.slice(0, 5);
+            this.value = value;
+        });
+    });
 }
