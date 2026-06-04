@@ -209,6 +209,7 @@ def after_migrate():
     restrict_core_workspaces()
     setup_role_home_pages()
     restrict_no_vat_sale_to_sales_manager()
+    clear_default_letter_head()
 
     # HR defaults (no-op if hrms not installed)
     try:
@@ -854,4 +855,15 @@ def restrict_no_vat_sale_to_sales_manager():
             frappe.db.delete("Custom DocPerm", {"name": row.name})
 
     frappe.clear_cache(doctype="No VAT Sale")
+    frappe.db.commit()
+
+
+def clear_default_letter_head():
+    """Ensure no RMAX letter head is marked as default.
+    Frappe can auto-promote a letter head to default when it's created or
+    when fixtures sync. This runs after every migrate to revert that.
+    """
+    frappe.db.sql(
+        "UPDATE `tabLetter Head` SET `is_default` = 0 WHERE `name` LIKE 'RMAX%'"
+    )
     frappe.db.commit()
