@@ -29,13 +29,13 @@ app_include_css = "/assets/rmax_custom/css/rmax_custom.css"
 app_include_js = [
     "/assets/rmax_custom/js/enter_navigation_global.js",
     "/assets/rmax_custom/js/warehouse_stock_popup.js",
-    "/assets/rmax_custom/js/sales_invoice_pos_total_popup.v3.js",
+    "/assets/rmax_custom/js/sales_invoice_pos_total_popup.v3.js?v=2",
     "/assets/rmax_custom/js/sales_invoice_popup.js",
     # create_customer.js moved to doctype_js (Sales Invoice) so JS edits go
     # live without needing a `bench build` outside the maintenance window.
     "/assets/rmax_custom/js/create_multiple_supplier.js",
     "/assets/rmax_custom/js/materiel_request.js",
-    "/assets/rmax_custom/js/vat_validation.js",
+    "/assets/rmax_custom/js/vat_validation.js?v=2",
     "/assets/rmax_custom/js/contact_validation.js",
     "/assets/rmax_custom/js/item_branch_user.js",
     "/assets/rmax_custom/js/branch_user_restrict.js?v=2"
