@@ -72,6 +72,24 @@ function open_create_customer_dialog(frm, opts) {
         OVERRIDE_ROLES.includes(r)
     );
 
+    frappe.call({
+        method: "rmax_custom.api.customer.get_user_branch_defaults",
+        callback: function (branch_res) {
+            const branch_defaults = branch_res.message || {};
+            _open_customer_dialog(frm, opts, company, branch_defaults);
+        },
+    });
+}
+
+function _open_customer_dialog(frm, opts, company, branch_defaults) {
+    opts = opts || {};
+    const customerField = opts.customerField || "customer";
+
+    const OVERRIDE_ROLES = ["Sales Manager", "Sales Master Manager", "System Manager"];
+    const can_override_vat = (frappe.user_roles || []).some((r) =>
+        OVERRIDE_ROLES.includes(r)
+    );
+
     frappe.db.get_value(
         "Company",
         company,
@@ -109,6 +127,14 @@ function open_create_customer_dialog(frm, opts) {
                         fieldtype: "Data",
                         description: __("Optional. Renders on bilingual ZATCA print format and enables Arabic search."),
                         reqd: 0,
+                    },
+                    {
+                        fieldname: "customer_group",
+                        fieldtype: "Link",
+                        label: "Customer Group",
+                        options: "Customer Group",
+                        filters: { is_group: 0 },
+                        default: branch_defaults.customer_group || "",
                     },
                     {
                         fieldname: "mobile_no",
@@ -283,6 +309,7 @@ function open_create_customer_dialog(frm, opts) {
                             args: {
                                 customer_name: values.customer_name,
                                 custom_customer_name_ar: values.custom_customer_name_ar || "",
+                                customer_group: values.customer_group || null,
                                 mobile_no: values.mobile_no,
                                 email_id: values.email_id || null,
                                 customer_type: customer_type,

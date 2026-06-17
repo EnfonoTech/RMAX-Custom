@@ -20,6 +20,40 @@ def _can_override_vat_duplicate(user=None):
 	return bool(set(frappe.get_roles(user)) & VAT_DUPLICATE_OVERRIDE_ROLES)
 
 
+@frappe.whitelist()
+def get_user_branch_defaults():
+	"""Return customer_group and supplier_group from the current user's Branch Configuration."""
+	user = frappe.session.user
+	branch_config = frappe.db.get_value(
+		"Branch Configuration User",
+		{"user": user},
+		"parent",
+	)
+	result = {"customer_group": None, "supplier_group": None}
+	if not branch_config:
+		return result
+
+	cg_rows = frappe.get_all(
+		"Branch Configuration Customer",
+		filters={"parent": branch_config},
+		fields=["customer_group"],
+		limit=1,
+	)
+	if cg_rows:
+		result["customer_group"] = cg_rows[0].customer_group
+
+	sg_rows = frappe.get_all(
+		"Branch Configuration Supplier",
+		filters={"parent": branch_config},
+		fields=["supplier_group"],
+		limit=1,
+	)
+	if sg_rows:
+		result["supplier_group"] = sg_rows[0].supplier_group
+
+	return result
+
+
 def enforce_vat_duplicate_rule(doc, method=None):
 	"""Customer.validate hook. Server-side enforcement of VAT duplicate rule.
 
@@ -129,6 +163,7 @@ def create_customer_with_address(
     duplicate_vat_reason=None,
     buyer_kind=None,
     custom_customer_name_ar: str = "",
+    customer_group=None,
 ):
 
     if not customer_name:
@@ -208,7 +243,7 @@ def create_customer_with_address(
         "doctype": "Customer",
         "customer_name": customer_name,
         "customer_type": customer_type or "Company",
-        "customer_group": _get_default_customer_group(),
+        "customer_group": customer_group or _get_default_customer_group(),
         "territory": _get_default_territory(),
         "default_currency": default_currency,
         "tax_id": tax_id,
