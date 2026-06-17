@@ -51,6 +51,7 @@
 		"Collection Report",
 		"Branch Receivables",
 		"Stock Balance",
+		"Simple Stock Report",
 		"Stock Ledger",
 		"General Ledger",
 	];

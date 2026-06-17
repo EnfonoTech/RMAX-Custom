@@ -119,6 +119,7 @@ def create_supplier_with_address(
     allow_duplicate_vat=0,
     duplicate_vat_reason=None,
     buyer_kind=None,
+    supplier_group=None,
 ):
     if not supplier_name:
         frappe.throw(_("Supplier Name is required"))
@@ -188,7 +189,7 @@ def create_supplier_with_address(
         "doctype": "Supplier",
         "supplier_name": supplier_name,
         "supplier_type": supplier_type or "Company",
-        "supplier_group": _get_default_supplier_group(),
+        "supplier_group": supplier_group or _get_default_supplier_group(),
         "country": country,
         "mobile_no": mobile_no or None,
         "email_id": email_id or None,

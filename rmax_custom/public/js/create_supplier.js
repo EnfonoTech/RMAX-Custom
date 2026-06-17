@@ -60,6 +60,19 @@ function open_create_supplier_dialog(frm, opts) {
     const supplierField = opts.supplierField || "supplier";
     const company = frm.doc.company || frappe.defaults.get_default("company");
 
+    frappe.call({
+        method: "rmax_custom.api.customer.get_user_branch_defaults",
+        callback: function (branch_res) {
+            const branch_defaults = branch_res.message || {};
+            _open_supplier_dialog(frm, opts, company, branch_defaults);
+        },
+    });
+}
+
+function _open_supplier_dialog(frm, opts, company, branch_defaults) {
+    opts = opts || {};
+    const supplierField = opts.supplierField || "supplier";
+
     const OVERRIDE_ROLES = ["Purchase Manager", "Purchase Master Manager", "System Manager"];
     const user_roles = frappe.user_roles || [];
     const can_override_vat = user_roles.some((r) => OVERRIDE_ROLES.includes(r));
@@ -92,6 +105,14 @@ function open_create_supplier_dialog(frm, opts) {
                     fieldtype: "Data",
                     label: "Supplier Name",
                     reqd: 1,
+                },
+                {
+                    fieldname: "supplier_group",
+                    fieldtype: "Link",
+                    label: "Supplier Group",
+                    options: "Supplier Group",
+                    filters: { is_group: 0 },
+                    default: branch_defaults.supplier_group || "",
                 },
                 {
                     fieldname: "mobile_no",
@@ -283,6 +304,7 @@ function open_create_supplier_dialog(frm, opts) {
                             country:                is_b2b ? values.country : null,
                             allow_duplicate_vat:    allow_dup,
                             duplicate_vat_reason:   allow_dup ? dup_reason : null,
+                            supplier_group:         values.supplier_group || null,
                         },
                         callback: function (r) {
                             if (r.message) {
