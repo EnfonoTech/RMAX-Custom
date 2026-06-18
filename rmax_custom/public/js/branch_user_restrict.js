@@ -50,6 +50,7 @@
 		"Stock Sales Report",
 		"Collection Report",
 		"Branch Receivables",
+		"Accounts Receivable Summary",
 		"Stock Balance",
 		"Simple Stock Report",
 		"Stock Ledger",
@@ -339,6 +340,32 @@
 		}
 	}
 
+	// === AUTO-SET BRANCH FILTER ON AR SUMMARY ===
+	function set_ar_summary_branch_filter() {
+		if (!is_restricted_user()) return;
+		var route = frappe.get_route();
+		if (!route || route[0] !== "query-report" || route[1] !== "Accounts Receivable Summary") return;
+
+		var branch = frappe.defaults.get_user_default("Branch");
+		if (!branch) return;
+
+		var attempts = 0;
+		var interval = setInterval(function () {
+			attempts++;
+			if (attempts > 40) { clearInterval(interval); return; }
+
+			var report = frappe.query_report;
+			if (!report || !report.get_filter) return;
+
+			var branch_filter = report.get_filter("branch");
+			if (!branch_filter) { clearInterval(interval); return; }
+
+			clearInterval(interval);
+			report.set_filter_value("branch", branch);
+			report.refresh();
+		}, 300);
+	}
+
 	// === APPLY ALL RESTRICTIONS ===
 	function apply_all() {
 		if (!is_restricted_user()) return;
@@ -347,6 +374,7 @@
 		fix_logo_href();
 		add_dashboard_nav();
 		hide_cost_columns_in_reports();
+		set_ar_summary_branch_filter();
 	}
 
 	// === ENFORCE ON EVERY PAGE CHANGE ===

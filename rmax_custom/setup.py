@@ -294,6 +294,15 @@ def after_migrate():
             message=frappe.get_traceback(),
         )
 
+    # Custom print format for Accounts Receivable Summary report
+    try:
+        setup_ar_summary_print_format()
+    except Exception:
+        frappe.log_error(
+            title="rmax_custom: AR summary print format setup failed",
+            message=frappe.get_traceback(),
+        )
+
 
 # Roles allowed to tick custom_allow_duplicate_vat on Customer (permlevel 1)
 VAT_DUPLICATE_OVERRIDE_ROLES = ("Sales Manager", "Sales Master Manager", "System Manager")
@@ -867,3 +876,187 @@ def clear_default_letter_head():
         "UPDATE `tabLetter Head` SET `is_default` = 0 WHERE `name` LIKE 'RMAX%'"
     )
     frappe.db.commit()
+
+
+def setup_ar_summary_print_format():
+    """Create a Jinja Print Format for Accounts Receivable Summary report."""
+    if not frappe.db.exists("Report", "Accounts Receivable Summary"):
+        return
+
+    pf_name = "RMAX AR Summary"
+    html = _get_ar_summary_print_html()
+
+    if frappe.db.exists("Print Format", pf_name):
+        frappe.db.set_value("Print Format", pf_name, "html", html, update_modified=False)
+    else:
+        pf = frappe.get_doc({
+            "doctype": "Print Format",
+            "name": pf_name,
+            "print_format_for": "Report",
+            "report": "Accounts Receivable Summary",
+            "doc_type": "Sales Invoice",
+            "print_format_type": "JS",
+            "standard": "No",
+            "module": "Rmax Custom",
+            "html": html,
+        })
+        pf.insert(ignore_permissions=True)
+
+    frappe.db.commit()
+
+
+def _get_ar_summary_print_html():
+    return r"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Accounts Receivable Summary</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@emran-alhaddad/saudi-riyal-font/index.css">
+    <style>
+        @page { size: A4 landscape; margin: 15px; }
+        body { font-family: Arial, sans-serif; font-size: 8.5pt; margin: 0; }
+        .title { text-align: center; font-size: 14pt; font-weight: bold; margin: 16px 0 4px; }
+        .period { text-align: center; font-size: 9.5pt; margin-bottom: 10px; color: #333; }
+        p { margin: 4px 0; font-size: 8.5pt; }
+        table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 8px; }
+        th, td { border: 0.5px solid #000; text-align: center; line-height: 1.2; padding: 3px 4px; }
+        th { font-weight: bold; background-color: #1e293b; color: #fff; }
+        .text-right { text-align: right; }
+        .text-left  { text-align: left; }
+        .row-even td { background-color: #fafaf8; }
+        .row-odd  td { background-color: #f5f3ef; }
+        .total-row td { background-color: #334155; color: #fff; font-weight: bold; }
+        .aging-summary { margin-top: 14px; }
+        .aging-summary th { background-color: #334155; }
+        .aging-label-row td { background-color: #e8e4dc; font-weight: bold; }
+        .footer-section { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid #aaa; }
+        .sig-block { text-align: center; }
+        .sig-line { border-bottom: 1px solid #333; width: 200px; margin-top: 50px; margin-bottom: 5px; }
+        .sig-label { font-size: 8pt; color: #555; }
+        .stamp-block { text-align: center; }
+        .stamp-box { width: 150px; height: 90px; border: 1px solid #aaa; display: block; margin-bottom: 5px; }
+        .stamp-label { font-size: 8pt; color: #555; }
+        .footer-note { margin-top: 16px; font-size: 8pt; color: #555; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div style="font-size:11pt; font-weight:bold; text-align:left; margin-bottom:4px;">
+    {% if (filters.company) { %}{%= filters.company %}{% } %}
+</div>
+<div class="title">Accounts Receivable Summary</div>
+<div class="period">
+    {% if (filters.report_date) { %}
+        As of {%= frappe.datetime.str_to_user(filters.report_date) %}
+    {% } else { %}
+        As of {%= frappe.datetime.str_to_user(frappe.datetime.get_today()) %}
+    {% } %}
+</div>
+
+
+<table>
+    <thead>
+        <tr>
+            <th class="text-left" style="width:60px;">Party Type</th>
+            <th class="text-left" style="width:150px;">Party</th>
+            <th class="text-right" style="width:75px;">Advance (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:80px;">Invoiced (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:75px;">Paid (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:75px;">Credit Note (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:80px;">Outstanding (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% var row_idx = 0; %}
+        {% var t_adv=0, t_inv=0, t_paid=0, t_cn=0, t_out=0, t_r1=0, t_r2=0, t_r3=0, t_r4=0, t_r5=0; %}
+
+        {% for (var i = 0; i < data.length; i++) { %}
+            {% var row = data[i]; %}
+            {% if (!row.party && !row.customer_name) { continue; } %}
+
+            {% var adv        = flt(row.advance || 0); %}
+            {% var invoiced   = flt(row.invoiced || 0); %}
+            {% var paid       = flt(row.paid || 0); %}
+            {% var cn         = flt(row.credit_note || 0); %}
+            {% var outstanding= flt(row.outstanding || 0); %}
+            {% var r1 = flt(row.range1 || 0); %}
+            {% var r2 = flt(row.range2 || 0); %}
+            {% var r3 = flt(row.range3 || 0); %}
+            {% var r4 = flt(row.range4 || 0); %}
+            {% var r5 = flt(row.range5 || 0); %}
+
+            {% t_adv+=adv; t_inv+=invoiced; t_paid+=paid; t_cn+=cn; t_out+=outstanding; %}
+            {% t_r1+=r1; t_r2+=r2; t_r3+=r3; t_r4+=r4; t_r5+=r5; %}
+
+            {% var cls = (row_idx % 2 === 0) ? "row-even" : "row-odd"; %}
+            {% row_idx++; %}
+
+            <tr class="{%= cls %}">
+                <td class="text-left">{%= row.party_type || "" %}</td>
+                <td class="text-left">{%= row.customer_name || row.party || "" %}</td>
+                <td class="text-right">{%= adv ? format_currency(adv, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(invoiced, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(paid, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right">{%= cn ? format_currency(cn, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right"><strong><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(outstanding, " ").replace(/[^\d,.\-]/g, "").trim() %}</strong></td>
+            </tr>
+        {% } %}
+
+        <tr class="total-row">
+            <td colspan="2" class="text-left"><strong>Total</strong></td>
+            <td class="text-right">{%= format_currency(t_adv, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_inv, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_paid, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right">{%= format_currency(t_cn, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_out, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+        </tr>
+    </tbody>
+</table>
+
+
+<div class="aging-summary">
+    <div style="font-weight:bold; font-size:9pt; margin-bottom:4px;">
+        Ageing Summary
+        {% if (filters.ageing_based_on) { %}<span style="font-weight:normal; font-size:8pt; color:#555;">(Based On: {%= filters.ageing_based_on %})</span>{% } %}
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Less than 30 Days</th>
+                <th>31 to 60 Days</th>
+                <th>61 to 90 Days</th>
+                <th>91 to 120 Days</th>
+                <th>More than 120 Days</th>
+                <th>Total Outstanding</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="aging-label-row">
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r1, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r2, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r3, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r4, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r5, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+                <td class="text-right"><strong><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_out, " ").replace(/[^\d,.\-]/g, "").trim() %}</strong></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div class="footer-section">
+    <div class="sig-block">
+        <div class="sig-line"></div>
+        <div class="sig-label">Authorized Signature</div>
+    </div>
+    <div class="stamp-block">
+        <div class="stamp-box"></div>
+        <div class="stamp-label">Company Stamp</div>
+    </div>
+</div>
+
+<div class="footer-note">
+    Generated on {%= frappe.datetime.str_to_user(frappe.datetime.get_today()) %}
+</div>
+
+</body>
+</html>"""
