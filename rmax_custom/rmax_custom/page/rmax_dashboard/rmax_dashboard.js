@@ -181,6 +181,7 @@ function render_branch_dashboard(data) {
 	html += action_card('bar-chart-2', 'Stock Sales Report', 'Sales analysis', 'report', 'Stock Sales Report');
 	html += action_card('dollar-sign', 'Collection Report', 'Payment collections', 'report', 'Collection Report');
 	html += action_card('credit-card', 'Branch Receivables', 'Outstanding receivables', 'report', 'Branch Receivables');
+	html += action_card('activity', 'AR Summary', 'Party-wise aging', 'report', 'Accounts Receivable Summary');
 	html += action_card('layers', 'Stock Balance', 'Current stock levels', 'report', 'Stock Balance');
 	html += action_card('box', 'Simple Stock Report', 'Stock as on date', 'report', 'Simple Stock Report');
 	html += action_card('book-open', 'Stock Ledger', 'Stock transactions', 'report', 'Stock Ledger');
@@ -219,6 +220,7 @@ function render_stock_dashboard(data) {
 	html += action_card('package', 'Purchase Receipt', 'Receive goods', 'list', 'Purchase Receipt');
 	html += action_card('list', 'Item', 'Manage items', 'list', 'Item');
 	html += action_card('layers', 'Stock Balance', 'Current stock levels', 'report', 'Stock Balance');
+	html += action_card('box', 'Simple Stock Report', 'Stock as on date', 'report', 'Simple Stock Report');
 	html += action_card('book-open', 'Stock Ledger', 'Stock transactions', 'report', 'Stock Ledger');
 	html += action_card('tag', 'Item Groups', 'Browse item groups', 'list', 'Item Group');
 	html += action_card('alert-triangle', 'Report Damage', 'Create damage slip', 'new', 'Damage Slip');
