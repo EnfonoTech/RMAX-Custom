@@ -926,9 +926,6 @@ def _get_ar_summary_print_html():
         .row-even td { background-color: #fafaf8; }
         .row-odd  td { background-color: #f5f3ef; }
         .total-row td { background-color: #334155; color: #fff; font-weight: bold; }
-        .aging-summary { margin-top: 14px; }
-        .aging-summary th { background-color: #334155; }
-        .aging-label-row td { background-color: #e8e4dc; font-weight: bold; }
         .footer-section { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid #aaa; }
         .sig-block { text-align: center; }
         .sig-line { border-bottom: 1px solid #333; width: 200px; margin-top: 50px; margin-bottom: 5px; }
@@ -951,41 +948,41 @@ def _get_ar_summary_print_html():
     {% } else { %}
         As of {%= frappe.datetime.str_to_user(frappe.datetime.get_today()) %}
     {% } %}
+    {% if (filters.ageing_based_on) { %}
+        &nbsp;&nbsp;<span style="font-size:8pt; color:#555;">(Ageing Based On: {%= filters.ageing_based_on %})</span>
+    {% } %}
 </div>
 
 
 <table>
     <thead>
         <tr>
-            <th class="text-left" style="width:60px;">Party Type</th>
-            <th class="text-left" style="width:150px;">Party</th>
-            <th class="text-right" style="width:75px;">Advance (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
-            <th class="text-right" style="width:80px;">Invoiced (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
-            <th class="text-right" style="width:75px;">Paid (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
-            <th class="text-right" style="width:75px;">Credit Note (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-left" style="width:50px;">Party Type</th>
+            <th class="text-left" style="width:140px;">Party</th>
             <th class="text-right" style="width:80px;">Outstanding (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:65px;">0-30 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:65px;">31-60 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:65px;">61-90 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:65px;">91-120 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+            <th class="text-right" style="width:65px;">&gt;120 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
         </tr>
     </thead>
     <tbody>
         {% var row_idx = 0; %}
-        {% var t_adv=0, t_inv=0, t_paid=0, t_cn=0, t_out=0, t_r1=0, t_r2=0, t_r3=0, t_r4=0, t_r5=0; %}
+        {% var t_out=0, t_r1=0, t_r2=0, t_r3=0, t_r4=0, t_r5=0; %}
 
         {% for (var i = 0; i < data.length; i++) { %}
             {% var row = data[i]; %}
             {% if (!row.party && !row.customer_name) { continue; } %}
 
-            {% var adv        = flt(row.advance || 0); %}
-            {% var invoiced   = flt(row.invoiced || 0); %}
-            {% var paid       = flt(row.paid || 0); %}
-            {% var cn         = flt(row.credit_note || 0); %}
-            {% var outstanding= flt(row.outstanding || 0); %}
+            {% var outstanding = flt(row.outstanding || 0); %}
             {% var r1 = flt(row.range1 || 0); %}
             {% var r2 = flt(row.range2 || 0); %}
             {% var r3 = flt(row.range3 || 0); %}
             {% var r4 = flt(row.range4 || 0); %}
             {% var r5 = flt(row.range5 || 0); %}
 
-            {% t_adv+=adv; t_inv+=invoiced; t_paid+=paid; t_cn+=cn; t_out+=outstanding; %}
+            {% t_out+=outstanding; %}
             {% t_r1+=r1; t_r2+=r2; t_r3+=r3; t_r4+=r4; t_r5+=r5; %}
 
             {% var cls = (row_idx % 2 === 0) ? "row-even" : "row-odd"; %}
@@ -994,27 +991,28 @@ def _get_ar_summary_print_html():
             <tr class="{%= cls %}">
                 <td class="text-left">{%= row.party_type || "" %}</td>
                 <td class="text-left">{%= row.customer_name || row.party || "" %}</td>
-                <td class="text-right">{%= adv ? format_currency(adv, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
-                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(invoiced, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
-                <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(paid, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
-                <td class="text-right">{%= cn ? format_currency(cn, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
                 <td class="text-right"><strong><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(outstanding, " ").replace(/[^\d,.\-]/g, "").trim() %}</strong></td>
+                <td class="text-right">{%= r1 ? format_currency(r1, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right">{%= r2 ? format_currency(r2, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right">{%= r3 ? format_currency(r3, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right">{%= r4 ? format_currency(r4, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
+                <td class="text-right">{%= r5 ? format_currency(r5, " ").replace(/[^\d,.\-]/g, "").trim() : "-" %}</td>
             </tr>
         {% } %}
 
         <tr class="total-row">
             <td colspan="2" class="text-left"><strong>Total</strong></td>
-            <td class="text-right">{%= format_currency(t_adv, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
-            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_inv, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
-            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_paid, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
-            <td class="text-right">{%= format_currency(t_cn, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
             <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_out, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_r1, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_r2, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_r3, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_r4, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
+            <td class="text-right"><span class="icon-saudi_riyal" style="color:#fff;"></span>&nbsp;{%= format_currency(t_r5, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
         </tr>
     </tbody>
 </table>
 
-
-<div class="aging-summary">
+<div style="margin-top: 14px;">
     <div style="font-weight:bold; font-size:9pt; margin-bottom:4px;">
         Ageing Summary
         {% if (filters.ageing_based_on) { %}<span style="font-weight:normal; font-size:8pt; color:#555;">(Based On: {%= filters.ageing_based_on %})</span>{% } %}
@@ -1022,16 +1020,16 @@ def _get_ar_summary_print_html():
     <table>
         <thead>
             <tr>
-                <th>Less than 30 Days</th>
-                <th>31 to 60 Days</th>
-                <th>61 to 90 Days</th>
-                <th>91 to 120 Days</th>
-                <th>More than 120 Days</th>
-                <th>Total Outstanding</th>
+                <th>0-30 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+                <th>31-60 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+                <th>61-90 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+                <th>91-120 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+                <th>&gt;120 Days (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
+                <th>Total Outstanding (<span class="icon-saudi_riyal" style="color:#fff;"></span>)</th>
             </tr>
         </thead>
         <tbody>
-            <tr class="aging-label-row">
+            <tr style="background-color:#e8e4dc; font-weight:bold;">
                 <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r1, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
                 <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r2, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
                 <td class="text-right"><span class="icon-saudi_riyal"></span>&nbsp;{%= format_currency(t_r3, " ").replace(/[^\d,.\-]/g, "").trim() %}</td>
