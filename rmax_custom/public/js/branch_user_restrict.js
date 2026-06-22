@@ -379,7 +379,17 @@
 
 	// === ENFORCE ON EVERY PAGE CHANGE ===
 	$(document).on("page-change", function () {
-		setTimeout(apply_all, 200);
+		// enforce_route immediately to prevent page flash/blink
+		if (is_restricted_user()) enforce_route();
+		// UI-only updates can follow after a short delay
+		setTimeout(function () {
+			if (is_restricted_user()) {
+				hide_sidebar();
+				fix_logo_href();
+				add_dashboard_nav();
+				hide_cost_columns_in_reports();
+			}
+		}, 100);
 	});
 
 	// === ENFORCE ON INITIAL LOAD ===
