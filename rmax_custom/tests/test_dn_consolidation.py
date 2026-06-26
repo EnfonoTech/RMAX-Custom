@@ -82,6 +82,23 @@ class TestConsolidateDnsToSi(FrappeTestCase):
             frappe.db.get_value("Delivery Note", dn.name, "custom_consolidated_si")
         )
 
+    def test_draft_si_delete_clears_stamp_and_succeeds(self):
+        # Reproduces the bug: a DRAFT consolidated SI stamps the DN via
+        # custom_consolidated_si; deleting it must clear the stamp (on_trash)
+        # so the link-integrity check doesn't block the delete.
+        dn = _make_submitted_dn(self.customer, self.item, self.company,
+                                self.warehouse, qty=5, rate=10)
+        si_name = consolidate_dns_to_si([dn.name])
+        self.assertEqual(
+            frappe.db.get_value("Delivery Note", dn.name, "custom_consolidated_si"),
+            si_name,
+        )
+        frappe.delete_doc("Sales Invoice", si_name)
+        self.assertFalse(frappe.db.exists("Sales Invoice", si_name))
+        self.assertFalse(
+            frappe.db.get_value("Delivery Note", dn.name, "custom_consolidated_si")
+        )
+
 
 # --- fixtures helpers ---
 

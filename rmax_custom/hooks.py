@@ -227,6 +227,9 @@ doc_events = {
 			"rmax_custom.inter_company_dn.sales_invoice_on_cancel",
 			"rmax_custom.api.delivery_note.sales_invoice_on_cancel_clear_dn_return",
 		],
+		"on_trash": [
+			"rmax_custom.api.delivery_note.sales_invoice_on_trash_clear_consolidated",
+		],
 	},
 	"Quotation": {
 		"before_insert": [
