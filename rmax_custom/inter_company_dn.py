@@ -291,17 +291,9 @@ def sales_invoice_on_cancel(doc, method=None):
 
 	# Clear the net-off consolidation stamp on every DN linked via
 	# custom_consolidated_si. (Set by api.delivery_note.consolidate_dns_to_si.)
-	consolidated_dns = frappe.get_all(
-		"Delivery Note",
-		filters={"custom_consolidated_si": doc.name},
-		pluck="name",
-	)
-	for dn_name in consolidated_dns:
-		frappe.db.set_value(
-			"Delivery Note", dn_name,
-			"custom_consolidated_si", None,
-			update_modified=False,
-		)
+	# Shared with the on_trash path. Local import avoids a circular import.
+	from rmax_custom.api.delivery_note import clear_consolidated_si_links
+	clear_consolidated_si_links(doc.name)
 
 
 def _source_dns_for_si(si_doc) -> set[str]:

@@ -672,6 +672,38 @@ def consolidate_dns_to_si(delivery_note_names):
     return si.name
 
 
+def clear_consolidated_si_links(si_name):
+    """Clear the ``custom_consolidated_si`` back-reference on every Delivery
+    Note that points to this Sales Invoice.
+
+    ``consolidate_dns_to_si`` stamps each source DN with
+    ``custom_consolidated_si = <SI>``. That Link field makes Frappe's
+    link-integrity check (``check_if_doc_is_linked``) block cancel/delete of the
+    SI. Both the cancel path (submitted SI) and the trash path (draft SI delete)
+    must clear it first, or the operation is refused with
+    "Cannot delete or cancel ... is linked with Delivery Note ...".
+    """
+    for dn_name in frappe.get_all(
+        "Delivery Note",
+        filters={"custom_consolidated_si": si_name},
+        pluck="name",
+    ):
+        frappe.db.set_value(
+            "Delivery Note", dn_name,
+            "custom_consolidated_si", None,
+            update_modified=False,
+        )
+
+
+def sales_invoice_on_trash_clear_consolidated(doc, method=None):
+    """Sales Invoice ``on_trash``: free the netted-off DN stamps so a DRAFT
+    consolidated SI can be deleted. ``on_trash`` runs before
+    ``check_if_doc_is_linked`` in ``frappe.delete_doc`` (verified against v15),
+    so clearing here lets the link-integrity check pass. The submitted-SI case
+    is handled separately on ``on_cancel``. No-op for non-consolidated SIs."""
+    clear_consolidated_si_links(doc.name)
+
+
 # ---------------------------------------------------------------------------
 # Multi-source return allocation APIs
 # ---------------------------------------------------------------------------
