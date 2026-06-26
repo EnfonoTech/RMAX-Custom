@@ -82,6 +82,24 @@ class TestConsolidateDnsToSi(FrappeTestCase):
             frappe.db.get_value("Delivery Note", dn.name, "custom_consolidated_si")
         )
 
+    def test_clubbed_dn_billing_status_flips_on_submit_and_reverts(self):
+        # The net-off SI omits SI Item.delivery_note, so ERPNext's billing calc
+        # can't flip the clubbed DNs. on_submit must mark them Completed; cancel
+        # must revert to To Bill.
+        dn = _make_submitted_dn(self.customer, self.item, self.company,
+                                self.warehouse, qty=5, rate=10)
+        self.assertEqual(
+            frappe.db.get_value("Delivery Note", dn.name, "status"), "To Bill"
+        )
+        si = frappe.get_doc("Sales Invoice", consolidate_dns_to_si([dn.name]))
+        si.submit()
+        dn.reload()
+        self.assertEqual(flt(dn.per_billed), 100)
+        self.assertEqual(dn.status, "Completed")
+        si.cancel()
+        dn.reload()
+        self.assertEqual(dn.status, "To Bill")
+
     def test_draft_si_delete_clears_stamp_and_succeeds(self):
         # Reproduces the bug: a DRAFT consolidated SI stamps the DN via
         # custom_consolidated_si; deleting it must clear the stamp (on_trash)

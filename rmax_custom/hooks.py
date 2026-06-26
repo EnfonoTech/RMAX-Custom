@@ -222,6 +222,7 @@ doc_events = {
 		"on_submit": [
 			"rmax_custom.inter_company.sales_invoice_on_submit",
 			"rmax_custom.inter_company_dn.sales_invoice_on_submit",
+			"rmax_custom.api.delivery_note.sales_invoice_on_submit_mark_consolidated",
 		],
 		"on_cancel": [
 			"rmax_custom.inter_company_dn.sales_invoice_on_cancel",
