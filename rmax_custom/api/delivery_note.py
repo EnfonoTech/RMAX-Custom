@@ -730,7 +730,11 @@ def unmark_consolidated_dns_billed(si_name):
     ):
         try:
             dn = frappe.get_doc("Delivery Note", dn_name)
+            # update_billing_status recomputes per_billed (→ 0 for a pure net-off
+            # DN) but does NOT re-derive the status field; set_status must run
+            # after it or the DN stays stuck on "Completed".
             dn.update_billing_status(update_modified=False)
+            dn.set_status(update=True, update_modified=False)
         except Exception:
             frappe.db.set_value(
                 "Delivery Note", dn_name,
