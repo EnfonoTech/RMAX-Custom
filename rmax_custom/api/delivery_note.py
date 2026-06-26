@@ -695,12 +695,63 @@ def clear_consolidated_si_links(si_name):
         )
 
 
+def mark_consolidated_dns_billed(si_name):
+    """Mark every DN consolidated into this SI as fully billed → status Completed.
+
+    The net-off consolidated SI omits ``SI Item.delivery_note``, so ERPNext's
+    ``update_billing_status`` sums zero linked rows and would leave each source
+    DN stuck on "To Bill". Set ``per_billed``/``status`` explicitly instead.
+    Flat 100% — a clubbed DN is treated as fully invoiced regardless of net-off.
+    No-op for a normal (non-consolidated) Sales Invoice.
+    """
+    for dn_name in frappe.get_all(
+        "Delivery Note",
+        filters={"custom_consolidated_si": si_name},
+        pluck="name",
+    ):
+        frappe.db.set_value(
+            "Delivery Note", dn_name,
+            {"per_billed": 100, "status": "Completed"},
+            update_modified=False,
+        )
+
+
+def unmark_consolidated_dns_billed(si_name):
+    """Revert the billing flag on DNs consolidated into this SI when it is
+    cancelled or deleted. Re-runs ERPNext's own ``update_billing_status`` so the
+    DN reflects any OTHER real invoices (a pure net-off DN has none → "To Bill").
+    Must be called BEFORE clearing ``custom_consolidated_si`` — it needs the link
+    to find the DNs.
+    """
+    for dn_name in frappe.get_all(
+        "Delivery Note",
+        filters={"custom_consolidated_si": si_name},
+        pluck="name",
+    ):
+        try:
+            dn = frappe.get_doc("Delivery Note", dn_name)
+            dn.update_billing_status(update_modified=False)
+        except Exception:
+            frappe.db.set_value(
+                "Delivery Note", dn_name,
+                {"per_billed": 0, "status": "To Bill"},
+                update_modified=False,
+            )
+
+
+def sales_invoice_on_submit_mark_consolidated(doc, method=None):
+    """Sales Invoice ``on_submit``: flip every clubbed DN (linked via
+    ``custom_consolidated_si``) from "To Bill" to "Completed"."""
+    mark_consolidated_dns_billed(doc.name)
+
+
 def sales_invoice_on_trash_clear_consolidated(doc, method=None):
-    """Sales Invoice ``on_trash``: free the netted-off DN stamps so a DRAFT
-    consolidated SI can be deleted. ``on_trash`` runs before
-    ``check_if_doc_is_linked`` in ``frappe.delete_doc`` (verified against v15),
-    so clearing here lets the link-integrity check pass. The submitted-SI case
-    is handled separately on ``on_cancel``. No-op for non-consolidated SIs."""
+    """Sales Invoice ``on_trash``: revert the clubbed DNs' billing flag, then
+    free the netted-off DN stamps so a DRAFT consolidated SI can be deleted.
+    ``on_trash`` runs before ``check_if_doc_is_linked`` in ``frappe.delete_doc``
+    (verified against v15), so clearing here lets the link-integrity check pass.
+    No-op for non-consolidated SIs."""
+    unmark_consolidated_dns_billed(doc.name)
     clear_consolidated_si_links(doc.name)
 
 

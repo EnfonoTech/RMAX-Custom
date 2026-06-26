@@ -289,10 +289,15 @@ def sales_invoice_on_cancel(doc, method=None):
 	if linked:
 		frappe.db.commit()
 
-	# Clear the net-off consolidation stamp on every DN linked via
-	# custom_consolidated_si. (Set by api.delivery_note.consolidate_dns_to_si.)
-	# Shared with the on_trash path. Local import avoids a circular import.
-	from rmax_custom.api.delivery_note import clear_consolidated_si_links
+	# Revert the billing flag on the clubbed DNs, then clear the net-off
+	# consolidation stamp. (Set by api.delivery_note.consolidate_dns_to_si.)
+	# Order matters — unmark needs the link before it is cleared. Shared with the
+	# on_trash path. Local import avoids a circular import.
+	from rmax_custom.api.delivery_note import (
+		clear_consolidated_si_links,
+		unmark_consolidated_dns_billed,
+	)
+	unmark_consolidated_dns_billed(doc.name)
 	clear_consolidated_si_links(doc.name)
 
 
