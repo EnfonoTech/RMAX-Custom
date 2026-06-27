@@ -234,3 +234,35 @@ function _rmax_apply_branch_payment_accounts(frm, cdt, cdn) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// Consolidated Delivery Notes link (SI → source DNs)
+// ---------------------------------------------------------------------------
+// Net-off consolidation links the source DNs to this SI via the custom field
+// `custom_consolidated_si` (the standard SI→DN item link is intentionally
+// omitted — merged/netted rows can't map to a single DN row), so the
+// Connections tab cannot surface them. This button gives the SI → source-DN
+// navigation. The DN → SI direction already works via the DN's
+// "Consolidated Sales Invoice" field.
+frappe.ui.form.on("Sales Invoice", {
+    refresh: function (frm) {
+        if (frm.is_new()) return;
+        frappe.db
+            .count("Delivery Note", {
+                filters: { custom_consolidated_si: frm.doc.name },
+            })
+            .then(function (n) {
+                if (n) {
+                    frm.add_custom_button(
+                        __("Delivery Notes ({0})", [n]),
+                        function () {
+                            frappe.set_route("List", "Delivery Note", {
+                                custom_consolidated_si: frm.doc.name,
+                            });
+                        },
+                        __("View")
+                    );
+                }
+            });
+    },
+});
+

@@ -390,6 +390,13 @@ def _build_consolidated_standard_si(dns, buckets):
     si.customer_name = head.customer_name
     si.company = head.company
     si.currency = head.currency
+    # Carry the source DN's price list (e.g. "Inter Company Price") onto the SI.
+    # Without this the SI falls back to the customer/default selling price list
+    # (e.g. "Retail Price"), which mismatches the DNs. Item rates are still set
+    # explicitly from the netted DN amounts below, so this only fixes the
+    # price-list field + price_list_rate, it does not re-price the invoice.
+    if head.get("selling_price_list"):
+        si.selling_price_list = head.selling_price_list
     si.posting_date = frappe.utils.today()
     si.set_posting_time = 1
     si.update_stock = 0

@@ -100,6 +100,24 @@ class TestConsolidateDnsToSi(FrappeTestCase):
         dn.reload()
         self.assertEqual(dn.status, "To Bill")
 
+    def test_consolidated_si_inherits_dn_price_list(self):
+        # Consolidated SI must carry the source DN's selling price list (e.g.
+        # "Inter Company Price"), not fall back to the customer/default list.
+        pl = _ensure_selling_price_list("RMAX Consol PL")
+        dn = frappe.new_doc("Delivery Note")
+        dn.customer = self.customer
+        dn.company = self.company
+        dn.set_warehouse = self.warehouse
+        dn.selling_price_list = pl
+        dn.append("items", {
+            "item_code": self.item, "qty": 3, "rate": 10,
+            "warehouse": self.warehouse, "uom": "Nos",
+        })
+        dn.insert(ignore_permissions=True)
+        dn.submit()
+        si = frappe.get_doc("Sales Invoice", consolidate_dns_to_si([dn.name]))
+        self.assertEqual(si.selling_price_list, pl)
+
     def test_draft_si_delete_clears_stamp_and_succeeds(self):
         # Reproduces the bug: a DRAFT consolidated SI stamps the DN via
         # custom_consolidated_si; deleting it must clear the stamp (on_trash)
@@ -148,6 +166,17 @@ def _ensure_item(item_code):
     i.is_stock_item = 0  # avoid bin/valuation setup in unit tests
     i.save(ignore_permissions=True)
     return i.name
+
+
+def _ensure_selling_price_list(name):
+    if not frappe.db.exists("Price List", name):
+        pl = frappe.new_doc("Price List")
+        pl.price_list_name = name
+        pl.selling = 1
+        pl.enabled = 1
+        pl.currency = "SAR"
+        pl.insert(ignore_permissions=True)
+    return name
 
 
 def _pick_default_company():
