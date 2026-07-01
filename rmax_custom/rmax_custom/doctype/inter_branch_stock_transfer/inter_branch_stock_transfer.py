@@ -102,11 +102,38 @@ class InterBranchStockTransfer(Document):
             raise
 
     def _create_journal_entry(self) -> str | None:
-        """Create and submit the inter-branch JE for this IBST.
+        """Create and submit the inter-branch companion JE for this IBST.
 
-        Dr  Due from Head Office - R Matrix - RM
-        Cr  Due to Ghurab Office - R Matrix - RM
+        Identical pattern to create_companion_inter_branch_je_for_stock_transfer:
+            Dr  Due from <target_branch>  (branch = source_branch)
+            Cr  Due to <source_branch>    (branch = target_branch)
+
+        Requires from_warehouse and to_warehouse to be mapped in Branch
+        Configuration so resolve_warehouse_branch can identify the branches.
         """
+        from rmax_custom.inter_branch import (
+            resolve_warehouse_branch,
+            get_or_create_inter_branch_account,
+        )
+
+        source_branch = resolve_warehouse_branch(self.from_warehouse)
+        target_branch = resolve_warehouse_branch(self.to_warehouse)
+
+        if not source_branch or not target_branch:
+            frappe.throw(
+                _(
+                    "Journal Entry cannot be created because the branch could not be "
+                    "determined for one or both warehouses.<br><br>"
+                    "Go to <b>Branch Configuration</b> and add:<br>"
+                    "• <b>{0}</b> under the Source Branch's Warehouse table<br>"
+                    "• <b>{1}</b> under the Target Branch's Warehouse table"
+                ).format(self.from_warehouse or "—", self.to_warehouse or "—"),
+                title=_("Warehouse Not Mapped to Branch"),
+            )
+
+        if source_branch == target_branch:
+            return None
+
         # Amount from the submitted SE; fall back to item rows.
         amount = 0.0
         if self.stock_entry:
@@ -127,40 +154,49 @@ class InterBranchStockTransfer(Document):
         if not amount:
             return None
 
-        company_currency = frappe.db.get_value("Company", self.company, "default_currency")
+        company = self.company
+        src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
+        tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
+
+        company_currency = frappe.db.get_value("Company", company, "default_currency")
+        src_currency = frappe.db.get_value("Account", src_receivable, "account_currency") or company_currency
+        tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
 
         je = frappe.new_doc("Journal Entry")
         je.posting_date = self.posting_date
-        je.company = self.company
+        je.company = company
         je.voucher_type = "Journal Entry"
         je.custom_source_doctype = "Inter Branch Stock Transfer"
         je.custom_source_docname = self.name
-        je.user_remark = _("Inter-Branch Stock Transfer: {0}").format(self.name)
-
+        je.user_remark = _("Inter-Branch obligation from Inter Branch Stock Transfer {0}").format(self.name)
         je.append("accounts", {
-            "account": "Due from Head Office - R Matrix - RM",
-            "account_currency": company_currency,
+            "account": src_receivable,
+            "account_currency": src_currency,
             "exchange_rate": 1,
             "debit_in_account_currency": amount,
             "debit": amount,
+            "branch": source_branch,
+            "custom_auto_inserted": 1,
             "custom_source_doctype": "Inter Branch Stock Transfer",
             "custom_source_docname": self.name,
         })
         je.append("accounts", {
-            "account": "Due to Ghurab Office - R Matrix - RM",
-            "account_currency": company_currency,
+            "account": tgt_payable,
+            "account_currency": tgt_currency,
             "exchange_rate": 1,
             "credit_in_account_currency": amount,
             "credit": amount,
+            "branch": target_branch,
+            "custom_auto_inserted": 1,
             "custom_source_doctype": "Inter Branch Stock Transfer",
             "custom_source_docname": self.name,
         })
-
         je.flags.skip_inter_branch_injection = True
         je.flags.ignore_permissions = True
         je.insert(ignore_permissions=True)
         je.submit()
 
+        self.db_set("journal_entry", je.name, notify=True)
         frappe.msgprint(
             _('Journal Entry <a href="/app/journal-entry/{0}">{0}</a> created').format(je.name),
             alert=True,

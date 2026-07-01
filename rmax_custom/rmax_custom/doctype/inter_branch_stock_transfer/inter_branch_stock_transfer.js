@@ -5,6 +5,7 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
 
     onload: function (frm) {
         _setup_warehouse_queries(frm);
+        _setup_price_list_query(frm);
         if (frm.is_new()) {
             _set_default_source_warehouse(frm);
         }
@@ -12,6 +13,7 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
 
     refresh: function (frm) {
         _setup_warehouse_queries(frm);
+        _setup_price_list_query(frm);
         _setup_buttons(frm);
         _toggle_posting_time(frm);
     },
@@ -52,6 +54,12 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
             });
         } else {
             frm.set_value('customer_name', '');
+        }
+    },
+
+    price_list: function (frm) {
+        if (frm.doc.price_list) {
+            _fetch_price_list_rates_for_all_items(frm);
         }
     },
 });
@@ -236,4 +244,38 @@ function _recalculate_row_amount(cdt, cdn) {
     let row = locals[cdt][cdn];
     frappe.model.set_value(cdt, cdn, 'basic_amount', flt(row.qty) * flt(row.basic_rate));
     frappe.model.set_value(cdt, cdn, 'transfer_qty', flt(row.qty) * flt(row.conversion_factor || 1));
+}
+
+function _setup_price_list_query(frm) {
+    frm.set_query('price_list', function () {
+        return { filters: { selling: 1, enabled: 1 } };
+    });
+}
+
+function _fetch_price_list_rate(frm, cdt, cdn) {
+    let row = locals[cdt][cdn];
+    if (!row.item_code || !frm.doc.price_list) return;
+    frappe.call({
+        method: 'frappe.client.get_value',
+        args: {
+            doctype: 'Item Price',
+            filters: { item_code: row.item_code, price_list: frm.doc.price_list },
+            fieldname: 'price_list_rate',
+        },
+        callback: function (r) {
+            if (r.message && r.message.price_list_rate) {
+                frappe.model.set_value(cdt, cdn, 'basic_rate', r.message.price_list_rate);
+                frappe.model.set_value(cdt, cdn, 'valuation_rate', r.message.price_list_rate);
+                _recalculate_row_amount(cdt, cdn);
+            }
+        }
+    });
+}
+
+function _fetch_price_list_rates_for_all_items(frm) {
+    (frm.doc.items || []).forEach(function (item) {
+        if (item.item_code) {
+            _fetch_price_list_rate(frm, item.doctype, item.name);
+        }
+    });
 }

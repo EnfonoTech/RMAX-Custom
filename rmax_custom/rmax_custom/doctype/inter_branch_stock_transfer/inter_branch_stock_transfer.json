@@ -20,6 +20,7 @@
   "section_break_customer",
   "customer",
   "customer_name",
+  "price_list",
   "section_break_items",
   "items",
   "section_break_refs",
@@ -130,6 +131,12 @@
    "read_only": 1
   },
   {
+   "fieldname": "price_list",
+   "fieldtype": "Link",
+   "label": "Price List",
+   "options": "Price List"
+  },
+  {
    "fieldname": "section_break_items",
    "fieldtype": "Section Break"
   },
@@ -182,7 +189,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-06-30 09:50:55.269409",
+ "modified": "2026-07-01 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Inter Branch Stock Transfer",
