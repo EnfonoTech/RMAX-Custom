@@ -607,6 +607,117 @@ def _backfill_branch_columns_on_child_doctypes() -> None:
             )
 
 
+def create_companion_inter_branch_je_for_ibst(ibst) -> str | None:
+    """Create a 2-line Journal Entry for an Inter Branch Stock Transfer.
+
+    Always creates the JE on submit — unlike the generic Stock Transfer flow,
+    IBST does not gate on the company cut-over date because it is a dedicated
+    inter-branch doctype and the user explicitly wants the JE every time.
+
+    Returns the new JE name, or None when source == target branch or amount is zero.
+    """
+    source_wh = getattr(ibst, "from_warehouse", None)
+    target_wh = getattr(ibst, "to_warehouse", None)
+    source_branch = resolve_warehouse_branch(source_wh)
+    target_branch = resolve_warehouse_branch(target_wh)
+
+    if not source_branch or not target_branch:
+        frappe.log_error(
+            title="IBST companion JE skipped — branch not found",
+            message=(
+                f"Inter Branch Stock Transfer {getattr(ibst, 'name', '?')}: could not resolve "
+                f"source branch from warehouse '{source_wh}' or target branch from '{target_wh}'. "
+                f"Make sure both warehouses are mapped in Branch Configuration."
+            ),
+        )
+        return None
+    if source_branch == target_branch:
+        return None
+
+    # Prefer reading basic_amount from the already-submitted Stock Entry — ERPNext
+    # fills this from the actual valuation rate, so it is accurate even when the
+    # user left basic_rate blank on the IBST form.
+    amount = 0.0
+    se_name = getattr(ibst, "stock_entry", None)
+    if se_name:
+        se_rows = frappe.get_all(
+            "Stock Entry Detail",
+            filters={"parent": se_name},
+            fields=["basic_amount"],
+        )
+        amount = round(sum(flt(r.basic_amount) for r in se_rows), 2)
+
+    # Fall back to IBST item rates when the SE doesn't exist or has zero amounts.
+    if not amount:
+        amount = round(
+            sum(
+                flt(getattr(item, "basic_amount", 0))
+                or (flt(getattr(item, "qty", 0)) * flt(getattr(item, "basic_rate", 0)))
+                for item in (ibst.items or [])
+            ),
+            2,
+        )
+
+    if amount <= 0:
+        frappe.log_error(
+            title="IBST companion JE skipped — zero amount",
+            message=(
+                f"Inter Branch Stock Transfer {getattr(ibst, 'name', '?')} produced a zero "
+                f"transfer amount. Ensure items have a valuation rate in the source warehouse "
+                f"or set basic_rate on the IBST items before submitting."
+            ),
+        )
+        return None
+
+    company = ibst.company
+    src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
+    tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
+
+    company_currency = frappe.db.get_value("Company", company, "default_currency")
+    src_currency = frappe.db.get_value("Account", src_receivable, "account_currency") or company_currency
+    tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
+
+    je = frappe.new_doc("Journal Entry")
+    je.posting_date = ibst.posting_date
+    je.company = company
+    je.voucher_type = "Journal Entry"
+    je.custom_source_doctype = "Inter Branch Stock Transfer"
+    je.custom_source_docname = ibst.name
+    je.user_remark = _("Inter-Branch obligation from Inter Branch Stock Transfer {0}").format(ibst.name)
+    je.append(
+        "accounts",
+        {
+            "account": src_receivable,
+            "account_currency": src_currency,
+            "exchange_rate": 1,
+            "debit_in_account_currency": amount,
+            "debit": amount,
+            "branch": source_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Inter Branch Stock Transfer",
+            "custom_source_docname": ibst.name,
+        },
+    )
+    je.append(
+        "accounts",
+        {
+            "account": tgt_payable,
+            "account_currency": tgt_currency,
+            "exchange_rate": 1,
+            "credit_in_account_currency": amount,
+            "credit": amount,
+            "branch": target_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Inter Branch Stock Transfer",
+            "custom_source_docname": ibst.name,
+        },
+    )
+    je.flags.skip_inter_branch_injection = True
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je.name
+
+
 def setup_inter_branch_foundation() -> None:
     """Idempotent entrypoint called from setup.after_migrate.
 
@@ -734,6 +845,96 @@ def create_companion_inter_branch_je_for_stock_transfer(stock_transfer) -> str |
             "custom_auto_inserted": 1,
             "custom_source_doctype": "Stock Transfer",
             "custom_source_docname": stock_transfer.name,
+        },
+    )
+    je.flags.skip_inter_branch_injection = True
+    je.insert(ignore_permissions=True)
+    je.submit()
+    return je.name
+
+
+def create_companion_inter_branch_je_for_ibst(ibst) -> str | None:
+    """Create a 2-line Journal Entry for a submitted Inter Branch Stock Transfer.
+
+    Same accounting as the Stock Transfer companion JE:
+        Dr Inter-Branch Receivable — Due from <target_branch>  (branch = source)
+        Cr Inter-Branch Payable   — Due to <source_branch>    (branch = target)
+
+    Amount is read from the already-submitted Stock Entry's basic_amount so
+    valuation is consistent with the stock ledger.
+    Returns the new JE name, or None when no JE is needed.
+    """
+    source_wh = getattr(ibst, "from_warehouse", None)
+    target_wh = getattr(ibst, "to_warehouse", None)
+    source_branch = resolve_warehouse_branch(source_wh)
+    target_branch = resolve_warehouse_branch(target_wh)
+
+    if not source_branch or not target_branch:
+        return None
+    if source_branch == target_branch:
+        return None
+
+    # Read amount from the SE that was just submitted; fall back to item rows.
+    amount = 0.0
+    if getattr(ibst, "stock_entry", None):
+        se_rows = frappe.get_all(
+            "Stock Entry Detail",
+            filters={"parent": ibst.stock_entry},
+            fields=["basic_amount"],
+        )
+        amount = round(sum(flt(r.basic_amount) for r in se_rows), 2)
+    if not amount:
+        amount = round(
+            sum(
+                flt(getattr(item, "basic_amount", None)) or (flt(item.qty) * flt(item.basic_rate))
+                for item in (ibst.items or [])
+            ),
+            2,
+        )
+    if amount <= 0:
+        return None
+
+    company = ibst.company
+    src_receivable = get_or_create_inter_branch_account(company, target_branch, "receivable")
+    tgt_payable = get_or_create_inter_branch_account(company, source_branch, "payable")
+
+    company_currency = frappe.db.get_value("Company", company, "default_currency")
+    src_currency = frappe.db.get_value("Account", src_receivable, "account_currency") or company_currency
+    tgt_currency = frappe.db.get_value("Account", tgt_payable, "account_currency") or company_currency
+
+    je = frappe.new_doc("Journal Entry")
+    je.posting_date = ibst.posting_date
+    je.company = company
+    je.voucher_type = "Journal Entry"
+    je.custom_source_doctype = "Inter Branch Stock Transfer"
+    je.custom_source_docname = ibst.name
+    je.user_remark = _("Inter-Branch obligation from Inter Branch Stock Transfer {0}").format(ibst.name)
+    je.append(
+        "accounts",
+        {
+            "account": src_receivable,
+            "account_currency": src_currency,
+            "exchange_rate": 1,
+            "debit_in_account_currency": amount,
+            "debit": amount,
+            "branch": source_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Inter Branch Stock Transfer",
+            "custom_source_docname": ibst.name,
+        },
+    )
+    je.append(
+        "accounts",
+        {
+            "account": tgt_payable,
+            "account_currency": tgt_currency,
+            "exchange_rate": 1,
+            "credit_in_account_currency": amount,
+            "credit": amount,
+            "branch": target_branch,
+            "custom_auto_inserted": 1,
+            "custom_source_doctype": "Inter Branch Stock Transfer",
+            "custom_source_docname": ibst.name,
         },
     )
     je.flags.skip_inter_branch_injection = True
