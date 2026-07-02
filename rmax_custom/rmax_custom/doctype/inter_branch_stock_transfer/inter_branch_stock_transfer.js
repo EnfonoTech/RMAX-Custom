@@ -6,6 +6,7 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
     onload: function (frm) {
         _setup_warehouse_queries(frm);
         _setup_price_list_query(frm);
+        _setup_taxes_and_charges_query(frm);
         if (frm.is_new()) {
             _set_default_source_warehouse(frm);
         }
@@ -14,6 +15,7 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
     refresh: function (frm) {
         _setup_warehouse_queries(frm);
         _setup_price_list_query(frm);
+        _setup_taxes_and_charges_query(frm);
         _setup_buttons(frm);
         _toggle_posting_time(frm);
     },
@@ -24,6 +26,8 @@ frappe.ui.form.on('Inter Branch Stock Transfer', {
 
     company: function (frm) {
         _setup_warehouse_queries(frm);
+        _setup_taxes_and_charges_query(frm);
+        _set_default_taxes_and_charges(frm);
     },
 
     from_warehouse: function (frm) {
@@ -92,7 +96,9 @@ frappe.ui.form.on('Inter Branch Stock Transfer Item', {
             frappe.model.set_value(cdt, cdn, 't_warehouse', frm.doc.to_warehouse);
         }
 
-        _fetch_valuation_rate(frm, cdt, cdn);
+        _fetch_price_list_rate(frm, cdt, cdn, function () {
+            _fetch_valuation_rate(frm, cdt, cdn);
+        });
     },
 
     s_warehouse: function (frm, cdt, cdn) {
@@ -252,9 +258,32 @@ function _setup_price_list_query(frm) {
     });
 }
 
-function _fetch_price_list_rate(frm, cdt, cdn) {
+function _setup_taxes_and_charges_query(frm) {
+    frm.set_query('taxes_and_charges', function () {
+        return { filters: { company: frm.doc.company, disabled: 0 } };
+    });
+}
+
+function _set_default_taxes_and_charges(frm) {
+    if (!frm.doc.company || frm.doc.taxes_and_charges) return;
+    frappe.db.get_value(
+        'Sales Taxes and Charges Template',
+        { company: frm.doc.company, is_default: 1 },
+        'name',
+        function (r) {
+            if (r && r.name) {
+                frm.set_value('taxes_and_charges', r.name);
+            }
+        }
+    );
+}
+
+function _fetch_price_list_rate(frm, cdt, cdn, on_not_found) {
     let row = locals[cdt][cdn];
-    if (!row.item_code || !frm.doc.price_list) return;
+    if (!row.item_code || !frm.doc.price_list) {
+        if (on_not_found) on_not_found();
+        return;
+    }
     frappe.call({
         method: 'frappe.client.get_value',
         args: {
@@ -267,6 +296,8 @@ function _fetch_price_list_rate(frm, cdt, cdn) {
                 frappe.model.set_value(cdt, cdn, 'basic_rate', r.message.price_list_rate);
                 frappe.model.set_value(cdt, cdn, 'valuation_rate', r.message.price_list_rate);
                 _recalculate_row_amount(cdt, cdn);
+            } else if (on_not_found) {
+                on_not_found();
             }
         }
     });

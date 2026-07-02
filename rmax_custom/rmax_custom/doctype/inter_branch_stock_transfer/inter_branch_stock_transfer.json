@@ -21,6 +21,7 @@
   "customer",
   "customer_name",
   "price_list",
+  "taxes_and_charges",
   "section_break_items",
   "items",
   "section_break_refs",
@@ -99,7 +100,8 @@
    "fieldtype": "Link",
    "ignore_user_permissions": 1,
    "label": "Set Source Warehouse",
-   "options": "Warehouse"
+   "options": "Warehouse",
+   "reqd": 1
   },
   {
    "fieldname": "column_break_wh",
@@ -110,7 +112,8 @@
    "fieldtype": "Link",
    "ignore_user_permissions": 1,
    "label": "Set Target Warehouse",
-   "options": "Warehouse"
+   "options": "Warehouse",
+   "reqd": 1
   },
   {
    "fieldname": "section_break_customer",
@@ -121,7 +124,8 @@
    "fieldname": "customer",
    "fieldtype": "Link",
    "label": "Customer",
-   "options": "Customer"
+   "options": "Customer",
+   "reqd": 1
   },
   {
    "fetch_from": "customer.customer_name",
@@ -135,6 +139,12 @@
    "fieldtype": "Link",
    "label": "Price List",
    "options": "Price List"
+  },
+  {
+   "fieldname": "taxes_and_charges",
+   "fieldtype": "Link",
+   "label": "Sales Taxes and Charges Template",
+   "options": "Sales Taxes and Charges Template"
   },
   {
    "fieldname": "section_break_items",
@@ -189,7 +199,7 @@
  "index_web_pages_for_search": 1,
  "is_submittable": 1,
  "links": [],
- "modified": "2026-07-01 00:00:00.000000",
+ "modified": "2026-07-02 10:42:59.541116",
  "modified_by": "Administrator",
  "module": "Rmax Custom",
  "name": "Inter Branch Stock Transfer",
