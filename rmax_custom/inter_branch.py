@@ -443,6 +443,30 @@ def resolve_warehouse_branch(warehouse: str) -> str | None:
     return rows[0][0] if rows else None
 
 
+def resolve_branch_cost_center(branch: str) -> str | None:
+    """Look up the default Cost Center for a Branch via Branch Configuration.
+
+    Mirrors resolve_warehouse_branch: returns the first (idx-ordered, i.e.
+    the "default" row per the Branch Configuration Cost Center convention)
+    Cost Center of the Branch Configuration linked to this branch, or None
+    when no mapping exists.
+    """
+    if not branch:
+        return None
+    rows = frappe.db.sql(
+        """
+        SELECT bcc.cost_center
+        FROM `tabBranch Configuration Cost Center` bcc
+        INNER JOIN `tabBranch Configuration` bc ON bc.name = bcc.parent
+        WHERE bc.branch = %s AND bcc.cost_center IS NOT NULL
+        ORDER BY bcc.idx ASC
+        LIMIT 1
+        """,
+        (branch,),
+    )
+    return rows[0][0] if rows else None
+
+
 @frappe.whitelist()
 def backfill_je_header_source() -> int:
     """Populate `custom_source_doctype` and `custom_source_docname` on the Journal

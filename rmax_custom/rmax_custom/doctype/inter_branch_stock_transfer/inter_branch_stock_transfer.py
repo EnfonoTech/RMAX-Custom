@@ -14,6 +14,7 @@ class InterBranchStockTransfer(Document):
 
     def validate(self):
         self._set_item_warehouses_from_header()
+        self._set_default_taxes_and_charges()
 
     def _set_item_warehouses_from_header(self):
         """Push header warehouse defaults to item rows that have no row-level value."""
@@ -22,6 +23,13 @@ class InterBranchStockTransfer(Document):
                 item.s_warehouse = self.from_warehouse
             if self.to_warehouse and not item.t_warehouse:
                 item.t_warehouse = self.to_warehouse
+
+    def _set_default_taxes_and_charges(self):
+        """Default to the company's default Sales Taxes and Charges Template, if unset."""
+        if self.is_new() and self.company and not self.taxes_and_charges:
+            self.taxes_and_charges = frappe.db.get_value(
+                "Sales Taxes and Charges Template", {"is_default": 1, "company": self.company}
+            )
 
     def before_submit(self):
         self._validate_warehouses()
@@ -89,11 +97,12 @@ class InterBranchStockTransfer(Document):
     # ------------------------------------------------------------------
 
     def on_submit(self):
-        self._create_stock_entry()
+        source_branch, target_branch = self._resolve_branches_or_throw()
+        self._create_stock_entry(source_branch, target_branch)
         if self.customer:
-            self._create_delivery_note()
+            self._create_delivery_note(target_branch)
         try:
-            self._create_journal_entry()
+            self._create_journal_entry(source_branch, target_branch)
         except Exception:
             frappe.log_error(
                 title="Inter-Branch companion JE failed (IBST)",
@@ -101,20 +110,15 @@ class InterBranchStockTransfer(Document):
             )
             raise
 
-    def _create_journal_entry(self) -> str | None:
-        """Create and submit the inter-branch companion JE for this IBST.
+    def _resolve_branches_or_throw(self) -> tuple[str, str]:
+        """Resolve (source_branch, target_branch) from Branch Configuration warehouse mapping.
 
-        Identical pattern to create_companion_inter_branch_je_for_stock_transfer:
-            Dr  Due from <target_branch>  (branch = source_branch)
-            Cr  Due to <source_branch>    (branch = target_branch)
-
-        Requires from_warehouse and to_warehouse to be mapped in Branch
-        Configuration so resolve_warehouse_branch can identify the branches.
+        Both warehouses must be mapped, or GL posting for the companion Stock
+        Entry / Delivery Note fails deep inside submit() with an opaque
+        "Accounting Dimension Branch is required" error instead of this
+        actionable one.
         """
-        from rmax_custom.inter_branch import (
-            resolve_warehouse_branch,
-            get_or_create_inter_branch_account,
-        )
+        from rmax_custom.inter_branch import resolve_warehouse_branch
 
         source_branch = resolve_warehouse_branch(self.from_warehouse)
         target_branch = resolve_warehouse_branch(self.to_warehouse)
@@ -122,14 +126,28 @@ class InterBranchStockTransfer(Document):
         if not source_branch or not target_branch:
             frappe.throw(
                 _(
-                    "Journal Entry cannot be created because the branch could not be "
-                    "determined for one or both warehouses.<br><br>"
+                    "Branch could not be determined for one or both warehouses.<br><br>"
                     "Go to <b>Branch Configuration</b> and add:<br>"
                     "• <b>{0}</b> under the Source Branch's Warehouse table<br>"
                     "• <b>{1}</b> under the Target Branch's Warehouse table"
                 ).format(self.from_warehouse or "—", self.to_warehouse or "—"),
                 title=_("Warehouse Not Mapped to Branch"),
             )
+        return source_branch, target_branch
+
+    def _create_journal_entry(
+        self, source_branch: str | None = None, target_branch: str | None = None
+    ) -> str | None:
+        """Create and submit the inter-branch companion JE for this IBST.
+
+        Identical pattern to create_companion_inter_branch_je_for_stock_transfer:
+            Dr  Due from <target_branch>  (branch = source_branch)
+            Cr  Due to <source_branch>    (branch = target_branch)
+        """
+        from rmax_custom.inter_branch import get_or_create_inter_branch_account
+
+        if source_branch is None or target_branch is None:
+            source_branch, target_branch = self._resolve_branches_or_throw()
 
         if source_branch == target_branch:
             return None
@@ -204,10 +222,12 @@ class InterBranchStockTransfer(Document):
         )
         return je.name
 
-    def _create_stock_entry(self):
+    def _create_stock_entry(self, source_branch: str, target_branch: str):
         se = frappe.new_doc("Stock Entry")
         se.stock_entry_type = "Material Transfer"
         se.company = self.company
+        se.branch = source_branch
+        se.set_posting_time = 1
         se.posting_date = self.posting_date
         se.posting_time = self.posting_time
         se.from_warehouse = self.from_warehouse
@@ -226,6 +246,9 @@ class InterBranchStockTransfer(Document):
                 "allow_zero_valuation_rate": item.allow_zero_valuation_rate,
                 "serial_no": item.serial_no,
                 "batch_no": item.batch_no,
+                # Both legs are stamped with source_branch so GL insert passes the
+                # mandatory-dimension check; the target leg is corrected below.
+                "branch": source_branch,
             })
 
         # Prevent the SE on_submit hook from creating a second inter-branch JE.
@@ -237,6 +260,14 @@ class InterBranchStockTransfer(Document):
         se.flags.ignore_permissions = True
         se.submit()
 
+        if source_branch != target_branch:
+            # on_stock_entry_submit (which normally does this) is skipped for SEs
+            # flagged from_stock_transfer, so re-tag the target warehouse's GL
+            # leg(s) here instead.
+            from rmax_custom.inter_branch import _retag_se_gl_entries
+
+            _retag_se_gl_entries(se, source_branch, target_branch)
+
         self.db_set("stock_entry", se.name, notify=True)
         frappe.msgprint(
             _('Stock Entry <a href="/app/stock-entry/{0}">{0}</a> created').format(se.name),
@@ -244,10 +275,20 @@ class InterBranchStockTransfer(Document):
             indicator="green",
         )
 
-    def _create_delivery_note(self):
+    def _create_delivery_note(self, target_branch: str | None = None):
+        if target_branch is None:
+            target_branch = self._resolve_branches_or_throw()[1]
+
+        from rmax_custom.inter_branch import resolve_branch_cost_center
+
+        target_cost_center = resolve_branch_cost_center(target_branch)
+
         dn = frappe.new_doc("Delivery Note")
         dn.customer = self.customer
         dn.company = self.company
+        dn.branch = target_branch
+        dn.cost_center = target_cost_center
+        dn.set_posting_time = 1
         dn.posting_date = self.posting_date
         dn.posting_time = self.posting_time
         dn.set_warehouse = self.to_warehouse
@@ -261,11 +302,23 @@ class InterBranchStockTransfer(Document):
                 "uom": item.uom,
                 "warehouse": item.t_warehouse or self.to_warehouse,
                 "rate": item.basic_rate,
+                "cost_center": target_cost_center,
                 "description": item.description or item.item_name,
+                "branch": target_branch,
             })
+
+        if self.taxes_and_charges:
+            from erpnext.controllers.accounts_controller import get_taxes_and_charges
+
+            dn.taxes_and_charges = self.taxes_and_charges
+            dn.extend(
+                "taxes",
+                get_taxes_and_charges("Sales Taxes and Charges Template", self.taxes_and_charges),
+            )
 
         dn.flags.ignore_permissions = True
         dn.insert(ignore_permissions=True)
+        dn.submit()
 
         self.db_set("delivery_note", dn.name, notify=True)
         frappe.msgprint(
